@@ -1,0 +1,27 @@
+WALTAJJII GROUPS UPDATE
+
+Features included:
+- Create a group with a name and optional existing usernames.
+- List groups the signed-in user belongs to.
+- View group members and roles.
+- Add members and remove members (group admins only).
+- Send and read group text messages.
+- Existing one-to-one messaging and call code retained.
+
+IMPORTANT
+- This package contains application source only. It deliberately excludes the SQLite database, uploaded files, .env secrets, and node_modules.
+- Keep the original Waltajjii folder and database backup unchanged.
+- Group features require a valid JWT_SECRET (at least 32 characters) as already required by login.
+
+To apply safely:
+1. Make sure the current local app works, then stop it with Ctrl+C in its PowerShell window.
+2. Keep a copy of your existing project folder.
+3. Copy the files/folders in this ZIP into your project folder, allowing replacement of matching source files.
+4. Do not copy any database backup over your active data/waltajjii.db.
+5. Open PowerShell in the project folder and run: npm.cmd start
+6. Log in and test: Create group; add an existing username; open group; send a text; view/manage members; remove a non-admin member.
+
+LIMITATIONS
+- This is an initial group feature implementation, not a security audit or integration-tested production release.
+- Group messages currently support text only. Group file attachments and group calls are not included.
+- An admin cannot remove themselves; admin transfer is not implemented.
