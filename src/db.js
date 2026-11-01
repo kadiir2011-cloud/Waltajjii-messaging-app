@@ -2,7 +2,9 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 
-const dataDir = path.join(__dirname, "..", "data");
+// On Render, set STORAGE_DIR to the persistent disk mount path (for example,
+// /var/data). Locally, retain the existing project data directory.
+const dataDir = process.env.STORAGE_DIR || path.join(__dirname, "..", "data");
 fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, "waltajjii.db");
 
