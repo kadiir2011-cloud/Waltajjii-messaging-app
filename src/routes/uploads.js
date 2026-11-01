@@ -8,7 +8,11 @@ const db = require("../db");
 
 const router = express.Router();
 
-// Keep uploaded media on the same persistent disk as the SQLite database on Render.\n// Locally, retain the existing project uploads directory.\nconst uploadDir = process.env.STORAGE_DIR\n  ? path.join(process.env.STORAGE_DIR, "uploads")\n  : path.join(__dirname, "..", "..", "uploads");
+// Keep uploaded media on the same persistent disk as the SQLite database on Render.
+// Locally, retain the existing project uploads directory.
+const uploadDir = process.env.STORAGE_DIR
+  ? path.join(process.env.STORAGE_DIR, "uploads")
+  : path.join(__dirname, "..", "..", "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
