@@ -25,9 +25,12 @@ function authenticate(req, res, next) {
 
 router.get("/users", authenticate, (req, res) => {
   const users = db.prepare(
-    "SELECT id, username FROM users WHERE id != ? ORDER BY username LIMIT 100"
-  ).all(req.auth.userId);
-
+  `SELECT id, username, bio, avatar_path AS avatarPath
+   FROM users
+   WHERE id != ?
+   ORDER BY username
+   LIMIT 100`
+).all(req.auth.userId);
   res.json({ users });
 });
 
