@@ -90,5 +90,51 @@ router.post("/login", authLimiter, async (req, res) => {
     return res.status(500).json({ error: "Could not log in." });
   }
 });
+// Authenticate requests to profile endpoints.
+function authenticateProfile(req, res, next) {
+  const header = req.headers.authorization || "";
+  const [scheme, token] = header.split(" ");
 
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Login required." });
+  }
+
+  try {
+    req.auth = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: "waltajjii",
+      audience: "waltajjii-users"
+    });
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired login token." });
+  }
+}
+
+// Retrieve the logged-in user's profile.
+router.get("/profile", authenticateProfile, (req, res) => {
+  const user = db.prepare(`
+    SELECT id, username, bio, avatar_path AS avatarPath
+    FROM users WHERE id = ?
+  `).get(req.auth.userId);
+
+  if (!user) return res.status(404).json({ error: "Account not found." });
+
+  res.json({ user });
+});
+
+// Update the logged-in user's brief bio.
+router.patch("/profile", authenticateProfile, (req, res) => {
+  const bio = String(req.body.bio || "").trim();
+
+  if (bio.length > 160) {
+    return res.status(400).json({
+      error: "Bio must not exceed 160 characters."
+    });
+  }
+
+  db.prepare("UPDATE users SET bio = ? WHERE id = ?")
+    .run(bio, req.auth.userId);
+
+  res.json({ message: "Bio updated successfully.", bio });
+});
 module.exports = router;
