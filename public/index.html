@@ -141,7 +141,39 @@
         <button type="button" id="logout-button">Log out</button>
       </div>
       <p id="welcome-user" class="muted"></p>
+<section id="profile-panel" class="group-panel">
+  <h3>My profile</h3>
 
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <img
+      id="profile-picture-preview"
+      src=""
+      alt="Profile picture"
+      style="width:90px;height:90px;border-radius:50%;object-fit:cover;background:#e6f3ef;"
+    >
+
+    <div>
+      <strong id="profile-username"></strong>
+      <p id="profile-bio-display" class="muted">No bio added yet.</p>
+    </div>
+  </div>
+
+  <label for="profile-picture-input">Profile picture (JPG, PNG or WebP; maximum 2 MB)</label>
+  <input id="profile-picture-input" type="file"
+         accept="image/jpeg,image/png,image/webp">
+
+  <label for="profile-bio-input">Brief bio (maximum 160 characters)</label>
+  <textarea id="profile-bio-input" maxlength="160"
+            rows="3" style="width:100%;padding:12px;border:1px solid #bdcec8;border-radius:8px;"></textarea>
+
+  <div class="row">
+    <button type="button" id="save-profile-button">Save bio</button>
+    <button type="button" id="upload-profile-picture-button">Upload picture</button>
+    <button type="button" id="remove-profile-picture-button">Remove picture</button>
+  </div>
+
+  <p id="profile-status" class="muted" role="status" aria-live="polite"></p>
+</section>
       <label for="recipient">Choose a recipient</label>
       <select id="recipient" required>
         <option value="">Loading users...</option>
