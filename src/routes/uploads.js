@@ -153,5 +153,120 @@ res.sendFile(filePath, sendOptions, (err) => {
 });
 
 }); // Closes router.get()
+// Profile-picture upload: JPG, PNG or WebP, maximum 2 MB.
+const profileImageTypes = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp"
+};
 
+const profileImageStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const extension = profileImageTypes[file.mimetype];
+
+    if (!extension) {
+      return cb(new Error("Please use a JPG, PNG or WebP image."));
+    }
+
+    cb(null, crypto.randomUUID() + extension);
+  }
+});
+
+const profileImageUpload = multer({
+  storage: profileImageStorage,
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    cb(null, Object.prototype.hasOwnProperty.call(
+      profileImageTypes, file.mimetype
+    ));
+  }
+});
+
+// Upload or replace the logged-in user's profile picture.
+router.post("/profile-picture", authenticate, (req, res) => {
+  profileImageUpload.single("avatar")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        error: err.code === "LIMIT_FILE_SIZE"
+          ? "Profile picture must be 2 MB or smaller."
+          : err.message || "Picture upload failed."
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        error: "Please select a JPG, PNG or WebP picture."
+      });
+    }
+
+    const user = db.prepare(
+      "SELECT avatar_path FROM users WHERE id = ?"
+    ).get(req.auth.userId);
+
+    if (!user) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: "Account not found." });
+    }
+
+    db.prepare(
+      "UPDATE users SET avatar_path = ? WHERE id = ?"
+    ).run(req.file.filename, req.auth.userId);
+
+    if (user.avatar_path) {
+      const oldPath = path.join(uploadDir, user.avatar_path);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    res.json({
+      message: "Profile picture updated.",
+      avatarPath: req.file.filename
+    });
+  });
+});
+
+// Remove the logged-in user's profile picture.
+router.delete("/profile-picture", authenticate, (req, res) => {
+  const user = db.prepare(
+    "SELECT avatar_path FROM users WHERE id = ?"
+  ).get(req.auth.userId);
+
+  if (user && user.avatar_path) {
+    const oldPath = path.join(uploadDir, user.avatar_path);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  db.prepare(
+    "UPDATE users SET avatar_path = NULL WHERE id = ?"
+  ).run(req.auth.userId);
+
+  res.json({ message: "Profile picture removed." });
+});
+
+// Retrieve a registered user's profile picture.
+router.get("/profile-picture/:userId", authenticate, (req, res) => {
+  const userId = Number(req.params.userId);
+
+  if (!Number.isInteger(userId) || userId < 1) {
+    return res.status(400).json({ error: "Invalid user." });
+  }
+
+  const user = db.prepare(
+    "SELECT avatar_path FROM users WHERE id = ?"
+  ).get(userId);
+
+  if (!user || !user.avatar_path) {
+    return res.status(404).json({ error: "Profile picture not found." });
+  }
+
+  const filename = user.avatar_path;
+
+  if (!/^[0-9a-f-]+\.(jpg|png|webp)$/i.test(filename)) {
+    return res.status(404).json({ error: "Profile picture not found." });
+  }
+
+  res.sendFile(path.join(uploadDir, filename), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
 module.exports = router;
