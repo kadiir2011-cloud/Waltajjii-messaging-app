@@ -422,11 +422,37 @@ let activeCallUsername = null;
 const userIdsByUsername = new Map();
 const pendingIceCandidates = [];
 
-const rtcConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" }
-  ]
-};
+const meteredCredentialApiKey = "PASTE_YOUR_NEW_METERED_API_KEY_HERE";
+
+let rtcConfigurationPromise = null;
+
+async function getRtcConfiguration() {
+  if (!rtcConfigurationPromise) {
+    rtcConfigurationPromise = fetch(
+      "https://waltajjii-calls.metered.live/api/v1/turn/credentials?apiKey=" +
+      encodeURIComponent(meteredCredentialApiKey)
+    )
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error("Could not load TURN server settings.");
+        }
+
+        const iceServers = await response.json();
+
+        if (!Array.isArray(iceServers) || iceServers.length === 0) {
+          throw new Error("No ICE servers were returned.");
+        }
+
+        return { iceServers };
+      })
+      .catch(error => {
+        rtcConfigurationPromise = null;
+        throw error;
+      });
+  }
+
+  return rtcConfigurationPromise;
+}
 
 function setCallStatus(message) {
   if (callStatus) callStatus.textContent = message;
