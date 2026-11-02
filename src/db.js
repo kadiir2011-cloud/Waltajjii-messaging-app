@@ -20,6 +20,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL COLLATE NOCASE UNIQUE,
     password_hash TEXT NOT NULL,
+    bio TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -75,5 +76,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_group_messages_group
   ON group_messages(group_id, id);
 `);
+// Safely add the bio field to existing databases.
+const userColumns = db.prepare("PRAGMA table_info(users)").all();
 
+if (!userColumns.some(column => column.name === "bio")) {
+  db.exec("ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''");
+}
 module.exports = db;
