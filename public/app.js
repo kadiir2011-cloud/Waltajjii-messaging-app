@@ -28,6 +28,7 @@ let callSocket = null;
 
     function showChat(username) {
       currentUsername = username;
+          loadMyProfile();
       authPanel.style.display = "none";
       chatPanel.style.display = "block";
       document.getElementById("welcome-user").textContent =
@@ -36,7 +37,42 @@ let callSocket = null;
       loadUsers();
       loadGroups();
     }
+async function loadMyProfile() {
+  const profileStatus = document.getElementById("profile-status");
+  const bioInput = document.getElementById("profile-bio-input");
+  const bioDisplay = document.getElementById("profile-bio-display");
+  const usernameDisplay = document.getElementById("profile-username");
+  const picturePreview = document.getElementById("profile-picture-preview");
 
+  try {
+    const data = await api("/api/auth/profile");
+    const user = data.user;
+
+    usernameDisplay.textContent = user.username;
+    bioInput.value = user.bio || "";
+    bioDisplay.textContent = user.bio || "No bio added yet.";
+
+    if (user.avatarPath) {
+      const response = await fetch(
+        "/api/uploads/profile-picture/" + user.id,
+        { headers: { Authorization: "Bearer " + token } }
+      );
+
+      if (response.ok) {
+        const imageBlob = await response.blob();
+        picturePreview.src = URL.createObjectURL(imageBlob);
+      } else {
+        picturePreview.removeAttribute("src");
+      }
+    } else {
+      picturePreview.removeAttribute("src");
+    }
+
+    profileStatus.textContent = "";
+  } catch (error) {
+    profileStatus.textContent = error.message;
+  }
+}
     function showLogin() {
       token = null;
       currentUsername = null;
@@ -143,7 +179,9 @@ callSocket.on("connect_error", (error) => {
 
   const option = document.createElement("option");
   option.value = user.username;
-  option.textContent = user.username;
+  option.textContent = user.bio
+  ? `${user.username} — ${user.bio}`
+  : user.username;
   recipient.appendChild(option);
 }); 
         statusBox.textContent = data.users.length
@@ -897,5 +935,76 @@ groupMessageForm.addEventListener("submit", async event => {
   } finally {
     button.disabled = false;
     groupMessageInput.focus();
+  }
+});
+// Save the user's bio.
+document.getElementById("save-profile-button").addEventListener("click", async () => {
+  const bio = document.getElementById("profile-bio-input").value;
+  const status = document.getElementById("profile-status");
+
+  try {
+    const data = await api("/api/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ bio })
+    });
+
+    document.getElementById("profile-bio-display").textContent =
+      data.bio || "No bio added yet.";
+
+    status.textContent = "Bio saved successfully.";
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+// Upload or replace the profile picture.
+document.getElementById("upload-profile-picture-button").addEventListener("click", async () => {
+  const input = document.getElementById("profile-picture-input");
+  const status = document.getElementById("profile-status");
+  const file = input.files[0];
+
+  if (!file) {
+    status.textContent = "Please select a picture first.";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("avatar", file);
+
+  try {
+    const response = await fetch("/api/uploads/profile-picture", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token },
+      body: formData
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Upload failed.");
+
+    await loadMyProfile();
+    input.value = "";
+    status.textContent = "Profile picture updated successfully.";
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+// Remove the profile picture.
+document.getElementById("remove-profile-picture-button").addEventListener("click", async () => {
+  const status = document.getElementById("profile-status");
+
+  try {
+    const response = await fetch("/api/uploads/profile-picture", {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token }
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Removal failed.");
+
+    await loadMyProfile();
+    status.textContent = "Profile picture removed.";
+  } catch (error) {
+    status.textContent = error.message;
   }
 });
