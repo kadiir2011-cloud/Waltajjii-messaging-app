@@ -533,7 +533,8 @@ async function prepareMediaConnection(videoEnabled = true) {
 
   localVideo.srcObject = videoEnabled ? localStream : null;
 
-  peerConnection = new RTCPeerConnection(rtcConfiguration);
+  const rtcConfiguration = await getRtcConfiguration();
+peerConnection = new RTCPeerConnection(rtcConfiguration);
 
   localStream.getTracks().forEach(track => {
     peerConnection.addTrack(track, localStream);
