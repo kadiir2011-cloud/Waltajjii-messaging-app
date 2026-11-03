@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const jwt = require("jsonwebtoken");
 const db = require("../db");
 
@@ -23,28 +23,32 @@ function authenticate(req, res, next) {
   }
 }
 
-router.get("/users", authenticate, (req, res) => {
-  const users = db.prepare(
-  `SELECT id, username, bio, avatar_path AS avatarPath
-   FROM users
-   WHERE id != ?
-   ORDER BY username
-   LIMIT 100`
-).all(req.auth.userId);
-  res.json({ users });
+router.get("/users", authenticate, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT id, username, bio, avatar_path AS "avatarPath"
+       FROM users
+       WHERE id <> $1
+       ORDER BY username
+       LIMIT 100`,
+      [req.auth.userId]
+    );
+
+    res.json({ users: result.rows });
+  } catch (error) {
+    console.error("Could not load users:", error);
+    res.status(500).json({ error: "Could not load users." });
+  }
 });
 
-
-router.post("/", authenticate, (req, res) => {
+router.post("/", authenticate, async (req, res) => {
   const receiverUsername = String(req.body.receiverUsername || "").trim();
   let body = String(req.body.body || "").trim();
   const mediaPath = String(req.body.mediaPath || "").trim();
   const mediaType = String(req.body.mediaType || "").trim();
 
   if (!receiverUsername) {
-    return res.status(400).json({
-      error: "Please select a recipient."
-    });
+    return res.status(400).json({ error: "Please select a recipient." });
   }
 
   if (body.length > 2000) {
@@ -59,92 +63,113 @@ router.post("/", authenticate, (req, res) => {
     });
   }
 
-  if (mediaPath && !/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath)) {
-  return res.status(400).json({
-    error: "Invalid media file."
-  });
-}
+  if (
+    mediaPath &&
+    !/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath)
+  ) {
+    return res.status(400).json({ error: "Invalid media file." });
+  }
 
-if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
-  return res.status(400).json({
-    error: "Invalid media type."
-  });
-}
+  if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
+    return res.status(400).json({ error: "Invalid media type." });
+  }
+
   if (!body) {
-  body = mediaType === "video"
-    ? "[Video]"
-    : mediaType === "document"
-      ? "[Document]"
-      : "[Image]";
-}
-  const receiver = db.prepare(
-    "SELECT id FROM users WHERE username = ?"
-  ).get(receiverUsername);
-
-  if (!receiver) {
-    return res.status(404).json({
-      error: "Recipient not found."
-    });
+    body = mediaType === "video"
+      ? "[Video]"
+      : mediaType === "document"
+        ? "[Document]"
+        : "[Image]";
   }
 
-  if (receiver.id === req.auth.userId) {
-    return res.status(400).json({
-      error: "You cannot message yourself."
-    });
+  try {
+    const receiverResult = await db.query(
+      "SELECT id FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1",
+      [receiverUsername]
+    );
+    const receiver = receiverResult.rows[0];
+
+    if (!receiver) {
+      return res.status(404).json({ error: "Recipient not found." });
+    }
+
+    if (String(receiver.id) === String(req.auth.userId)) {
+      return res.status(400).json({
+        error: "You cannot message yourself."
+      });
+    }
+
+    const insertResult = await db.query(
+      `INSERT INTO messages
+         (sender_id, receiver_id, body, media_path, media_type)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [
+        req.auth.userId,
+        receiver.id,
+        body,
+        mediaPath || null,
+        mediaPath ? mediaType : null
+      ]
+    );
+
+    const messageResult = await db.query(
+      `SELECT m.id,
+              s.username AS sender,
+              r.username AS recipient,
+              m.body,
+              m.media_path AS "mediaPath",
+              m.media_type AS "mediaType",
+              m.created_at AS "createdAt"
+       FROM messages m
+       JOIN users s ON s.id = m.sender_id
+       JOIN users r ON r.id = m.receiver_id
+       WHERE m.id = $1`,
+      [insertResult.rows[0].id]
+    );
+
+    res.status(201).json({ message: messageResult.rows[0] });
+  } catch (error) {
+    console.error("Could not send message:", error);
+    res.status(500).json({ error: "Could not send message." });
   }
-
-  const result = db.prepare(`
-    INSERT INTO messages
-      (sender_id, receiver_id, body, media_path, media_type)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(
-    req.auth.userId,
-    receiver.id,
-    body,
-    mediaPath || null,
-    mediaPath ? mediaType : null
-  );
-
-  const message = db.prepare(`
-    SELECT m.id, s.username AS sender, r.username AS recipient,
-           m.body, m.media_path AS mediaPath,
-           m.media_type AS mediaType,
-           m.created_at AS createdAt
-    FROM messages m
-    JOIN users s ON s.id = m.sender_id
-    JOIN users r ON r.id = m.receiver_id
-    WHERE m.id = ?
-  `).get(result.lastInsertRowid);
-
-  res.status(201).json({ message });
 });
 
+router.get("/conversation/:username", authenticate, async (req, res) => {
+  try {
+    const otherResult = await db.query(
+      "SELECT id FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1",
+      [String(req.params.username || "")]
+    );
+    const other = otherResult.rows[0];
 
-router.get("/conversation/:username", authenticate, (req, res) => {
-  const other = db.prepare(
-    "SELECT id FROM users WHERE username = ?"
-  ).get(String(req.params.username || ""));
+    if (!other) {
+      return res.status(404).json({ error: "User not found." });
+    }
 
-  if (!other) {
-    return res.status(404).json({ error: "User not found." });
+    const messagesResult = await db.query(
+      `SELECT m.id,
+              s.username AS sender,
+              r.username AS recipient,
+              m.body,
+              m.media_path AS "mediaPath",
+              m.media_type AS "mediaType",
+              m.created_at AS "createdAt"
+       FROM messages m
+       JOIN users s ON s.id = m.sender_id
+       JOIN users r ON r.id = m.receiver_id
+       WHERE (m.sender_id = $1 AND m.receiver_id = $2)
+          OR (m.sender_id = $2 AND m.receiver_id = $1)
+       ORDER BY m.id ASC
+       LIMIT 200`,
+      [req.auth.userId, other.id]
+    );
+
+    res.json({ messages: messagesResult.rows });
+  } catch (error) {
+    console.error("Could not load conversation:", error);
+    res.status(500).json({ error: "Could not load conversation." });
   }
-
-  const messages = db.prepare(`
-    SELECT m.id, s.username AS sender, r.username AS recipient,
-           m.body, m.media_path AS mediaPath,
-           m.media_type AS mediaType,
-           m.created_at AS createdAt
-    FROM messages m
-    JOIN users s ON s.id = m.sender_id
-    JOIN users r ON r.id = m.receiver_id
-    WHERE (m.sender_id = ? AND m.receiver_id = ?)
-       OR (m.sender_id = ? AND m.receiver_id = ?)
-    ORDER BY m.id ASC
-    LIMIT 200
-  `).all(req.auth.userId, other.id, other.id, req.auth.userId);
-
-  res.json({ messages });
 });
-
 
 module.exports = router;
