@@ -1,30 +1,21 @@
 const express = require("express");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
-const path = require("path");
-const fs = require("fs");
 const crypto = require("crypto");
+const { Readable } = require("stream");
 const db = require("../db");
 
 const router = express.Router();
-
-// Keep uploaded media on the same persistent disk as the SQLite database on Render.
-// Locally, retain the existing project uploads directory.
-const uploadDir = process.env.STORAGE_DIR
-  ? path.join(process.env.STORAGE_DIR, "uploads")
-  : path.join(__dirname, "..", "..", "uploads");
-fs.mkdirSync(uploadDir, { recursive: true });
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const PROFILE_IMAGE_MAX_SIZE = 2 * 1024 * 1024;
+const bucket = process.env.SUPABASE_STORAGE_BUCKET || "waltajjii-media";
 
 function authenticate(req, res, next) {
   const header = req.headers.authorization || "";
   const [scheme, token] = header.split(" ");
-
   if (scheme !== "Bearer" || !token) {
     return res.status(401).json({ error: "Login required." });
   }
-
   try {
     req.auth = jwt.verify(token, process.env.JWT_SECRET, {
       issuer: "waltajjii",
@@ -37,51 +28,32 @@ function authenticate(req, res, next) {
 }
 
 const allowedTypes = {
-  // Images
   "image/jpeg": ".jpg",
   "image/png": ".png",
   "image/webp": ".webp",
   "image/gif": ".gif",
-
-  // Videos
   "video/mp4": ".mp4",
   "video/webm": ".webm",
-
-  // Documents
   "application/pdf": ".pdf",
   "application/msword": ".doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-
-  // Spreadsheets
   "application/vnd.ms-excel": ".xls",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
   "text/csv": ".csv",
-
-  // Presentations
   "application/vnd.ms-powerpoint": ".ppt",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
-
-  // Text files
   "text/plain": ".txt"
 };
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const extension = allowedTypes[file.mimetype];
-    if (!extension) {
-      return cb(new Error("Unsupported file type. Please select a supported image, video, or document."));
-    }
 
-    cb(null, crypto.randomUUID() + extension);
-  }
-});
+const profileImageTypes = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp"
+};
 
 const upload = multer({
-  storage,
-  limits: {
-    fileSize: MAX_FILE_SIZE,
-    files: 1
-  },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE, files: 1 },
   fileFilter: (req, file, cb) => {
     if (!Object.prototype.hasOwnProperty.call(allowedTypes, file.mimetype)) {
       return cb(new Error("Unsupported file type."));
@@ -90,183 +62,203 @@ const upload = multer({
   }
 });
 
-router.post("/", authenticate, (req, res) => {
-  upload.single("media")(req, res, (err) => {
-    if (err) {
-      const message = err.code === "LIMIT_FILE_SIZE"
-        ? "File is too large. Maximum size is 10 MB."
-        : err.message || "Upload failed.";
-
-      return res.status(400).json({ error: message });
+const profileImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: PROFILE_IMAGE_MAX_SIZE, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (!Object.prototype.hasOwnProperty.call(profileImageTypes, file.mimetype)) {
+      return cb(new Error("Please use a JPG, PNG or WebP image."));
     }
-
-    if (!req.file) {
-  return res.status(400).json({ error: "Please select a file." });
-}
-    const mediaType = req.file.mimetype.startsWith("image/")
-  ? "image"
-  : req.file.mimetype.startsWith("video/")
-    ? "video"
-    : "document";
-
- res.status(201).json({
-  message: "File uploaded successfully.",
-  fileId: req.file.filename,
-  mediaType
+    cb(null, true);
+  }
 });
 
-  }); // Closes upload.single callback
-}); // Closes router.post route
+function storageConfig() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Supabase Storage environment variables are missing.");
+  return { url: url.replace(/\/$/, ""), key };
+}
 
-router.get("/:filename", authenticate, (req, res) => {
- const filename = String(req.params.filename || "");
+async function storageRequest(path, options = {}) {
+  const { url, key } = storageConfig();
+  const response = await fetch(`${url}/storage/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      ...(options.headers || {})
+    }
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const error = new Error(`Supabase Storage request failed (${response.status}). ${detail}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response;
+}
 
-  // Accept only filenames generated by the upload route.
+async function storeFile(file, filename) {
+  await storageRequest(
+    `object/${encodeURIComponent(bucket)}/${encodeURIComponent(filename)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": file.mimetype,
+        "x-upsert": "true"
+      },
+      body: file.buffer
+    }
+  );
+}
+
+async function removeFile(filename) {
+  if (!filename) return;
+  await storageRequest(`object/${encodeURIComponent(bucket)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prefixes: [filename] })
+  });
+}
+
+async function sendStoredFile(filename, res, attachment = false) {
+  const response = await storageRequest(
+    `object/${encodeURIComponent(bucket)}/${encodeURIComponent(filename)}`
+  );
+  res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
+  res.setHeader("Cache-Control", "private, no-store");
+  if (attachment) res.setHeader("Content-Disposition", "attachment");
+  Readable.fromWeb(response.body).pipe(res);
+}
+
+function uploadError(res, err, profile = false) {
+  const message = err.code === "LIMIT_FILE_SIZE"
+    ? (profile ? "Profile picture must be 2 MB or smaller." : "File is too large. Maximum size is 10 MB.")
+    : err.message || "Upload failed.";
+  return res.status(400).json({ error: message });
+}
+
+router.post("/", authenticate, (req, res) => {
+  upload.single("media")(req, res, async (err) => {
+    if (err) return uploadError(res, err);
+    if (!req.file) return res.status(400).json({ error: "Please select a file." });
+
+    const fileId = crypto.randomUUID() + allowedTypes[req.file.mimetype];
+    const mediaType = req.file.mimetype.startsWith("image/")
+      ? "image"
+      : req.file.mimetype.startsWith("video/")
+        ? "video"
+        : "document";
+
+    try {
+      await storeFile(req.file, fileId);
+      res.status(201).json({
+        message: "File uploaded successfully.",
+        fileId,
+        mediaType
+      });
+    } catch (error) {
+      console.error("Media upload failed:", error);
+      res.status(502).json({ error: "Could not store the uploaded file." });
+    }
+  });
+});
+
+router.get("/:filename", authenticate, async (req, res) => {
+  const filename = String(req.params.filename || "");
   if (!/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename)) {
     return res.status(400).json({ error: "Invalid media filename." });
   }
 
-  const message = db.prepare(`
-    SELECT id
-    FROM messages
-    WHERE media_path = ?
-      AND (sender_id = ? OR receiver_id = ?)
-    LIMIT 1
-  `).get(filename, req.auth.userId, req.auth.userId);
+  try {
+    const result = await db.query(
+      `SELECT id FROM messages
+       WHERE media_path = $1 AND (sender_id = $2 OR receiver_id = $2)
+       LIMIT 1`,
+      [filename, req.auth.userId]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Media not found." });
 
-  if (!message) {
-    return res.status(404).json({ error: "Media not found." });
-  }
-
-  const filePath = path.join(uploadDir, filename);
-
-  const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename);
-
-const sendOptions = isDocument
-  ? { headers: { "Content-Disposition": "attachment" } }
-  : {};
-
-res.sendFile(filePath, sendOptions, (err) => {
-  if (err && !res.headersSent) {
-    res.status(err.statusCode === 404 ? 404 : 500).end();
+    const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename);
+    await sendStoredFile(filename, res, isDocument);
+  } catch (error) {
+    console.error("Media retrieval failed:", error);
+    if (!res.headersSent) res.status(502).json({ error: "Could not retrieve media." });
   }
 });
 
-}); // Closes router.get()
-// Profile-picture upload: JPG, PNG or WebP, maximum 2 MB.
-const profileImageTypes = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp"
-};
-
-const profileImageStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const extension = profileImageTypes[file.mimetype];
-
-    if (!extension) {
-      return cb(new Error("Please use a JPG, PNG or WebP image."));
-    }
-
-    cb(null, crypto.randomUUID() + extension);
-  }
-});
-
-const profileImageUpload = multer({
-  storage: profileImageStorage,
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
-  fileFilter: (req, file, cb) => {
-    cb(null, Object.prototype.hasOwnProperty.call(
-      profileImageTypes, file.mimetype
-    ));
-  }
-});
-
-// Upload or replace the logged-in user's profile picture.
 router.post("/profile-picture", authenticate, (req, res) => {
-  profileImageUpload.single("avatar")(req, res, (err) => {
-    if (err) {
-      return res.status(400).json({
-        error: err.code === "LIMIT_FILE_SIZE"
-          ? "Profile picture must be 2 MB or smaller."
-          : err.message || "Picture upload failed."
-      });
+  profileImageUpload.single("avatar")(req, res, async (err) => {
+    if (err) return uploadError(res, err, true);
+    if (!req.file) return res.status(400).json({ error: "Please select a JPG, PNG or WebP picture." });
+
+    const filename = crypto.randomUUID() + profileImageTypes[req.file.mimetype];
+    try {
+      const userResult = await db.query(
+        "SELECT avatar_path FROM users WHERE id = $1",
+        [req.auth.userId]
+      );
+      const user = userResult.rows[0];
+      if (!user) return res.status(404).json({ error: "Account not found." });
+
+      await storeFile(req.file, filename);
+      await db.query(
+        "UPDATE users SET avatar_path = $1 WHERE id = $2",
+        [filename, req.auth.userId]
+      );
+      if (user.avatar_path) {
+        try { await removeFile(user.avatar_path); }
+        catch (cleanupError) { console.error("Old avatar cleanup failed:", cleanupError); }
+      }
+      res.json({ message: "Profile picture updated.", avatarPath: filename });
+    } catch (error) {
+      console.error("Profile picture upload failed:", error);
+      res.status(502).json({ error: "Could not update profile picture." });
     }
-
-    if (!req.file) {
-      return res.status(400).json({
-        error: "Please select a JPG, PNG or WebP picture."
-      });
-    }
-
-    const user = db.prepare(
-      "SELECT avatar_path FROM users WHERE id = ?"
-    ).get(req.auth.userId);
-
-    if (!user) {
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ error: "Account not found." });
-    }
-
-    db.prepare(
-      "UPDATE users SET avatar_path = ? WHERE id = ?"
-    ).run(req.file.filename, req.auth.userId);
-
-    if (user.avatar_path) {
-      const oldPath = path.join(uploadDir, user.avatar_path);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
-
-    res.json({
-      message: "Profile picture updated.",
-      avatarPath: req.file.filename
-    });
   });
 });
 
-// Remove the logged-in user's profile picture.
-router.delete("/profile-picture", authenticate, (req, res) => {
-  const user = db.prepare(
-    "SELECT avatar_path FROM users WHERE id = ?"
-  ).get(req.auth.userId);
+router.delete("/profile-picture", authenticate, async (req, res) => {
+  try {
+    const userResult = await db.query(
+      "SELECT avatar_path FROM users WHERE id = $1",
+      [req.auth.userId]
+    );
+    if (!userResult.rowCount) return res.status(404).json({ error: "Account not found." });
 
-  if (user && user.avatar_path) {
-    const oldPath = path.join(uploadDir, user.avatar_path);
-    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    const oldPath = userResult.rows[0].avatar_path;
+    await db.query("UPDATE users SET avatar_path = NULL WHERE id = $1", [req.auth.userId]);
+    if (oldPath) {
+      try { await removeFile(oldPath); }
+      catch (cleanupError) { console.error("Avatar cleanup failed:", cleanupError); }
+    }
+    res.json({ message: "Profile picture removed." });
+  } catch (error) {
+    console.error("Profile picture removal failed:", error);
+    res.status(500).json({ error: "Could not remove profile picture." });
   }
-
-  db.prepare(
-    "UPDATE users SET avatar_path = NULL WHERE id = ?"
-  ).run(req.auth.userId);
-
-  res.json({ message: "Profile picture removed." });
 });
 
-// Retrieve a registered user's profile picture.
-router.get("/profile-picture/:userId", authenticate, (req, res) => {
+router.get("/profile-picture/:userId", authenticate, async (req, res) => {
   const userId = Number(req.params.userId);
-
-  if (!Number.isInteger(userId) || userId < 1) {
+  if (!Number.isSafeInteger(userId) || userId < 1) {
     return res.status(400).json({ error: "Invalid user." });
   }
-
-  const user = db.prepare(
-    "SELECT avatar_path FROM users WHERE id = ?"
-  ).get(userId);
-
-  if (!user || !user.avatar_path) {
-    return res.status(404).json({ error: "Profile picture not found." });
+  try {
+    const result = await db.query(
+      "SELECT avatar_path FROM users WHERE id = $1",
+      [userId]
+    );
+    const filename = result.rows[0]?.avatar_path;
+    if (!filename || !/^[0-9a-f-]+\.(jpg|png|webp)$/i.test(filename)) {
+      return res.status(404).json({ error: "Profile picture not found." });
+    }
+    await sendStoredFile(filename, res);
+  } catch (error) {
+    console.error("Profile picture retrieval failed:", error);
+    if (!res.headersSent) res.status(502).json({ error: "Could not retrieve profile picture." });
   }
-
-  const filename = user.avatar_path;
-
-  if (!/^[0-9a-f-]+\.(jpg|png|webp)$/i.test(filename)) {
-    return res.status(404).json({ error: "Profile picture not found." });
-  }
-
-  res.sendFile(path.join(uploadDir, filename), (err) => {
-    if (err && !res.headersSent) res.status(404).end();
-  });
 });
+
 module.exports = router;
