@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
@@ -13,6 +13,23 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+function authenticate(req, res, next) {
+  const header = req.headers.authorization || "";
+  const [scheme, token] = header.split(" ");
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Login required." });
+  }
+  try {
+    req.auth = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: "waltajjii",
+      audience: "waltajjii-users"
+    });
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired login token." });
+  }
+}
+
 router.post("/register", authLimiter, async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
@@ -23,7 +40,6 @@ router.post("/register", authLimiter, async (req, res) => {
         error: "Username must be 3–30 characters using letters, numbers, or underscores."
       });
     }
-
     if (password.length < 12 || password.length > 128) {
       return res.status(400).json({
         error: "Password must be between 12 and 128 characters."
@@ -31,20 +47,19 @@ router.post("/register", authLimiter, async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-
-    const result = db.prepare(
-      "INSERT INTO users (username, password_hash) VALUES (?, ?)"
-    ).run(username, passwordHash);
+    const result = await db.query(
+      "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username",
+      [username, passwordHash]
+    );
 
     return res.status(201).json({
       message: "Account created successfully.",
-      user: { id: result.lastInsertRowid, username }
+      user: { id: result.rows[0].id, username: result.rows[0].username }
     });
   } catch (error) {
-    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    if (error.code === "23505") {
       return res.status(409).json({ error: "That username is already taken." });
     }
-
     console.error("Registration error:", error.message);
     return res.status(500).json({ error: "Could not create account." });
   }
@@ -55,13 +70,12 @@ router.post("/login", authLimiter, async (req, res) => {
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
 
-    const user = db.prepare(
-      "SELECT id, username, password_hash FROM users WHERE username = ?"
-    ).get(username);
-
-    const valid = user
-      ? await bcrypt.compare(password, user.password_hash)
-      : false;
+    const result = await db.query(
+      "SELECT id, username, password_hash FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1",
+      [username]
+    );
+    const user = result.rows[0];
+    const valid = user ? await bcrypt.compare(password, user.password_hash) : false;
 
     if (!valid) {
       return res.status(401).json({ error: "Invalid username or password." });
@@ -90,51 +104,33 @@ router.post("/login", authLimiter, async (req, res) => {
     return res.status(500).json({ error: "Could not log in." });
   }
 });
-// Authenticate requests to profile endpoints.
-function authenticateProfile(req, res, next) {
-  const header = req.headers.authorization || "";
-  const [scheme, token] = header.split(" ");
 
-  if (scheme !== "Bearer" || !token) {
-    return res.status(401).json({ error: "Login required." });
-  }
-
+router.get("/profile", authenticate, async (req, res) => {
   try {
-    req.auth = jwt.verify(token, process.env.JWT_SECRET, {
-      issuer: "waltajjii",
-      audience: "waltajjii-users"
-    });
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid or expired login token." });
+    const result = await db.query(
+      "SELECT id, username, bio, avatar_path AS \"avatarPath\" FROM users WHERE id = $1",
+      [req.auth.userId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: "Account not found." });
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error("Profile retrieval error:", error.message);
+    res.status(500).json({ error: "Could not retrieve profile." });
   }
-}
-
-// Retrieve the logged-in user's profile.
-router.get("/profile", authenticateProfile, (req, res) => {
-  const user = db.prepare(`
-    SELECT id, username, bio, avatar_path AS avatarPath
-    FROM users WHERE id = ?
-  `).get(req.auth.userId);
-
-  if (!user) return res.status(404).json({ error: "Account not found." });
-
-  res.json({ user });
 });
 
-// Update the logged-in user's brief bio.
-router.patch("/profile", authenticateProfile, (req, res) => {
-  const bio = String(req.body.bio || "").trim();
-
-  if (bio.length > 160) {
-    return res.status(400).json({
-      error: "Bio must not exceed 160 characters."
-    });
+router.patch("/profile", authenticate, async (req, res) => {
+  try {
+    const bio = String(req.body.bio || "").trim();
+    if (bio.length > 160) {
+      return res.status(400).json({ error: "Bio must not exceed 160 characters." });
+    }
+    await db.query("UPDATE users SET bio = $1 WHERE id = $2", [bio, req.auth.userId]);
+    res.json({ message: "Bio updated successfully.", bio });
+  } catch (error) {
+    console.error("Profile update error:", error.message);
+    res.status(500).json({ error: "Could not update profile." });
   }
-
-  db.prepare("UPDATE users SET bio = ? WHERE id = ?")
-    .run(bio, req.auth.userId);
-
-  res.json({ message: "Bio updated successfully.", bio });
 });
+
 module.exports = router;
