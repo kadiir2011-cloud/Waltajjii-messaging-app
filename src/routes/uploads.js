@@ -47,7 +47,6 @@ const allowedTypes = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
   "text/csv": ".csv",
   "application/vnd.ms-powerpoint": ".ppt",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".ppt",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
   "text/plain": ".txt"
 };
@@ -139,7 +138,21 @@ router.get("/:filename", authenticate, async (req, res) => {
   `).get(filename, req.auth.userId, req.auth.userId);
   if (!message) return res.status(404).json({ error: "Media not found." });
   const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename);
-  return sendStoredFile(filename, res, { attachment: isDocument });
+  const contentTypes = {
+    ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+    ".pdf": "application/pdf", ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt": "text/plain", ".csv": "text/csv"
+  };
+  return sendStoredFile(filename, res, {
+    attachment: isDocument,
+    contentType: contentTypes[path.extname(filename).toLowerCase()] || "application/octet-stream"
+  });
 });
 
 // Profile pictures: JPG, PNG or WebP, maximum 2 MB.
