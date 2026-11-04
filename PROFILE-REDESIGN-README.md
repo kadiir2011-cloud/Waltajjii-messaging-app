@@ -18,3 +18,17 @@ This package contains a profile redesign based on the source ZIP supplied for Wa
 5. Do not commit `.env`, JWT secrets, Supabase keys, or other credentials.
 
 The profile-sharing preference controls which optional profile fields are returned by the authenticated user-list endpoint. The existing app does not yet provide a dedicated public profile page.
+
+
+## Supabase Storage integration (review branch)
+
+The backend can store newly uploaded message attachments and profile pictures in the private Supabase Storage bucket.
+
+Before enabling it in Render, set these environment variables:
+- `SUPABASE_URL`: the Supabase project URL.
+- `SUPABASE_SERVICE_ROLE_KEY`: the Supabase secret/service-role key (server-side only).
+- `SUPABASE_STORAGE_BUCKET`: `waltajjii-media` (optional; this is the default).
+
+Never expose the secret key in browser code, GitHub, screenshots, or chat. Existing local uploads are not automatically migrated by this integration; local files are served as a fallback while they remain available. SQLite user accounts, messages, and groups remain on the existing database and require a separate persistence/backup solution.
+
+When Supabase credentials are absent, uploads continue using the existing local filesystem. When configured, new uploads use the private bucket and authenticated application endpoints retrieve them.
