@@ -43,6 +43,14 @@ async function loadMyProfile() {
   const bioDisplay = document.getElementById("profile-bio-display");
   const usernameDisplay = document.getElementById("profile-username");
   const picturePreview = document.getElementById("profile-picture-preview");
+  const profileFields = {
+    title: document.getElementById("profile-title"),
+    organization: document.getElementById("profile-organization"),
+    department: document.getElementById("profile-department"),
+    location: document.getElementById("profile-location"),
+    website: document.getElementById("profile-website"),
+    mode: document.getElementById("profile-mode")
+  };
 
   try {
     const data = await api("/api/auth/profile");
@@ -51,6 +59,15 @@ async function loadMyProfile() {
     usernameDisplay.textContent = user.username;
     bioInput.value = user.bio || "";
     bioDisplay.textContent = user.bio || "No bio added yet.";
+    profileFields.title.value = user.professionalTitle || "";
+    profileFields.organization.value = user.organization || "";
+    profileFields.department.value = user.department || "";
+    profileFields.location.value = user.location || "";
+    profileFields.website.value = user.website || "";
+    profileFields.mode.value = user.profileMode || "both";
+    document.getElementById("bio-counter").textContent = (user.bio || "").length;
+    const professionalLine = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
+    document.getElementById("profile-professional-line").textContent = professionalLine || "Waltajjii member";
 
     if (user.avatarPath) {
       const response = await fetch(
@@ -179,9 +196,10 @@ callSocket.on("connect_error", (error) => {
 
   const option = document.createElement("option");
   option.value = user.username;
-  option.textContent = user.bio
-  ? `${user.username} — ${user.bio}`
-  : user.username;
+  const professionalLabel = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
+  option.textContent = professionalLabel
+    ? `${user.username} — ${professionalLabel}`
+    : (user.bio ? `${user.username} — ${user.bio}` : user.username);
   recipient.appendChild(option);
 }); 
         statusBox.textContent = data.users.length
@@ -937,21 +955,36 @@ groupMessageForm.addEventListener("submit", async event => {
     groupMessageInput.focus();
   }
 });
-// Save the user's bio.
+// Keep the biography character counter in sync with typing.
+document.getElementById("profile-bio-input").addEventListener("input", event => {
+  document.getElementById("bio-counter").textContent = event.target.value.length;
+});
+
+// Save the user's profile.
 document.getElementById("save-profile-button").addEventListener("click", async () => {
-  const bio = document.getElementById("profile-bio-input").value;
   const status = document.getElementById("profile-status");
+  const payload = {
+    bio: document.getElementById("profile-bio-input").value,
+    professionalTitle: document.getElementById("profile-title").value,
+    organization: document.getElementById("profile-organization").value,
+    department: document.getElementById("profile-department").value,
+    location: document.getElementById("profile-location").value,
+    website: document.getElementById("profile-website").value,
+    profileMode: document.getElementById("profile-mode").value
+  };
 
   try {
     const data = await api("/api/auth/profile", {
       method: "PATCH",
-      body: JSON.stringify({ bio })
+      body: JSON.stringify(payload)
     });
 
     document.getElementById("profile-bio-display").textContent =
       data.bio || "No bio added yet.";
+    const professionalLine = [data.professionalTitle, data.organization].filter(Boolean).join(" · ");
+    document.getElementById("profile-professional-line").textContent = professionalLine || "Waltajjii member";
 
-    status.textContent = "Bio saved successfully.";
+    status.textContent = "Profile saved successfully.";
   } catch (error) {
     status.textContent = error.message;
   }
