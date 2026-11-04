@@ -74,6 +74,48 @@
       #message-form { align-items: stretch; flex-direction: column; }
       #message-form button { width: 100%; }
     }
+
+    /* Waltajjii profile refresh */
+    :root { --wt-ink:#172b3a; --wt-muted:#64748b; --wt-teal:#087f78; --wt-line:#e2e8f0; --wt-soft:#f4f8fa; }
+    body { background:linear-gradient(180deg,#edf4f5 0,#f7f9fb 280px); color:var(--wt-ink); }
+    header { background:linear-gradient(115deg,#102b43,#087f78); text-align:left; padding:22px max(20px,calc((100% - 1100px)/2)); }
+    header .brand { justify-content:flex-start; margin:0 0 6px; }
+    header .brand-tagline { margin:0 0 0 66px; opacity:.82; }
+    main { max-width:1100px; margin:24px auto; }
+    .panel { border:1px solid #e7edf1; border-radius:18px; box-shadow:0 12px 36px #17324a0c; }
+    button { background:var(--wt-teal); border-radius:10px; font-weight:600; transition:transform .15s,background .15s; }
+    button:hover { background:#066b66; transform:translateY(-1px); }
+    input, select, textarea { border:1px solid #d7e1e8 !important; border-radius:10px !important; background:#fff; }
+    #profile-panel { border:1px solid var(--wt-line); border-radius:18px; padding:22px; background:#fff; margin:20px 0 26px; }
+    .profile-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+    .profile-heading h3 { margin:0; font-size:1.2rem; }
+    .profile-hero { display:flex; align-items:center; gap:18px; padding:18px; border-radius:15px; background:linear-gradient(120deg,#f0f7f7,#f6f8fb); }
+    #profile-picture-preview { width:104px!important; height:104px!important; border-radius:50%; object-fit:cover; background:#dcebea; border:4px solid #fff; box-shadow:0 3px 12px #102b4318; }
+    .profile-identity { min-width:0; }
+    .profile-identity strong { display:block; font-size:1.3rem; letter-spacing:-.02em; }
+    .profile-handle { color:var(--wt-muted); font-size:.9rem; margin-top:3px; }
+    #profile-bio-display { margin:8px 0 0; }
+    .profile-section-title { margin:22px 0 10px; font-size:.95rem; color:#334e60; }
+    .profile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; }
+    .profile-field label { display:block; font-size:.86rem; font-weight:600; color:#42596a; margin:0 0 5px; }
+    .profile-field input, .profile-field textarea, .profile-field select { margin:0; width:100%; }
+    .profile-field.full { grid-column:1/-1; }
+    .profile-help { color:var(--wt-muted); font-size:.82rem; margin:7px 0 0; }
+    .profile-actions { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-top:16px; }
+    .profile-actions button { margin:0; }
+    .profile-actions .secondary { background:#eaf1f4; color:#263e4d; }
+    .profile-actions .danger { background:#fff0f0; color:#a33232; }
+    #profile-status { min-height:20px; margin:10px 0 0; }
+    @media(max-width:640px) {
+      header { padding:18px 16px; }
+      header .brand-tagline { margin-left:56px; }
+      main { margin:12px auto; padding:10px; }
+      #profile-panel { padding:16px; }
+      .profile-grid { grid-template-columns:1fr; }
+      .profile-field.full { grid-column:auto; }
+      .profile-hero { align-items:flex-start; padding:14px; }
+      #profile-picture-preview { width:82px!important; height:82px!important; }
+    }
   </style>
 </head>
 <body>
@@ -141,37 +183,77 @@
         <button type="button" id="logout-button">Log out</button>
       </div>
       <p id="welcome-user" class="muted"></p>
-<section id="profile-panel" class="group-panel">
-  <h3>My profile</h3>
-
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-    <img
-      id="profile-picture-preview"
-      src=""
-      alt="Profile picture"
-      style="width:90px;height:90px;border-radius:50%;object-fit:cover;background:#e6f3ef;"
-    >
-
+<section id="profile-panel" aria-labelledby="profile-heading">
+  <div class="profile-heading">
     <div>
+      <h3 id="profile-heading">Your profile</h3>
+      <p class="profile-help">A profile for both personal and professional connections.</p>
+    </div>
+    <span class="muted">WALTAJJII ID</span>
+  </div>
+
+  <div class="profile-hero">
+    <img id="profile-picture-preview" src="" alt="Profile picture">
+    <div class="profile-identity">
       <strong id="profile-username"></strong>
+      <div class="profile-handle" id="profile-professional-line">Waltajjii member</div>
       <p id="profile-bio-display" class="muted">No bio added yet.</p>
     </div>
   </div>
 
-  <label for="profile-picture-input">Profile picture (JPG, PNG or WebP; maximum 2 MB)</label>
-  <input id="profile-picture-input" type="file"
-         accept="image/jpeg,image/png,image/webp">
-
-  <label for="profile-bio-input">Brief bio (maximum 160 characters)</label>
-  <textarea id="profile-bio-input" maxlength="160"
-            rows="3" style="width:100%;padding:12px;border:1px solid #bdcec8;border-radius:8px;"></textarea>
-
-  <div class="row">
-    <button type="button" id="save-profile-button">Save bio</button>
-    <button type="button" id="upload-profile-picture-button">Upload picture</button>
-    <button type="button" id="remove-profile-picture-button">Remove picture</button>
+  <h4 class="profile-section-title">Basic identity</h4>
+  <div class="profile-grid">
+    <div class="profile-field full">
+      <label for="profile-bio-input">About you / brief bio</label>
+      <textarea id="profile-bio-input" maxlength="160" rows="3"
+        placeholder="A short introduction (maximum 160 characters)"></textarea>
+      <p class="profile-help"><span id="bio-counter">0</span>/160 characters</p>
+    </div>
+    <div class="profile-field">
+      <label for="profile-mode">What others can see</label>
+      <select id="profile-mode">
+        <option value="both">Show both personal and professional</option>
+        <option value="personal">Show personal details</option>
+        <option value="professional">Show professional details</option>
+      </select>
+    </div>
   </div>
 
+  <h4 class="profile-section-title">Professional information <span class="muted">(optional)</span></h4>
+  <div class="profile-grid">
+    <div class="profile-field">
+      <label for="profile-title">Professional title / role</label>
+      <input id="profile-title" maxlength="100" placeholder="e.g. Physician, Student, Engineer">
+    </div>
+    <div class="profile-field">
+      <label for="profile-organization">Organization / institution</label>
+      <input id="profile-organization" maxlength="120" placeholder="e.g. Jimma University">
+    </div>
+    <div class="profile-field">
+      <label for="profile-department">Department / unit</label>
+      <input id="profile-department" maxlength="120" placeholder="Department or team">
+    </div>
+    <div class="profile-field">
+      <label for="profile-location">Location</label>
+      <input id="profile-location" maxlength="100" placeholder="City, country">
+    </div>
+    <div class="profile-field full">
+      <label for="profile-website">Website / professional link</label>
+      <input id="profile-website" type="url" maxlength="200" placeholder="https://...">
+    </div>
+  </div>
+
+  <h4 class="profile-section-title">Profile picture</h4>
+  <div class="profile-field">
+    <label for="profile-picture-input">Choose JPG, PNG or WebP (maximum 2 MB)</label>
+    <input id="profile-picture-input" type="file" accept="image/jpeg,image/png,image/webp">
+  </div>
+
+  <div class="profile-actions">
+    <button type="button" id="save-profile-button">Save profile</button>
+    <button type="button" class="secondary" id="upload-profile-picture-button">Upload picture</button>
+    <button type="button" class="danger" id="remove-profile-picture-button">Remove picture</button>
+  </div>
   <p id="profile-status" class="muted" role="status" aria-live="polite"></p>
 </section>
       <label for="recipient">Choose a recipient</label>

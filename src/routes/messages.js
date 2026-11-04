@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const jwt = require("jsonwebtoken");
 const db = require("../db");
 
@@ -25,7 +25,13 @@ function authenticate(req, res, next) {
 
 router.get("/users", authenticate, (req, res) => {
   const users = db.prepare(
-  `SELECT id, username, bio, avatar_path AS avatarPath
+  `SELECT id, username,
+          CASE WHEN profile_mode IN ('personal', 'both') THEN bio ELSE '' END AS bio,
+          CASE WHEN profile_mode IN ('professional', 'both') THEN professional_title ELSE '' END AS professionalTitle,
+          CASE WHEN profile_mode IN ('professional', 'both') THEN organization ELSE '' END AS organization,
+          CASE WHEN profile_mode IN ('professional', 'both') THEN department ELSE '' END AS department,
+          CASE WHEN profile_mode IN ('professional', 'both') THEN location ELSE '' END AS location,
+          avatar_path AS avatarPath
    FROM users
    WHERE id != ?
    ORDER BY username

@@ -77,6 +77,23 @@ avatar_path TEXT,
   CREATE INDEX IF NOT EXISTS idx_group_messages_group
   ON group_messages(group_id, id);
 `);
+
+
+// Add profile fields to existing Waltajjii databases without deleting user data.
+const profileColumnNames = db.prepare("PRAGMA table_info(users)").all().map(column => column.name);
+const profileMigrations = [
+  ["professional_title", "TEXT NOT NULL DEFAULT ''"],
+  ["organization", "TEXT NOT NULL DEFAULT ''"],
+  ["department", "TEXT NOT NULL DEFAULT ''"],
+  ["location", "TEXT NOT NULL DEFAULT ''"],
+  ["website", "TEXT NOT NULL DEFAULT ''"],
+  ["profile_mode", "TEXT NOT NULL DEFAULT 'both'"]
+];
+for (const [column, definition] of profileMigrations) {
+  if (!profileColumnNames.includes(column)) {
+    db.exec(`ALTER TABLE users ADD COLUMN ${column} ${definition}`);
+  }
+}
 // Safely add the bio field to existing databases.
 const userColumns = db.prepare("PRAGMA table_info(users)").all();
 
