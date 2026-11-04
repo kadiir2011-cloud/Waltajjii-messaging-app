@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
@@ -113,7 +113,10 @@ function authenticateProfile(req, res, next) {
 // Retrieve the logged-in user's profile.
 router.get("/profile", authenticateProfile, (req, res) => {
   const user = db.prepare(`
-    SELECT id, username, bio, avatar_path AS avatarPath
+    SELECT id, username, bio,
+           professional_title AS professionalTitle,
+           organization, department, location, website, profile_mode AS profileMode,
+           avatar_path AS avatarPath
     FROM users WHERE id = ?
   `).get(req.auth.userId);
 
@@ -125,16 +128,30 @@ router.get("/profile", authenticateProfile, (req, res) => {
 // Update the logged-in user's brief bio.
 router.patch("/profile", authenticateProfile, (req, res) => {
   const bio = String(req.body.bio || "").trim();
+  const professionalTitle = String(req.body.professionalTitle || "").trim();
+  const organization = String(req.body.organization || "").trim();
+  const department = String(req.body.department || "").trim();
+  const location = String(req.body.location || "").trim();
+  const website = String(req.body.website || "").trim();
+  const profileMode = String(req.body.profileMode || "both").trim();
 
-  if (bio.length > 160) {
-    return res.status(400).json({
-      error: "Bio must not exceed 160 characters."
-    });
+  if (bio.length > 160 || professionalTitle.length > 100 ||
+      organization.length > 120 || department.length > 120 ||
+      location.length > 100 || website.length > 200) {
+    return res.status(400).json({ error: "One or more profile fields exceed their character limits." });
+  }
+  if (!["personal", "professional", "both"].includes(profileMode)) {
+    return res.status(400).json({ error: "Invalid profile display preference." });
+  }
+  if (website && !/^https?:\/\//i.test(website)) {
+    return res.status(400).json({ error: "Website must begin with http:// or https://." });
   }
 
-  db.prepare("UPDATE users SET bio = ? WHERE id = ?")
-    .run(bio, req.auth.userId);
+  db.prepare(`UPDATE users SET bio = ?, professional_title = ?, organization = ?,
+    department = ?, location = ?, website = ?, profile_mode = ? WHERE id = ?`)
+    .run(bio, professionalTitle, organization, department, location, website, profileMode, req.auth.userId);
 
-  res.json({ message: "Bio updated successfully.", bio });
+  res.json({ message: "Profile updated successfully.", bio, professionalTitle,
+    organization, department, location, website, profileMode });
 });
 module.exports = router;
