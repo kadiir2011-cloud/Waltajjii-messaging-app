@@ -1749,3 +1749,39 @@ document.getElementById("social-requests-tab").addEventListener("click", loadReq
 document.getElementById("social-following-tab").addEventListener("click", loadFollowing);
 document.getElementById("social-followers-tab").addEventListener("click", loadFollowers);
 document.getElementById("social-notifications-tab").addEventListener("click", loadNotifications);
+
+
+// Phase 9: grouped navigation controls. Navigation changes layout only; it does not alter app data.
+(function initWaltajjiiNavigation() {
+  const shell = document.querySelector(".wt-app-shell");
+  const toggle = document.getElementById("wt-nav-toggle");
+  const sidebar = document.getElementById("wt-sidebar");
+  if (!shell || !toggle || !sidebar) return;
+
+  toggle.addEventListener("click", () => {
+    const isOpen = shell.classList.toggle("wt-sidebar-open");
+    toggle.setAttribute("aria-expanded", String(isOpen));
+    toggle.textContent = isOpen ? "✕ Close menu" : "☰ Menu";
+  });
+
+  sidebar.querySelectorAll('a[href^="#"]').forEach(link => {
+    link.addEventListener("click", () => {
+      sidebar.querySelectorAll("a[aria-current='location']").forEach(item => item.removeAttribute("aria-current"));
+      link.setAttribute("aria-current", "location");
+      if (window.matchMedia("(max-width: 820px)").matches) {
+        shell.classList.remove("wt-sidebar-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.textContent = "☰ Menu";
+      }
+    });
+  });
+
+  sidebar.querySelectorAll(".wt-nav-group").forEach(group => {
+    group.addEventListener("toggle", () => {
+      if (!group.open) return;
+      sidebar.querySelectorAll(".wt-nav-group").forEach(other => {
+        if (other !== group) other.open = false;
+      });
+    });
+  });
+})();
