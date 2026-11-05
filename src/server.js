@@ -15,7 +15,8 @@ app.set("trust proxy", 1);
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      imgSrc: ["'self'", "data:", "blob:"]
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'"]
     }
   }
 }));
@@ -42,6 +43,7 @@ app.use("/api/groups", require("./routes/groups"));
 app.use("/api/channels", require("./routes/channels"));
 app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/social", require("./routes/social"));
+app.use("/api/calls", require("./routes/calls"));
 
 const server = http.createServer(app);
 
