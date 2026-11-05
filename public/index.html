@@ -420,6 +420,22 @@
     html[dir="rtl"] .message.mine { margin-right: auto; margin-left: 0; border-radius: 14px 14px 14px 4px; }
     html[dir="rtl"] #message-form { direction: rtl; }
 
+
+    @media (min-width: 1100px) {
+      .social-panel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 22px;
+        align-items: start;
+      }
+      .social-panel > #social-heading,
+      .social-panel > .social-muted,
+      .social-panel > .social-tabs { grid-column: 1 / -1; }
+      #social-discover, #social-feed { grid-column: auto; min-width: 0; }
+      #social-requests, #social-following, #social-followers,
+      #social-notifications { grid-column: 1 / -1; }
+    }
+
   </style>
 </head>
 <body>
