@@ -40,6 +40,12 @@ const allowedTypes = {
   "image/gif": ".gif",
   "video/mp4": ".mp4",
   "video/webm": ".webm",
+  "audio/webm": ".webm",
+  "audio/ogg": ".ogg",
+  "audio/mp4": ".m4a",
+  "audio/mpeg": ".mp3",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
   "application/pdf": ".pdf",
   "application/msword": ".doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
@@ -55,7 +61,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE, files: 1 },
   fileFilter: (req, file, cb) => {
-    if (!Object.prototype.hasOwnProperty.call(allowedTypes, file.mimetype)) {
+    if (!Object.prototype.hasOwnProperty.call(allowedTypes, String(file.mimetype || "").split(";")[0])) {
       return cb(new Error("Unsupported file type."));
     }
     cb(null, true);
@@ -63,12 +69,13 @@ const upload = multer({
 });
 
 async function storeFile(file, maxBytes, typeMap) {
-  const extension = typeMap[file.mimetype];
+  const mimeType = String(file.mimetype || "").split(";")[0];
+  const extension = typeMap[mimeType];
   if (!extension) throw new Error("Unsupported file type.");
   if (!file.buffer || file.size > maxBytes) throw new Error("File size limit exceeded.");
   const filename = crypto.randomUUID() + extension;
   if (storageService.configured) {
-    await storageService.uploadObject(filename, file.buffer, file.mimetype);
+    await storageService.uploadObject(filename, file.buffer, mimeType);
   } else {
     fs.writeFileSync(path.join(uploadDir, filename), file.buffer, { flag: "wx" });
   }
@@ -93,9 +100,10 @@ async function sendStoredFile(filename, res, options = {}) {
   }
   const filePath = path.join(uploadDir, filename);
   if (!fs.existsSync(filePath)) return res.status(404).end();
-  return res.sendFile(filePath, options.attachment
-    ? { headers: { "Content-Disposition": "attachment" } }
-    : {}, error => {
+  const headers = {};
+  if (options.attachment) headers["Content-Disposition"] = "attachment";
+  if (options.contentType && options.contentType.startsWith("audio/")) headers["Content-Type"] = options.contentType;
+  return res.sendFile(filePath, Object.keys(headers).length ? { headers } : {}, error => {
       if (error && !res.headersSent) res.status(404).end();
     });
 }
@@ -111,9 +119,10 @@ router.post("/", authenticate, (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Please select a file." });
     try {
       const filename = await storeFile(req.file, MAX_FILE_SIZE, allowedTypes);
-      const mediaType = req.file.mimetype.startsWith("image/")
+      const normalizedMime = String(req.file.mimetype || "").split(";")[0];
+      const mediaType = normalizedMime.startsWith("image/")
         ? "image"
-        : req.file.mimetype.startsWith("video/") ? "video" : "document";
+        : normalizedMime.startsWith("video/") ? "video" : "document";
       return res.status(201).json({
         message: "File uploaded successfully.",
         fileId: filename,
@@ -128,11 +137,11 @@ router.post("/", authenticate, (req, res) => {
 
 router.get("/:filename", authenticate, async (req, res) => {
   const filename = String(req.params.filename || "");
-  if (!/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename)) {
+  if (!/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename)) {
     return res.status(400).json({ error: "Invalid media filename." });
   }
   const message = db.prepare(`
-    SELECT id FROM messages
+    SELECT id, body FROM messages
     WHERE media_path = ? AND (sender_id = ? OR receiver_id = ?)
     LIMIT 1
   `).get(filename, req.auth.userId, req.auth.userId);
@@ -140,7 +149,8 @@ router.get("/:filename", authenticate, async (req, res) => {
   const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename);
   const contentTypes = {
     ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": String(message.body || "").startsWith("[Voice message]") ? "audio/webm" : "video/webm",
+    ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
     ".pdf": "application/pdf", ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".xls": "application/vnd.ms-excel",

@@ -9,6 +9,10 @@ const authPanel = document.getElementById("auth-panel");
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");
 const mediaInput = document.getElementById("media-input");
+    let recordedVoiceFile = null;
+    let voiceRecorder = null;
+    let voiceStream = null;
+    let voiceChunks = [];
 
     let token = null;
     let currentUsername = null;
@@ -228,13 +232,53 @@ items.forEach(item => {
   label.textContent = item.sender + " â†’ " + item.recipient;
 
   const content = document.createElement("div");
-  content.textContent = item.body || "";
+  const isVoiceMessage = Boolean(item.mediaPath && item.mediaType === "document" && String(item.body || "").startsWith("[Voice message]"));
+  content.textContent = isVoiceMessage ? String(item.body || "").replace(/^\[Voice message\]\s*/, "") : (item.body || "");
 
   if (item.mediaPath && item.mediaType) {
     const mediaUrl =
       "/api/uploads/" + encodeURIComponent(item.mediaPath);
 
-    if (item.mediaType === "image") {
+    if (isVoiceMessage) {
+      const player = document.createElement("div");
+      player.className = "voice-player";
+      const top = document.createElement("div");
+      top.className = "voice-player-top";
+      const title = document.createElement("span");
+      title.textContent = "🎙 Voice message";
+      const speed = document.createElement("select");
+      speed.setAttribute("aria-label", "Voice playback speed");
+      [["1","1×"],["1.5","1.5×"],["2","2×"]].forEach(([value,label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        speed.appendChild(option);
+      });
+      top.append(title, speed);
+      const waveform = document.createElement("div");
+      waveform.className = "voice-waveform";
+      for (let i = 0; i < 24; i++) {
+        const bar = document.createElement("span");
+        bar.style.height = (6 + ((i * 7 + 11) % 17)) + "px";
+        waveform.appendChild(bar);
+      }
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.preload = "metadata";
+      speed.addEventListener("change", () => { audio.playbackRate = Number(speed.value); });
+      fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+        .then(response => {
+          if (!response.ok) throw new Error("Voice message request failed: " + response.status);
+          return response.blob();
+        })
+        .then(blob => { audio.src = URL.createObjectURL(blob); })
+        .catch(error => {
+          console.error("Could not load voice message:", error);
+          title.textContent = "Voice message unavailable";
+        });
+      player.append(top, waveform, audio);
+      content.appendChild(player);
+    } else if (item.mediaType === "image") {
   const image = document.createElement("img");
 
   fetch(mediaUrl, {
@@ -285,6 +329,7 @@ items.forEach(item => {
 
   content.appendChild(image);
 } else if (item.mediaType === "video") {
+  const video = document.createElement("video");
   video.controls = true;
   video.preload = "metadata";
   video.style.maxWidth = "100%";
@@ -378,12 +423,75 @@ items.forEach(item => {
     document.getElementById("load-button").addEventListener("click", loadConversation);
     recipient.addEventListener("change", loadConversation);
 
+    const recordVoiceButton = document.getElementById("record-voice-button");
+    const voiceStatus = document.getElementById("voice-recording-status");
+    const voicePreview = document.getElementById("voice-recording-preview");
+
+    function clearVoiceRecording() {
+      recordedVoiceFile = null;
+      voicePreview.replaceChildren();
+      voicePreview.hidden = true;
+      voiceStatus.textContent = "";
+    }
+
+    recordVoiceButton.addEventListener("click", async () => {
+      if (voiceRecorder && voiceRecorder.state === "recording") {
+        voiceRecorder.stop();
+        return;
+      }
+      if (!recipient.value) {
+        voiceStatus.textContent = "Please select a recipient first.";
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        voiceStatus.textContent = "Voice recording is not supported in this browser.";
+        return;
+      }
+      try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+        const mimeType = candidates.find(type => MediaRecorder.isTypeSupported(type));
+        voiceRecorder = mimeType ? new MediaRecorder(voiceStream, { mimeType }) : new MediaRecorder(voiceStream);
+        voiceChunks = [];
+        voiceRecorder.addEventListener("dataavailable", event => {
+          if (event.data && event.data.size) voiceChunks.push(event.data);
+        });
+        voiceRecorder.addEventListener("stop", () => {
+          voiceStream.getTracks().forEach(track => track.stop());
+          voiceStream = null;
+          const type = voiceRecorder.mimeType || "audio/webm";
+          const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+          const blob = new Blob(voiceChunks, { type });
+          recordedVoiceFile = new File([blob], "waltajjii-voice-message." + extension, { type: type.split(";")[0] });
+          const previewAudio = document.createElement("audio");
+          previewAudio.controls = true;
+          previewAudio.src = URL.createObjectURL(blob);
+          voicePreview.replaceChildren(previewAudio);
+          voicePreview.hidden = false;
+          voiceStatus.textContent = "Voice message ready. Press Send to share it.";
+          recordVoiceButton.textContent = "🎙 Record again";
+          recordVoiceButton.classList.remove("is-recording");
+        });
+        voiceRecorder.start();
+        recordVoiceButton.textContent = "■ Stop recording";
+        recordVoiceButton.classList.add("is-recording");
+        voiceStatus.textContent = "Recording… speak now.";
+      } catch (error) {
+        if (voiceStream) voiceStream.getTracks().forEach(track => track.stop());
+        voiceStream = null;
+        voiceStatus.textContent = error.name === "NotAllowedError"
+          ? "Microphone access was denied. Allow microphone access and try again."
+          : "Could not start recording. Please check your microphone.";
+      }
+    });
+
     messageForm.addEventListener("submit", async event => {
   event.preventDefault();
 
   const receiverUsername = recipient.value;
   const body = messageInput.value.trim();
-  const file = mediaInput.files[0];
+  const file = recordedVoiceFile || mediaInput.files[0];
+  const isVoiceFile = Boolean(recordedVoiceFile && file === recordedVoiceFile);
 
   if (!receiverUsername) {
     statusBox.textContent = "Please select a recipient first.";
@@ -391,7 +499,7 @@ items.forEach(item => {
   }
 
   if (!body && !file) {
-    statusBox.textContent = "Write a message or select a file.";
+    statusBox.textContent = "Write a message, record a voice note, or select a file.";
     return;
   }
 
@@ -426,7 +534,7 @@ items.forEach(item => {
         method: "POST",
         body: JSON.stringify({
           receiverUsername,
-          body,
+          body: isVoiceFile ? "[Voice message]" + (body ? " " + body : "") : body,
           mediaPath: uploadResult.fileId,
           mediaType: uploadResult.mediaType
         })
@@ -434,6 +542,7 @@ items.forEach(item => {
 
       mediaInput.value = "";
       messageInput.value = "";
+      if (isVoiceFile) clearVoiceRecording();
 
       await loadConversation();
       statusBox.textContent = "Message with media sent.";
