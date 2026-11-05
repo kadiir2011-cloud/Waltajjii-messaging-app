@@ -39,6 +39,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/messages", require("./routes/messages"));
 app.use("/api/groups", require("./routes/groups"));
+app.use("/api/channels", require("./routes/channels"));
 app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/social", require("./routes/social"));
 
