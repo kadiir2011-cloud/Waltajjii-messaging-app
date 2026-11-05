@@ -1,7 +1,7 @@
 
 // Phase 7: local appearance preferences. These settings are private to this browser.
 (function initWaltajjiiAppearance() {
-  const defaults = { theme: "system", accent: "teal", wallpaper: "plain" };
+  const defaults = { theme: "system", accent: "teal", wallpaper: "plain", lowData: false };
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem("waltajjii-appearance") || "{}"); } catch { saved = {}; }
   const prefs = { ...defaults, ...saved };
@@ -9,29 +9,54 @@
   const themeSelect = document.getElementById("wt-theme");
   const accentSelect = document.getElementById("wt-accent");
   const wallpaperSelect = document.getElementById("wt-wallpaper");
+  const lowDataSelect = document.getElementById("wt-low-data");
   const status = document.getElementById("wt-preferences-status");
-  if (!themeSelect || !accentSelect || !wallpaperSelect) return;
+  if (!themeSelect || !accentSelect || !wallpaperSelect || !lowDataSelect) return;
   themeSelect.value = ["light", "dark", "system"].includes(prefs.theme) ? prefs.theme : "system";
   accentSelect.value = Object.hasOwn(accents, prefs.accent) ? prefs.accent : "teal";
   wallpaperSelect.value = ["plain", "soft", "sky", "warm"].includes(prefs.wallpaper) ? prefs.wallpaper : "plain";
+  lowDataSelect.checked = prefs.lowData === true;
   function apply() {
+    document.body.dataset.wtLowData = lowDataSelect.checked ? "true" : "false";
     const selectedTheme = themeSelect.value;
     const dark = selectedTheme === "dark" || (selectedTheme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
     document.body.dataset.wtTheme = dark ? "dark" : "light";
     document.body.style.setProperty("--wt-teal", accents[accentSelect.value] || accents.teal);
     document.body.dataset.wtWallpaper = wallpaperSelect.value;
     try {
-      localStorage.setItem("waltajjii-appearance", JSON.stringify({ theme: selectedTheme, accent: accentSelect.value, wallpaper: wallpaperSelect.value }));
-      status.textContent = "Your appearance preferences are saved on this device.";
+      localStorage.setItem("waltajjii-appearance", JSON.stringify({ theme: selectedTheme, accent: accentSelect.value, wallpaper: wallpaperSelect.value, lowData: lowDataSelect.checked }));
+      status.textContent = "Your appearance and data preferences are saved on this device.";
     } catch { status.textContent = "Preferences are applied for this session but could not be saved by this browser."; }
   }
-  [themeSelect, accentSelect, wallpaperSelect].forEach(control => control.addEventListener("change", apply));
+  [themeSelect, accentSelect, wallpaperSelect, lowDataSelect].forEach(control => control.addEventListener("change", apply));
   if (window.matchMedia) {
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
     systemTheme.addEventListener?.("change", () => { if (themeSelect.value === "system") apply(); });
   }
   apply();
 })();
+function isLowDataMode() {
+  return document.getElementById("wt-low-data")?.checked === true;
+}
+function createMediaLoadButton(label, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "secondary media-load-button";
+  button.textContent = label;
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    button.textContent = "Loading…";
+    onClick(() => {
+      button.remove();
+    }, error => {
+      button.disabled = false;
+      button.textContent = "Retry loading";
+      console.error("Could not load media:", error);
+    });
+  });
+  return button;
+}
+
 const authPanel = document.getElementById("auth-panel");
     const chatPanel = document.getElementById("chat-panel");
     const loginForm = document.getElementById("login-form");
@@ -300,55 +325,62 @@ items.forEach(item => {
       audio.controls = true;
       audio.preload = "metadata";
       speed.addEventListener("change", () => { audio.playbackRate = Number(speed.value); });
-      fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
-        .then(response => {
-          if (!response.ok) throw new Error("Voice message request failed: " + response.status);
-          return response.blob();
-        })
-        .then(blob => { audio.src = URL.createObjectURL(blob); })
-        .catch(error => {
-          console.error("Could not load voice message:", error);
-          title.textContent = "Voice message unavailable";
-        });
+      const loadVoiceMedia = (done, fail) => {
+        fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+          .then(response => {
+            if (!response.ok) throw new Error("Voice message request failed: " + response.status);
+            return response.blob();
+          })
+          .then(blob => {
+            audio.src = URL.createObjectURL(blob);
+            if (done) done();
+          })
+          .catch(error => {
+            title.textContent = "Voice message unavailable";
+            if (fail) fail(error);
+          });
+      };
+      if (isLowDataMode()) {
+        player.appendChild(createMediaLoadButton("Load voice message", loadVoiceMedia));
+      } else {
+        loadVoiceMedia();
+      }
       player.append(top, waveform, audio);
       content.appendChild(player);
     } else if (item.mediaType === "image") {
   const image = document.createElement("img");
 
-  fetch(mediaUrl, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Image request failed: " + response.status);
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      const imageUrl = URL.createObjectURL(blob);
-
-      // Display the image
-      image.src = imageUrl;
-
-      // Create a download link
-      const downloadLink = document.createElement("a");
-      downloadLink.href = imageUrl;
-      downloadLink.download = item.mediaPath.split("/").pop();
-      downloadLink.textContent = "⬇ Download image";
-      downloadLink.style.display = "inline-block";
-      downloadLink.style.marginTop = "8px";
-      downloadLink.style.padding = "8px 12px";
-      downloadLink.style.border = "1px solid #888";
-      downloadLink.style.borderRadius = "6px";
-
-      content.appendChild(downloadLink);
-    })
-    .catch(error => {
-      console.error("Could not load shared image:", error);
-      image.alt = "Image could not be loaded";
-    });
+  const loadImageMedia = (done, fail) => {
+    fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+      .then(response => {
+        if (!response.ok) throw new Error("Image request failed: " + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        const imageUrl = URL.createObjectURL(blob);
+        image.src = imageUrl;
+        const downloadLink = document.createElement("a");
+        downloadLink.href = imageUrl;
+        downloadLink.download = item.mediaPath.split("/").pop();
+        downloadLink.textContent = "⬇ Download image";
+        downloadLink.style.display = "inline-block";
+        downloadLink.style.marginTop = "8px";
+        downloadLink.style.padding = "8px 12px";
+        downloadLink.style.border = "1px solid #888";
+        downloadLink.style.borderRadius = "6px";
+        content.appendChild(downloadLink);
+        if (done) done();
+      })
+      .catch(error => {
+        image.alt = "Image could not be loaded";
+        if (fail) fail(error);
+      });
+  };
+  if (isLowDataMode()) {
+    content.appendChild(createMediaLoadButton("Load image (uses data)", loadImageMedia));
+  } else {
+    loadImageMedia();
+  }
 
   image.alt = "Image shared in chat";
   image.style.maxWidth = "100%";
@@ -371,24 +403,26 @@ items.forEach(item => {
   video.style.display = "block";
   video.style.marginTop = "8px";
 
-  fetch(mediaUrl, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Video request failed: " + response.status);
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      video.src = URL.createObjectURL(blob);
-    })
-    .catch(error => {
-      console.error("Could not load shared video:", error);
-      video.textContent = "Video could not be loaded.";
-    });
+  const loadVideoMedia = (done, fail) => {
+    fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+      .then(response => {
+        if (!response.ok) throw new Error("Video request failed: " + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        video.src = URL.createObjectURL(blob);
+        if (done) done();
+      })
+      .catch(error => {
+        video.textContent = "Video could not be loaded.";
+        if (fail) fail(error);
+      });
+  };
+  if (isLowDataMode()) {
+    content.appendChild(createMediaLoadButton("Load video (uses data)", loadVideoMedia));
+  } else {
+    loadVideoMedia();
+  }
 
   content.appendChild(video);
 
@@ -402,27 +436,31 @@ items.forEach(item => {
   link.style.border = "1px solid #888";
   link.style.borderRadius = "6px";
 
-  fetch(mediaUrl, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Document request failed: " + response.status);
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      link.href = URL.createObjectURL(blob);
-      link.download = item.mediaPath;
-    })
-    .catch(error => {
-      console.error("Could not load shared document:", error);
-      link.textContent = "Document could not be downloaded.";
-    });
-
-   content.appendChild(link);
+  link.hidden = true;
+  const loadDocumentMedia = (done, fail) => {
+    fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+      .then(response => {
+        if (!response.ok) throw new Error("Document request failed: " + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        link.href = URL.createObjectURL(blob);
+        link.download = item.mediaPath;
+        link.hidden = false;
+        link.textContent = "⬇ Download document: " + item.mediaPath;
+        if (done) done();
+      })
+      .catch(error => {
+        link.textContent = "Document could not be downloaded.";
+        if (fail) fail(error);
+      });
+  };
+  content.appendChild(link);
+  if (isLowDataMode()) {
+    content.appendChild(createMediaLoadButton("Prepare document download", loadDocumentMedia));
+  } else {
+    loadDocumentMedia();
+  }
 }
   } // Closes the outer media condition
 
