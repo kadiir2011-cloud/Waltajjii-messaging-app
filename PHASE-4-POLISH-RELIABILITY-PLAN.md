@@ -7,7 +7,7 @@
 - Keep all Phase 1–4 pull requests unmerged until end-to-end testing and explicit release approval.
 
 ## Goals
-1. Mobile-first responsive interface and accessible controls.
+1. Mobile-first responsive interface and accessible controls, followed by a complete cross-device visual redesign.
 3. User-facing notification preferences and privacy controls.
 4. Security and operational hardening.
 5. Durable database storage, backups, and recovery procedures.
@@ -36,6 +36,20 @@
 - Add accessible labels, focus states, and status announcements.
 - Test at phone, tablet, and desktop widths.
 
+### 4.7 Final visual redesign and responsive experience
+- Treat this as the final major user-interface workstream of Phase 4, after the multilingual foundation is stable.
+- Preserve Waltajjii's agreed visual identity: deep navy, teal, and soft white; clean typography and readable message bubbles; a polished communication experience inspired by WhatsApp and ChatGPT without copying either product.
+- Design mobile-first, then adapt deliberately for tablet and desktop rather than merely shrinking the desktop layout.
+- Mobile: compact navigation, thumb-friendly controls, readable type, well-sized conversation and media areas, clear back/navigation behavior, and no unintended horizontal scrolling.
+- Desktop: efficient multi-column workspace with clear navigation, conversation list/content separation, and sensible use of wide screens.
+- Tablet: adaptive intermediate layout with usable navigation and content panes.
+- Audit and refine every major component: authentication, navigation, profile, contacts/discovery, direct messaging, social feed/posts/comments, groups, channels, notifications, video/voice calls, forms, dialogs, menus, and settings.
+- Standardize spacing, typography, colors, buttons, cards, icons, borders, empty/loading/error states, and interactive feedback across the app.
+- Support light and dark themes consistently where existing app architecture allows; retain accessible contrast and visible keyboard focus.
+- Ensure responsive behavior also works with all seven interface languages; Arabic RTL must be correct on phone, tablet, and desktop.
+- Validate representative viewport widths (small phone, large phone, tablet, laptop, wide desktop), touch targets, keyboard navigation, text scaling, reduced motion, and overflow.
+- Do not remove or hide existing features merely to simplify the layout. Preserve existing workflows and data.
+
 ### 4.4 Notification and privacy controls
 - Add user preferences only after defining each notification type and default.
 - Enforce privacy choices on the server, not only by hiding UI.
@@ -55,7 +69,7 @@
 
 ## Acceptance criteria
 - No regressions in existing Phase 1–3 features or video calling.
-- Phone/tablet/desktop UI checks pass.
+- Phone/tablet/desktop UI checks pass, including the final visual redesign and all seven languages.
 - Privacy settings are enforced by API authorization.
 - Security checks and automated tests pass.
 - Data survives test-service redeploy/restart and a backup can be restored successfully.
