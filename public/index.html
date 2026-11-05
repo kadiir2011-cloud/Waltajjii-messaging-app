@@ -393,6 +393,28 @@
           <button type="submit">Send to group</button>
         </form>
       </section>
+
+      <section class="group-panel" aria-labelledby="channels-heading">
+        <h2 id="channels-heading">Channels</h2>
+        <p class="muted">Follow public channels or join private channels by invitation. Only channel owners and admins can publish announcements.</p>
+        <div class="row">
+          <button type="button" id="create-channel-button">Create channel</button>
+          <button type="button" id="refresh-channels-button">Refresh channels</button>
+        </div>
+        <label for="channel-select">Available channels</label>
+        <select id="channel-select"><option value="">Select a channel</option></select>
+        <div class="row">
+          <button type="button" id="open-channel-button">Open channel</button>
+          <button type="button" id="join-channel-button">Join selected public channel</button>
+          <button type="button" id="manage-channel-button">Manage members</button>
+        </div>
+        <p id="channel-status" role="status" aria-live="polite" class="muted">Log in to view channels.</p>
+        <div id="channel-messages" aria-live="polite" class="group-messages">Select a channel and open it.</div>
+        <form id="channel-message-form" class="group-message-form">
+          <input id="channel-message-input" maxlength="4000" placeholder="Publish a channel announcement..." autocomplete="off">
+          <button type="submit">Publish announcement</button>
+        </form>
+      </section>
     </section>
   </main>
 
