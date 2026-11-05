@@ -436,6 +436,15 @@
       #social-notifications { grid-column: 1 / -1; }
     }
 
+  
+    /* Phase 5: Moments cards and media */
+    .moment-form { display:grid; gap:8px; max-width:720px; }
+    .moment-form label { margin-top:5px; }
+    .moment-card { border:1px solid var(--wt-border); border-radius:16px; padding:15px; margin:12px 0; background:var(--wt-surface); }
+    .moment-card-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .moment-media { display:block; width:min(100%,520px); max-height:440px; object-fit:contain; margin:12px auto; border-radius:12px; background:#102b43; }
+    .moment-content { white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; }
+    .moment-delete { background:#fff0f0; color:#a33232; }
   </style>
 </head>
 <body>
@@ -581,6 +590,7 @@
         <h2 id="social-heading">Waltajjii Social</h2>
         <p class="social-muted">Discover people, build connections, share updates and follow conversations.</p>
         <nav class="social-tabs" aria-label="Social sections">
+          <button type="button" id="social-moments-tab">Moments</button>
           <button type="button" id="social-discover-tab">Discover</button>
           <button type="button" id="social-feed-tab">Feed</button>
           <button type="button" id="social-requests-tab">Requests</button>
@@ -588,6 +598,25 @@
           <button type="button" id="social-followers-tab">Followers</button>
           <button type="button" id="social-notifications-tab">Notifications</button>
         </nav>
+
+        <div class="social-section" id="social-moments">
+          <h3>Waltajjii Moments</h3>
+          <p class="social-muted">Share a photo, short video or text update. Moments disappear automatically after 24 hours.</p>
+          <form id="moment-form" class="moment-form">
+            <label for="moment-content">Your Moment</label>
+            <textarea class="social-input" id="moment-content" maxlength="500" rows="2" placeholder="What would you like to share?"></textarea>
+            <label for="moment-media">Add a photo or short video (optional, maximum 10 MB)</label>
+            <input class="social-input" id="moment-media" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm">
+            <label for="moment-audience">Who can view this Moment?</label>
+            <select id="moment-audience" class="social-input">
+              <option value="followers">People who follow you</option>
+              <option value="everyone">Everyone on Waltajjii</option>
+            </select>
+            <button type="submit" id="publish-moment-button">Share Moment</button>
+          </form>
+          <div id="moment-status" class="social-muted" role="status" aria-live="polite"></div>
+          <div id="moment-list" aria-live="polite"><p class="social-empty">Your active Moments will appear here.</p></div>
+        </div>
 
         <div class="social-section" id="social-discover">
           <h3>Discover people</h3>

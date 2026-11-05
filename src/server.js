@@ -43,6 +43,7 @@ app.use("/api/groups", require("./routes/groups"));
 app.use("/api/channels", require("./routes/channels"));
 app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/social", require("./routes/social"));
+app.use("/api/moments", require("./routes/moments"));
 app.use("/api/calls", require("./routes/calls"));
 
 const server = http.createServer(app);

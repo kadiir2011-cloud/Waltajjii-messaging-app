@@ -150,4 +150,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_channel_members_user ON channel_members(user_id, channel_id);
   CREATE INDEX IF NOT EXISTS idx_channel_messages_channel ON channel_messages(channel_id, id);
 `);
+// Phase 5: ephemeral Moments expire automatically after 24 hours.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS moments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    content TEXT NOT NULL DEFAULT '' CHECK(length(content) <= 500),
+    media_path TEXT,
+    media_type TEXT CHECK(media_type IS NULL OR media_type IN ('image','video')),
+    audience TEXT NOT NULL DEFAULT 'followers' CHECK(audience IN ('everyone','followers')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TEXT NOT NULL DEFAULT (datetime('now', '+24 hours')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CHECK(length(content) > 0 OR media_path IS NOT NULL)
+  );
+  CREATE INDEX IF NOT EXISTS idx_moments_expiry ON moments(expires_at, user_id);
+  CREATE INDEX IF NOT EXISTS idx_moments_user ON moments(user_id, id);
+`);
+
 module.exports = db;
