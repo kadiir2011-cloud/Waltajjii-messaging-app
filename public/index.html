@@ -445,6 +445,19 @@
     .moment-media { display:block; width:min(100%,520px); max-height:440px; object-fit:contain; margin:12px auto; border-radius:12px; background:#102b43; }
     .moment-content { white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; }
     .moment-delete { background:#fff0f0; color:#a33232; }
+
+    /* Phase 6: voice messages */
+    .voice-record-button { white-space: nowrap; background:#183b55; }
+    .voice-record-button.is-recording { background:#b42318; }
+    .voice-recording-status { color:var(--wt-muted); font-size:.82rem; }
+    .voice-recording-preview { grid-column:1/-1; padding:9px 12px; border-radius:12px; background:var(--wt-surface-soft); }
+    .voice-player { display:flex; flex-direction:column; gap:8px; min-width:min(280px,100%); max-width:420px; padding:10px; margin-top:8px; border:1px solid var(--wt-border); border-radius:13px; background:var(--wt-surface); }
+    .voice-player audio { width:100%; }
+    .voice-player-top { display:flex; align-items:center; justify-content:space-between; gap:10px; font-weight:650; }
+    .voice-player select { width:auto; min-width:76px; margin:0; padding:6px 8px; }
+    .voice-waveform { display:flex; align-items:center; gap:3px; height:25px; }
+    .voice-waveform span { flex:1; min-width:2px; border-radius:4px; background:linear-gradient(180deg,#28a69b,#087f78); }
+    @media(max-width:700px) { #message-form .voice-record-button { width:100%; } .voice-recording-status { text-align:center; } }
   </style>
 </head>
 <body>
@@ -701,6 +714,9 @@
   <input id="media-input" type="file"
        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
        aria-label="Choose an image, video, or document">
+  <button type="button" id="record-voice-button" class="voice-record-button">🎙 Record voice</button>
+  <span id="voice-recording-status" class="voice-recording-status" aria-live="polite"></span>
+  <div id="voice-recording-preview" class="voice-recording-preview" hidden></div>
   <button type="submit">Send</button>
 </form>
 
