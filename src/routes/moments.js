@@ -88,6 +88,21 @@ async function readMedia(filename, contentType, res) {
   return res.sendFile(localPath);
 }
 
+async function cleanupExpiredMoments() {
+  const expired = db.prepare(
+    "SELECT media_path AS mediaPath FROM moments WHERE datetime(expires_at) <= CURRENT_TIMESTAMP AND media_path IS NOT NULL"
+  ).all();
+  db.prepare("DELETE FROM moments WHERE datetime(expires_at) <= CURRENT_TIMESTAMP").run();
+  for (const item of expired) {
+    try {
+      if (storageService.configured) await storageService.removeObject(item.mediaPath);
+      else fs.rmSync(path.join(uploadDir, item.mediaPath), { force: true });
+    } catch (error) {
+      console.error("Expired Moment media cleanup failed:", error.message);
+    }
+  }
+}
+
 function visibleMomentQuery() {
   return `
     SELECT m.id, m.user_id AS userId, u.username, u.avatar_path AS avatarPath,
@@ -110,7 +125,8 @@ function visibleMomentQuery() {
   `;
 }
 
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
+  await cleanupExpiredMoments();
   const moments = db.prepare(visibleMomentQuery()).all(
     req.auth.userId, req.auth.userId, req.auth.userId
   );
@@ -172,16 +188,18 @@ router.post("/", (req, res) => {
 });
 
 router.get("/media/:momentId", async (req, res) => {
+  await cleanupExpiredMoments();
   const momentId = Number(req.params.momentId);
   if (!Number.isSafeInteger(momentId) || momentId < 1) {
     return res.status(400).json({ error: "Invalid Moment." });
   }
   const moment = db.prepare(`
     SELECT m.media_path AS mediaPath, m.media_type AS mediaType,
-      u.id AS ownerId, m.audience, m.expires_at AS expiresAt
-    FROM moments m JOIN users u ON u.id = m.user_id WHERE m.id = ?
+      u.id AS ownerId, m.audience
+    FROM moments m JOIN users u ON u.id = m.user_id
+    WHERE m.id = ? AND datetime(m.expires_at) > CURRENT_TIMESTAMP
   `).get(momentId);
-  if (!moment || !moment.mediaPath || new Date(moment.expiresAt + "Z").getTime() <= Date.now()) {
+  if (!moment || !moment.mediaPath) {
     return res.status(404).json({ error: "Moment not found or expired." });
   }
   const isVisible = Number(moment.ownerId) === Number(req.auth.userId)
