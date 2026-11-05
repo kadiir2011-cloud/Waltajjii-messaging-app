@@ -458,6 +458,24 @@
     .voice-waveform { display:flex; align-items:center; gap:3px; height:25px; }
     .voice-waveform span { flex:1; min-width:2px; border-radius:4px; background:linear-gradient(180deg,#28a69b,#087f78); }
     @media(max-width:700px) { #message-form .voice-record-button { width:100%; } .voice-recording-status { text-align:center; } }
+
+    /* Phase 7: personal appearance preferences */
+    .personalization-panel { border:1px solid var(--wt-line); border-radius:16px; padding:18px; margin:18px 0; background:var(--wt-panel,#fff); }
+    .personalization-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .personalization-grid label { display:block; font-weight:600; font-size:.9rem; }
+    .personalization-grid select { margin:6px 0 0; }
+    body[data-wt-theme="dark"] { --wt-ink:#e6edf3; --wt-muted:#a9bac8; --wt-line:#344653; --wt-soft:#1d2a35; --wt-panel:#17232d; background:#101820; color:var(--wt-ink); }
+    body[data-wt-theme="dark"] .panel, body[data-wt-theme="dark"] #profile-panel, body[data-wt-theme="dark"] .social-panel, body[data-wt-theme="dark"] .group-panel, body[data-wt-theme="dark"] .personalization-panel { background:var(--wt-panel); color:var(--wt-ink); border-color:var(--wt-line); }
+    body[data-wt-theme="dark"] input, body[data-wt-theme="dark"] select, body[data-wt-theme="dark"] textarea { background:#202f3a!important; color:#eef5f8; border-color:#425766!important; }
+    body[data-wt-theme="dark"] #messages, body[data-wt-theme="dark"] .group-messages { background:#121e27; border-color:var(--wt-line); }
+    body[data-wt-theme="dark"] .message { background:#243b43; color:#edf6f5; }
+    body[data-wt-theme="dark"] .message.mine { background:#263d59; }
+    body[data-wt-theme="dark"] .social-card { background:#1d2a35; border-color:var(--wt-line); }
+    body[data-wt-wallpaper="soft"] #messages { background:linear-gradient(135deg,#edf7f5,#f5f1fa); }
+    body[data-wt-wallpaper="sky"] #messages { background:linear-gradient(135deg,#e8f2ff,#f4f8ff); }
+    body[data-wt-wallpaper="warm"] #messages { background:linear-gradient(135deg,#fff3e6,#fff9f0); }
+    body[data-wt-theme="dark"][data-wt-wallpaper="soft"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="sky"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="warm"] #messages { background:#121e27; }
+    @media(max-width:560px) { .personalization-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -525,6 +543,15 @@
         <button type="button" id="logout-button">Log out</button>
       </div>
       <p id="welcome-user" class="muted"></p>
+      <section class="personalization-panel" id="personalization-panel" aria-labelledby="personalization-heading">
+        <div class="profile-heading"><div><h3 id="personalization-heading">Personalize your Waltajjii</h3><p class="profile-help">These appearance choices apply only to this browser.</p></div></div>
+        <div class="personalization-grid">
+          <div><label for="wt-theme">Appearance</label><select id="wt-theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">Use device setting</option></select></div>
+          <div><label for="wt-accent">Accent colour</label><select id="wt-accent"><option value="teal">Waltajjii teal</option><option value="blue">Ocean blue</option><option value="violet">Violet</option><option value="rose">Rose</option><option value="green">Forest green</option></select></div>
+          <div><label for="wt-wallpaper">Chat background</label><select id="wt-wallpaper"><option value="plain">Plain</option><option value="soft">Soft mint</option><option value="sky">Sky</option><option value="warm">Warm sand</option></select></div>
+        </div>
+        <p id="wt-preferences-status" class="profile-help" role="status" aria-live="polite">Your choices are saved automatically on this device.</p>
+      </section>
 <section id="profile-panel" aria-labelledby="profile-heading">
   <div class="profile-heading">
     <div>

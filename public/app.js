@@ -1,3 +1,37 @@
+
+// Phase 7: local appearance preferences. These settings are private to this browser.
+(function initWaltajjiiAppearance() {
+  const defaults = { theme: "system", accent: "teal", wallpaper: "plain" };
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("waltajjii-appearance") || "{}"); } catch { saved = {}; }
+  const prefs = { ...defaults, ...saved };
+  const accents = { teal: "#087f78", blue: "#2563eb", violet: "#7c3aed", rose: "#e11d48", green: "#15803d" };
+  const themeSelect = document.getElementById("wt-theme");
+  const accentSelect = document.getElementById("wt-accent");
+  const wallpaperSelect = document.getElementById("wt-wallpaper");
+  const status = document.getElementById("wt-preferences-status");
+  if (!themeSelect || !accentSelect || !wallpaperSelect) return;
+  themeSelect.value = ["light", "dark", "system"].includes(prefs.theme) ? prefs.theme : "system";
+  accentSelect.value = Object.hasOwn(accents, prefs.accent) ? prefs.accent : "teal";
+  wallpaperSelect.value = ["plain", "soft", "sky", "warm"].includes(prefs.wallpaper) ? prefs.wallpaper : "plain";
+  function apply() {
+    const selectedTheme = themeSelect.value;
+    const dark = selectedTheme === "dark" || (selectedTheme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.body.dataset.wtTheme = dark ? "dark" : "light";
+    document.body.style.setProperty("--wt-teal", accents[accentSelect.value] || accents.teal);
+    document.body.dataset.wtWallpaper = wallpaperSelect.value;
+    try {
+      localStorage.setItem("waltajjii-appearance", JSON.stringify({ theme: selectedTheme, accent: accentSelect.value, wallpaper: wallpaperSelect.value }));
+      status.textContent = "Your appearance preferences are saved on this device.";
+    } catch { status.textContent = "Preferences are applied for this session but could not be saved by this browser."; }
+  }
+  [themeSelect, accentSelect, wallpaperSelect].forEach(control => control.addEventListener("change", apply));
+  if (window.matchMedia) {
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    systemTheme.addEventListener?.("change", () => { if (themeSelect.value === "system") apply(); });
+  }
+  apply();
+})();
 const authPanel = document.getElementById("auth-panel");
     const chatPanel = document.getElementById("chat-panel");
     const loginForm = document.getElementById("login-form");
