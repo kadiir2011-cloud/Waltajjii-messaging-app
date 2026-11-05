@@ -66,7 +66,7 @@ router.post("/connect/:userId", (req, res) => {
 });
 
 router.get("/requests", (req, res) => {
-  const incoming = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username, u.bio, u.professional_title AS professionalTitle, u.organization, u.avatar_path AS avatarPath FROM connection_requests cr JOIN users u ON u.id = cr.requester_id WHERE cr.recipient_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
+  const incoming = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, u.avatar_path AS avatarPath FROM connection_requests cr JOIN users u ON u.id = cr.requester_id WHERE cr.recipient_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
   const outgoing = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username FROM connection_requests cr JOIN users u ON u.id = cr.recipient_id WHERE cr.requester_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
   res.json({ incoming, outgoing });
 });
@@ -88,6 +88,11 @@ router.post("/requests/:requestId/respond", (req, res) => {
   }
   db.prepare("UPDATE connection_requests SET status = 'declined', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(requestId);
   res.json({ message: "Request declined." });
+});
+
+router.get("/followers", (req, res) => {
+  const users = db.prepare(profileSelect() + " JOIN follows f ON f.follower_id = u.id WHERE f.following_id = ? ORDER BY u.username COLLATE NOCASE LIMIT 100").all(req.auth.userId);
+  res.json({ users });
 });
 
 router.get("/following", (req, res) => {
