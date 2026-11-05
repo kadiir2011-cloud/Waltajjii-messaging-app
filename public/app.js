@@ -36,6 +36,7 @@ let callSocket = null;
       statusBox.textContent = "Choose a recipient to begin.";
       loadUsers();
       loadGroups();
+      loadSocialData();
     }
 async function loadMyProfile() {
   const profileStatus = document.getElementById("profile-status");
@@ -1041,3 +1042,328 @@ document.getElementById("remove-profile-picture-button").addEventListener("click
     status.textContent = error.message;
   }
 });
+
+
+// Waltajjii Phase 2: social discovery, connections, feed and notifications.
+function socialElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+function socialUserCard(user, mode) {
+  const card = socialElement("article", "social-card");
+  const head = socialElement("div", "social-card-head");
+  const avatar = socialElement("img", "social-avatar");
+  avatar.alt = user.username + " profile picture";
+  if (user.avatarPath) {
+    avatar.src = "/api/uploads/profile-picture/" + encodeURIComponent(user.id);
+    avatar.onerror = () => avatar.removeAttribute("src");
+  }
+  const identity = socialElement("div");
+  identity.appendChild(socialElement("strong", "", user.username));
+  const professional = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
+  if (professional) identity.appendChild(socialElement("div", "social-muted", professional));
+  if (user.bio) identity.appendChild(socialElement("div", "social-muted", user.bio));
+  head.append(avatar, identity);
+  card.appendChild(head);
+
+  if (mode === "discover") {
+    card.appendChild(socialElement("p", "social-muted",
+      (user.followersCount || 0) + " followers · " + (user.followingCount || 0) + " following"));
+    const actions = socialElement("div", "social-actions");
+    const follow = socialElement("button", "", user.isFollowing ? "Unfollow" : "Follow");
+    follow.type = "button";
+    follow.addEventListener("click", async () => {
+      try {
+        if (user.isFollowing) {
+          await api("/api/social/follow/" + user.id, { method: "DELETE" });
+        } else {
+          await api("/api/social/follow/" + user.id, { method: "POST" });
+        }
+        await loadDiscover();
+        await loadFollowing();
+      } catch (error) { alert(error.message); }
+    });
+    actions.appendChild(follow);
+
+    if (user.connectionStatus === "accepted") {
+      actions.appendChild(socialElement("span", "social-muted", "Connected"));
+    } else if (user.incomingRequestId) {
+      actions.appendChild(socialElement("span", "social-muted", "Request received — respond in Requests"));
+    } else if (user.connectionStatus === "pending") {
+      actions.appendChild(socialElement("span", "social-muted", "Request pending"));
+    } else {
+      const connect = socialElement("button", "", "Connect");
+      connect.type = "button";
+      connect.addEventListener("click", async () => {
+        try {
+          await api("/api/social/connect/" + user.id, { method: "POST" });
+          await loadDiscover();
+          await loadRequests();
+        } catch (error) { alert(error.message); }
+      });
+      actions.appendChild(connect);
+    }
+    card.appendChild(actions);
+  } else if (mode === "following") {
+    const unfollow = socialElement("button", "", "Unfollow");
+    unfollow.type = "button";
+    unfollow.addEventListener("click", async () => {
+      try {
+        await api("/api/social/follow/" + user.id, { method: "DELETE" });
+        await loadFollowing();
+        await loadDiscover();
+      } catch (error) { alert(error.message); }
+    });
+    card.appendChild(unfollow);
+  }
+  return card;
+}
+
+async function loadDiscover() {
+  const host = document.getElementById("discover-results");
+  host.replaceChildren(socialElement("p", "social-empty", "Searching..."));
+  try {
+    const q = document.getElementById("social-search").value.trim();
+    const data = await api("/api/social/discover?q=" + encodeURIComponent(q));
+    host.replaceChildren();
+    if (!data.users.length) {
+      host.appendChild(socialElement("p", "social-empty", "No matching members found."));
+      return;
+    }
+    data.users.forEach(user => host.appendChild(socialUserCard(user, "discover")));
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+async function loadRequests() {
+  const host = document.getElementById("social-request-list");
+  host.replaceChildren(socialElement("p", "social-empty", "Loading requests..."));
+  try {
+    const data = await api("/api/social/requests");
+    host.replaceChildren();
+    host.appendChild(socialElement("h4", "", "Incoming requests"));
+    if (!data.incoming.length) host.appendChild(socialElement("p", "social-empty", "No incoming requests."));
+    data.incoming.forEach(request => {
+      const card = socialElement("article", "social-card");
+      card.appendChild(socialElement("strong", "", request.username));
+      const actions = socialElement("div", "social-actions");
+      ["accept", "decline"].forEach(action => {
+        const button = socialElement("button", "", action === "accept" ? "Accept" : "Decline");
+        button.type = "button";
+        button.addEventListener("click", async () => {
+          try {
+            await api("/api/social/requests/" + request.id + "/respond", {
+              method: "POST", body: JSON.stringify({ action })
+            });
+            await loadRequests();
+            await loadDiscover();
+            await loadFollowing();
+            await loadNotifications();
+          } catch (error) { alert(error.message); }
+        });
+        actions.appendChild(button);
+      });
+      card.appendChild(actions);
+      host.appendChild(card);
+    });
+    host.appendChild(socialElement("h4", "", "Sent requests"));
+    if (!data.outgoing.length) host.appendChild(socialElement("p", "social-empty", "No pending sent requests."));
+    data.outgoing.forEach(request => host.appendChild(socialElement("p", "social-muted", request.username + " — awaiting response")));
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+async function loadFollowing() {
+  const host = document.getElementById("social-following-list");
+  host.replaceChildren(socialElement("p", "social-empty", "Loading..."));
+  try {
+    const data = await api("/api/social/following");
+    host.replaceChildren();
+    if (!data.users.length) {
+      host.appendChild(socialElement("p", "social-empty", "You are not following anyone yet. Discover members to get started."));
+      return;
+    }
+    data.users.forEach(user => host.appendChild(socialUserCard(user, "following")));
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+async function loadComments(postId, listHost) {
+  listHost.replaceChildren(socialElement("p", "social-muted", "Loading comments..."));
+  try {
+    const data = await api("/api/social/posts/" + postId + "/comments");
+    listHost.replaceChildren();
+    if (!data.comments.length) listHost.appendChild(socialElement("p", "social-muted", "No comments yet."));
+    data.comments.forEach(comment => {
+      const item = socialElement("div", "social-comment");
+      item.appendChild(socialElement("strong", "", comment.username));
+      item.appendChild(socialElement("div", "", comment.content));
+      listHost.appendChild(item);
+    });
+  } catch (error) {
+    listHost.replaceChildren(socialElement("p", "social-muted", error.message));
+  }
+}
+
+async function loadFeed() {
+  const host = document.getElementById("social-feed-posts");
+  host.replaceChildren(socialElement("p", "social-empty", "Loading feed..."));
+  try {
+    const data = await api("/api/social/feed");
+    host.replaceChildren();
+    if (!data.posts.length) {
+      host.appendChild(socialElement("p", "social-empty", "Your feed is empty. Follow members or publish your first update."));
+      return;
+    }
+    data.posts.forEach(post => {
+      const card = socialElement("article", "social-card");
+      const head = socialElement("div", "social-card-head");
+      head.appendChild(socialElement("strong", "", post.username));
+      head.appendChild(socialElement("span", "social-muted", post.createdAt));
+      card.appendChild(head);
+      card.appendChild(socialElement("div", "social-post", post.content));
+      const actions = socialElement("div", "social-actions");
+      const like = socialElement("button", "", (post.likedByMe ? "Unlike" : "Like") + " · " + post.likeCount);
+      like.type = "button";
+      like.addEventListener("click", async () => {
+        try { await api("/api/social/posts/" + post.id + "/like", { method: "POST" }); await loadFeed(); await loadNotifications(); }
+        catch (error) { alert(error.message); }
+      });
+      const commentsButton = socialElement("button", "", "Comments · " + post.commentCount);
+      commentsButton.type = "button";
+      actions.append(like, commentsButton);
+      card.appendChild(actions);
+      const commentsHost = socialElement("div", "social-section");
+      commentsHost.hidden = true;
+      const commentsList = socialElement("div", "social-comments-list");
+      commentsHost.appendChild(commentsList);
+      commentsButton.addEventListener("click", async () => {
+        commentsHost.hidden = !commentsHost.hidden;
+        if (!commentsHost.hidden) await loadComments(post.id, commentsList);
+      });
+      const commentForm = document.createElement("form");
+      const commentInput = socialElement("input", "social-input");
+      commentInput.maxLength = 1000;
+      commentInput.placeholder = "Write a comment...";
+      const commentSubmit = socialElement("button", "", "Comment");
+      commentSubmit.type = "submit";
+      commentForm.append(commentInput, commentSubmit);
+      commentForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        const content = commentInput.value.trim();
+        if (!content) return;
+        try {
+          await api("/api/social/posts/" + post.id + "/comments", {
+            method: "POST", body: JSON.stringify({ content })
+          });
+          commentInput.value = "";
+          await loadComments(post.id, commentsList);
+          await loadFeed();
+          await loadNotifications();
+        } catch (error) { alert(error.message); }
+      });
+      commentsHost.appendChild(commentForm);
+      card.appendChild(commentsHost);
+      host.appendChild(card);
+    });
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+
+async function loadFollowers() {
+  const host = document.getElementById("social-followers-list");
+  host.replaceChildren(socialElement("p", "social-empty", "Loading..."));
+  try {
+    const data = await api("/api/social/followers");
+    host.replaceChildren();
+    if (!data.users.length) {
+      host.appendChild(socialElement("p", "social-empty", "You do not have followers yet."));
+      return;
+    }
+    data.users.forEach(user => {
+      const card = socialElement("article", "social-card");
+      const head = socialElement("div", "social-card-head");
+      const avatar = socialElement("img", "social-avatar");
+      avatar.alt = user.username + " profile picture";
+      if (user.avatarPath) avatar.src = "/api/uploads/profile-picture/" + encodeURIComponent(user.id);
+      const identity = socialElement("div");
+      identity.appendChild(socialElement("strong", "", user.username));
+      const details = [user.professionalTitle, user.organization, user.bio].filter(Boolean).join(" · ");
+      if (details) identity.appendChild(socialElement("div", "social-muted", details));
+      head.append(avatar, identity);
+      card.appendChild(head);
+      host.appendChild(card);
+    });
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+async function loadNotifications() {
+  const host = document.getElementById("social-notification-list");
+  host.replaceChildren(socialElement("p", "social-empty", "Loading..."));
+  try {
+    const data = await api("/api/social/notifications");
+    host.replaceChildren();
+    if (!data.notifications.length) {
+      host.appendChild(socialElement("p", "social-empty", "No notifications yet."));
+      return;
+    }
+    data.notifications.forEach(item => {
+      const row = socialElement("article", "social-card");
+      row.appendChild(socialElement("strong", "", item.actorUsername || "Waltajjii"));
+      row.appendChild(socialElement("span", "", " " + item.message));
+      row.appendChild(socialElement("div", "social-muted", item.createdAt + (item.isRead ? "" : " · New")));
+      host.appendChild(row);
+    });
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+async function loadSocialData() {
+  await Promise.all([loadDiscover(), loadFeed(), loadRequests(), loadFollowing(), loadFollowers(), loadNotifications()]);
+}
+
+document.getElementById("social-search-button").addEventListener("click", loadDiscover);
+document.getElementById("social-search").addEventListener("keydown", event => {
+  if (event.key === "Enter") { event.preventDefault(); loadDiscover(); }
+});
+document.getElementById("social-post-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const input = document.getElementById("social-post-content");
+  const content = input.value.trim();
+  if (!content) return;
+  const button = event.currentTarget.querySelector("button[type=submit]");
+  button.disabled = true;
+  try {
+    await api("/api/social/posts", { method: "POST", body: JSON.stringify({ content }) });
+    input.value = "";
+    await loadFeed();
+    statusBox.textContent = "Your post was published.";
+  } catch (error) {
+    statusBox.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+document.getElementById("social-mark-read-button").addEventListener("click", async () => {
+  try {
+    await api("/api/social/notifications/read", { method: "POST" });
+    await loadNotifications();
+  } catch (error) { alert(error.message); }
+});
+document.getElementById("social-discover-tab").addEventListener("click", loadDiscover);
+document.getElementById("social-feed-tab").addEventListener("click", loadFeed);
+document.getElementById("social-requests-tab").addEventListener("click", loadRequests);
+document.getElementById("social-following-tab").addEventListener("click", loadFollowing);
+document.getElementById("social-followers-tab").addEventListener("click", loadFollowers);
+document.getElementById("social-notifications-tab").addEventListener("click", loadNotifications);

@@ -116,6 +116,22 @@
       .profile-hero { align-items:flex-start; padding:14px; }
       #profile-picture-preview { width:82px!important; height:82px!important; }
     }
+  
+    .social-panel { margin-top:24px; border:1px solid var(--wt-line); border-radius:18px; padding:20px; background:#fff; }
+    .social-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 18px; }
+    .social-tabs button { padding:9px 13px; font-size:14px; }
+    .social-section { border-top:1px solid var(--wt-line); padding-top:16px; margin-top:16px; }
+    .social-card { border:1px solid var(--wt-line); border-radius:13px; padding:13px; margin:10px 0; background:#fbfdfe; }
+    .social-card-head { display:flex; align-items:center; gap:11px; }
+    .social-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; background:#e7eef2; }
+    .social-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .social-actions button { padding:8px 11px; font-size:13px; }
+    .social-muted { color:var(--wt-muted); font-size:13px; }
+    .social-input { width:100%; padding:11px; border:1px solid var(--wt-line); border-radius:10px; margin:7px 0; }
+    .social-post { white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; }
+    .social-comment { border-left:3px solid #dbe7eb; padding:7px 10px; margin:7px 0; }
+    .social-empty { color:var(--wt-muted); padding:12px 0; }
+
   </style>
 </head>
 <body>
@@ -256,6 +272,61 @@
   </div>
   <p id="profile-status" class="muted" role="status" aria-live="polite"></p>
 </section>
+
+      <section class="social-panel" id="social-panel" aria-labelledby="social-heading">
+        <h2 id="social-heading">Waltajjii Social</h2>
+        <p class="social-muted">Discover people, build connections, share updates and follow conversations.</p>
+        <nav class="social-tabs" aria-label="Social sections">
+          <button type="button" id="social-discover-tab">Discover</button>
+          <button type="button" id="social-feed-tab">Feed</button>
+          <button type="button" id="social-requests-tab">Requests</button>
+          <button type="button" id="social-following-tab">Following</button>
+          <button type="button" id="social-followers-tab">Followers</button>
+          <button type="button" id="social-notifications-tab">Notifications</button>
+        </nav>
+
+        <div class="social-section" id="social-discover">
+          <h3>Discover people</h3>
+          <div class="row">
+            <input class="social-input" id="social-search" type="search" maxlength="80" placeholder="Search by name, role, organization or department" style="flex:1;min-width:180px;">
+            <button type="button" id="social-search-button">Search</button>
+          </div>
+          <div id="discover-results" aria-live="polite"><p class="social-empty">Search for Waltajjii members.</p></div>
+        </div>
+
+        <div class="social-section" id="social-feed">
+          <h3>Personalized feed</h3>
+          <form id="social-post-form">
+            <textarea class="social-input" id="social-post-content" maxlength="2000" rows="3" placeholder="Share an update with your followers..."></textarea>
+            <button type="submit">Publish post</button>
+          </form>
+          <div id="social-feed-posts" aria-live="polite"><p class="social-empty">Your feed will appear here.</p></div>
+        </div>
+
+        <div class="social-section" id="social-requests">
+          <h3>Connection requests</h3>
+          <div id="social-request-list" aria-live="polite"><p class="social-empty">No requests loaded.</p></div>
+        </div>
+
+        <div class="social-section" id="social-following">
+          <h3>People you follow</h3>
+          <div id="social-following-list" aria-live="polite"><p class="social-empty">No following list loaded.</p></div>
+        </div>
+
+        <div class="social-section" id="social-followers">
+          <h3>Your followers</h3>
+          <div id="social-followers-list" aria-live="polite"><p class="social-empty">No followers loaded.</p></div>
+        </div>
+
+        <div class="social-section" id="social-notifications">
+          <div class="row" style="justify-content:space-between;">
+            <h3>Notifications</h3>
+            <button type="button" id="social-mark-read-button">Mark all as read</button>
+          </div>
+          <div id="social-notification-list" aria-live="polite"><p class="social-empty">No notifications loaded.</p></div>
+        </div>
+      </section>
+
       <label for="recipient">Choose a recipient</label>
       <select id="recipient" required>
         <option value="">Loading users...</option>
