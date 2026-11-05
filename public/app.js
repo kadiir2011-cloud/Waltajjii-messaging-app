@@ -1448,8 +1448,127 @@ async function loadNotifications() {
   }
 }
 
+let momentMediaUrls = [];
+
+async function loadMoments() {
+  const host = document.getElementById("moment-list");
+  const status = document.getElementById("moment-status");
+  momentMediaUrls.forEach(url => URL.revokeObjectURL(url));
+  momentMediaUrls = [];
+  host.replaceChildren(socialElement("p", "social-empty", "Loading Moments..."));
+  try {
+    const data = await api("/api/moments");
+    host.replaceChildren();
+    if (!data.moments.length) {
+      host.appendChild(socialElement("p", "social-empty", "No active Moments yet. Share the first one."));
+      return;
+    }
+    data.moments.forEach(moment => {
+      const card = socialElement("article", "moment-card");
+      const head = socialElement("div", "moment-card-head");
+      head.appendChild(socialElement("strong", "", moment.username));
+      const expires = new Date(String(moment.expiresAt).replace(" ", "T") + "Z");
+      const remaining = Math.max(0, Math.ceil((expires.getTime() - Date.now()) / 3600000));
+      head.appendChild(socialElement("span", "social-muted", remaining + "h left · " + (moment.audience === "everyone" ? "Everyone" : "Followers")));
+      card.appendChild(head);
+      if (moment.content) card.appendChild(socialElement("p", "moment-content", moment.content));
+      if (moment.mediaPath) {
+        const mediaHost = socialElement("div", "moment-media-host");
+        mediaHost.appendChild(socialElement("p", "social-muted", "Loading media..."));
+        card.appendChild(mediaHost);
+        fetch("/api/moments/media/" + moment.id, {
+          headers: { Authorization: "Bearer " + token }
+        }).then(response => {
+          if (!response.ok) throw new Error("Media unavailable");
+          return response.blob();
+        }).then(blob => {
+          const url = URL.createObjectURL(blob);
+          momentMediaUrls.push(url);
+          const media = document.createElement(moment.mediaType === "video" ? "video" : "img");
+          media.className = "moment-media";
+          if (moment.mediaType === "video") {
+            media.controls = true;
+            media.playsInline = true;
+            media.preload = "metadata";
+          } else {
+            media.alt = "Moment shared by " + moment.username;
+            media.loading = "lazy";
+          }
+          media.src = url;
+          mediaHost.replaceChildren(media);
+        }).catch(() => {
+          mediaHost.replaceChildren(socialElement("p", "social-muted", "This media could not be loaded."));
+        });
+      }
+      if (moment.isMine) {
+        const actions = socialElement("div", "social-actions");
+        const remove = socialElement("button", "moment-delete", "Delete Moment");
+        remove.type = "button";
+        remove.addEventListener("click", async () => {
+          if (!confirm("Delete this Moment?")) return;
+          remove.disabled = true;
+          try {
+            await api("/api/moments/" + moment.id, { method: "DELETE" });
+            await loadMoments();
+            status.textContent = "Moment deleted.";
+          } catch (error) {
+            status.textContent = error.message;
+            remove.disabled = false;
+          }
+        });
+        actions.appendChild(remove);
+        card.appendChild(actions);
+      }
+      host.appendChild(card);
+    });
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
+document.getElementById("moment-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const content = document.getElementById("moment-content");
+  const mediaInput = document.getElementById("moment-media");
+  const audience = document.getElementById("moment-audience");
+  const status = document.getElementById("moment-status");
+  const file = mediaInput.files[0];
+  if (!content.value.trim() && !file) {
+    status.textContent = "Write a short update or choose a photo/video.";
+    return;
+  }
+  if (file && file.size > 10 * 1024 * 1024) {
+    status.textContent = "Please choose a file smaller than 10 MB.";
+    return;
+  }
+  const button = document.getElementById("publish-moment-button");
+  button.disabled = true;
+  status.textContent = "Publishing your Moment...";
+  try {
+    const formData = new FormData();
+    formData.append("content", content.value.trim());
+    formData.append("audience", audience.value);
+    if (file) formData.append("media", file);
+    const response = await fetch("/api/moments", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token },
+      body: formData
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Could not publish this Moment.");
+    content.value = "";
+    mediaInput.value = "";
+    status.textContent = "Your Moment is live. It will expire after 24 hours.";
+    await loadMoments();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function loadSocialData() {
-  await Promise.all([loadDiscover(), loadFeed(), loadRequests(), loadFollowing(), loadFollowers(), loadNotifications()]);
+  await Promise.all([loadMoments(), loadDiscover(), loadFeed(), loadRequests(), loadFollowing(), loadFollowers(), loadNotifications()]);
 }
 
 document.getElementById("social-search-button").addEventListener("click", loadDiscover);
@@ -1480,6 +1599,7 @@ document.getElementById("social-mark-read-button").addEventListener("click", asy
     await loadNotifications();
   } catch (error) { alert(error.message); }
 });
+document.getElementById("social-moments-tab").addEventListener("click", loadMoments);
 document.getElementById("social-discover-tab").addEventListener("click", loadDiscover);
 document.getElementById("social-feed-tab").addEventListener("click", loadFeed);
 document.getElementById("social-requests-tab").addEventListener("click", loadRequests);
