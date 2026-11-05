@@ -480,8 +480,6 @@ let activeCallUsername = null;
 const userIdsByUsername = new Map();
 const pendingIceCandidates = [];
 
-const meteredCredentialApiKey = "PASTE_YOUR_NEW_METERED_API_KEY_HERE";
-
 let rtcConfigurationPromise = null;
 
 async function getRtcConfiguration() {
