@@ -132,6 +132,48 @@
     .social-comment { border-left:3px solid #dbe7eb; padding:7px 10px; margin:7px 0; }
     .social-empty { color:var(--wt-muted); padding:12px 0; }
 
+
+    /* Phase 4.1: mobile-first layout and touch accessibility */
+    html { -webkit-text-size-adjust: 100%; }
+    body { min-width: 320px; }
+    button, input, select, textarea { font: inherit; }
+    button, a, input, select, textarea { touch-action: manipulation; }
+    button { min-height: 44px; }
+    input, select, textarea { min-height: 44px; font-size: 16px; }
+    img, video { max-width: 100%; }
+    .message, .group-messages, #messages, .social-card { overflow-wrap: anywhere; }
+    :focus-visible { outline: 3px solid #e0a52b; outline-offset: 2px; }
+    @media (max-width: 640px) {
+      header { padding: 16px; }
+      header .brand { gap: 10px; }
+      header .brand-tagline { margin-left: 0; }
+      main { width: 100%; margin: 8px auto; padding: 8px; }
+      .panel, #profile-panel, .social-panel, .group-panel { padding: 14px; border-radius: 14px; }
+      .profile-heading { align-items: flex-start; flex-direction: column; }
+      .profile-hero { flex-wrap: wrap; }
+      .social-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .social-tabs button, .social-actions button { width: 100%; min-width: 0; }
+      .social-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .row { align-items: stretch; }
+      .row > button { flex: 1 1 140px; }
+      #messages, .group-messages { max-height: 50vh; }
+      #message-form, .group-message-form { align-items: stretch; flex-direction: column; }
+      #message-form button, .group-message-form button { width: 100%; }
+      #message-form input, .group-message-form input { width: 100%; }
+      footer { padding: 16px 10px; }
+    }
+    @media (max-width: 380px) {
+      header { padding: 14px 12px; }
+      main { padding: 6px; }
+      .panel, #profile-panel, .social-panel, .group-panel { padding: 12px; }
+      .social-tabs, .social-actions { grid-template-columns: 1fr; }
+      .profile-hero { gap: 10px; }
+      #profile-picture-preview { width: 72px !important; height: 72px !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+
   </style>
 </head>
 <body>
