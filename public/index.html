@@ -476,6 +476,46 @@
     body[data-wt-wallpaper="warm"] #messages { background:linear-gradient(135deg,#fff3e6,#fff9f0); }
     body[data-wt-theme="dark"][data-wt-wallpaper="soft"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="sky"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="warm"] #messages { background:#121e27; }
     @media(max-width:560px) { .personalization-grid { grid-template-columns:1fr; } }
+
+    /* Phase 9: grouped expandable navigation and responsive workspace */
+    #chat-panel { padding: 0; overflow: hidden; }
+    .wt-app-shell { display: grid; grid-template-columns: 248px minmax(0,1fr); min-height: 760px; }
+    .wt-sidebar { display:flex; flex-direction:column; gap:22px; padding:22px 15px; background:linear-gradient(180deg,#102b43,#153e50); color:#f4fbfc; border-radius:18px 0 0 18px; }
+    .wt-sidebar-brand { display:flex; align-items:center; gap:11px; padding:3px 9px 18px; border-bottom:1px solid #ffffff24; }
+    .wt-sidebar-brand strong { display:block; font-size:1.05rem; letter-spacing:.01em; }
+    .wt-sidebar-brand small { display:block; color:#c3d7df; font-size:.73rem; margin-top:2px; }
+    .wt-sidebar-mark { display:grid; place-items:center; width:38px; height:38px; border-radius:12px; background:#087f78; color:white; font-weight:800; font-size:1.2rem; }
+    .wt-nav-groups { display:flex; flex-direction:column; gap:8px; }
+    .wt-nav-group { border:1px solid #ffffff1c; border-radius:12px; overflow:hidden; background:#ffffff08; }
+    .wt-nav-group summary { display:flex; align-items:center; gap:10px; padding:12px 11px; min-height:46px; cursor:pointer; list-style:none; font-weight:700; font-size:.9rem; }
+    .wt-nav-group summary::-webkit-details-marker { display:none; }
+    .wt-nav-group summary::after { content:"＋"; margin-left:auto; color:#b9d3dc; font-size:.9rem; }
+    .wt-nav-group[open] summary::after { content:"−"; }
+    .wt-nav-icon { display:inline-grid; place-items:center; width:25px; height:25px; border-radius:8px; background:#ffffff18; color:#9ce5db; font-size:1rem; }
+    .wt-nav-group a { display:block; padding:9px 12px 9px 46px; color:#d8e9ed; text-decoration:none; font-size:.83rem; border-top:1px solid #ffffff0d; }
+    .wt-nav-group a:hover, .wt-nav-group a:focus-visible { background:#ffffff16; color:white; outline-offset:-3px; }
+    .wt-sidebar-foot { margin-top:auto; padding:14px 10px 0; border-top:1px solid #ffffff24; color:#c3d7df; font-size:.78rem; }
+    .wt-sidebar-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#57d6a3; margin-right:7px; }
+    .wt-main-content { min-width:0; padding:clamp(16px,2.4vw,30px); }
+    .wt-content-section { scroll-margin-top:18px; margin-bottom:24px; }
+    .wt-content-section > .group-panel, .wt-content-section > .social-panel { margin-top:0; }
+    .wt-nav-toggle { display:none; margin:0 0 14px; }
+    @media(max-width:820px) {
+      .wt-app-shell { grid-template-columns:1fr; min-height:0; }
+      .wt-sidebar { display:none; border-radius:0; }
+      .wt-app-shell.wt-sidebar-open .wt-sidebar { display:flex; }
+      .wt-main-content { padding:16px; }
+      .wt-nav-toggle { display:inline-flex; align-items:center; gap:8px; }
+      .wt-sidebar-foot { margin-top:8px; }
+    }
+    @media(min-width:821px) {
+      .wt-sidebar { position:sticky; top:0; align-self:start; min-height:760px; height:100%; }
+    }
+    @media(max-width:480px) {
+      .wt-main-content { padding:12px; }
+      .wt-sidebar { padding:16px 12px; }
+      .wt-nav-group summary { min-height:48px; }
+    }
   </style>
 </head>
 <body>
@@ -538,11 +578,43 @@
     </section>
 
     <section class="panel" id="chat-panel">
+      <div class="wt-app-shell">
+        <aside class="wt-sidebar" id="wt-sidebar" aria-label="Waltajjii main navigation">
+          <div class="wt-sidebar-brand"><span class="wt-sidebar-mark">W</span><div><strong>Waltajjii</strong><small>Your communication space</small></div></div>
+          <nav class="wt-nav-groups">
+            <details class="wt-nav-group" open>
+              <summary><span class="wt-nav-icon">◉</span><span>Communication</span></summary>
+              <a href="#wt-communication-section">Direct messages</a>
+              <a href="#call-panel">Voice and video calls</a>
+              <a href="#message-form">Send a message</a>
+            </details>
+            <details class="wt-nav-group">
+              <summary><span class="wt-nav-icon">◎</span><span>Social</span></summary>
+              <a href="#wt-social-section">Moments and social feed</a>
+              <a href="#social-discover">Discover people</a>
+              <a href="#social-notifications">Notifications</a>
+            </details>
+            <details class="wt-nav-group">
+              <summary><span class="wt-nav-icon">▦</span><span>Communities</span></summary>
+              <a href="#wt-groups-section">Groups</a>
+              <a href="#wt-channels-section">Channels</a>
+            </details>
+            <details class="wt-nav-group">
+              <summary><span class="wt-nav-icon">◌</span><span>My account</span></summary>
+              <a href="#profile-panel">My profile</a>
+              <a href="#personalization-panel">Appearance and personalization</a>
+            </details>
+          </nav>
+          <div class="wt-sidebar-foot"><span class="wt-sidebar-dot"></span> Connected space</div>
+        </aside>
+        <div class="wt-main-content">
+          <button type="button" class="wt-nav-toggle" id="wt-nav-toggle" aria-expanded="false" aria-controls="wt-sidebar">☰ Menu</button>
       <div class="row">
         <h2 style="margin-right:auto">Messages</h2>
         <button type="button" id="logout-button">Log out</button>
       </div>
       <p id="welcome-user" class="muted"></p>
+      <section class="wt-content-section" id="wt-account-section" aria-label="Account and personalization">
       <section class="personalization-panel" id="personalization-panel" aria-labelledby="personalization-heading">
         <div class="profile-heading"><div><h3 id="personalization-heading">Personalize your Waltajjii</h3><p class="profile-help">These appearance choices apply only to this browser.</p></div></div>
         <div class="personalization-grid">
@@ -626,6 +698,8 @@
   <p id="profile-status" class="muted" role="status" aria-live="polite"></p>
 </section>
 
+      </section>
+      <section class="wt-content-section" id="wt-social-section" aria-label="Social features">
       <section class="social-panel" id="social-panel" aria-labelledby="social-heading">
         <h2 id="social-heading">Waltajjii Social</h2>
         <p class="social-muted">Discover people, build connections, share updates and follow conversations.</p>
@@ -700,6 +774,8 @@
         </div>
       </section>
 
+      </section>
+      <section class="wt-content-section" id="wt-communication-section" aria-label="Communication">
       <label for="recipient">Choose a recipient</label>
       <select id="recipient" required>
         <option value="">Loading users...</option>
@@ -747,6 +823,8 @@
   <button type="submit">Send</button>
 </form>
 
+      </section>
+      <section class="wt-content-section" id="wt-groups-section" aria-label="Groups">
       <section class="group-panel" aria-labelledby="groups-heading">
         <h2 id="groups-heading">Groups</h2>
         <p class="muted">Create a group, add existing users, and manage membership. Only group admins can add or remove members.</p>
@@ -770,6 +848,8 @@
         </form>
       </section>
 
+      </section>
+      <section class="wt-content-section" id="wt-channels-section" aria-label="Channels">
       <section class="group-panel" aria-labelledby="channels-heading">
         <h2 id="channels-heading">Channels</h2>
         <p class="muted">Follow public channels or join private channels by invitation. Only channel owners and admins can publish announcements.</p>
@@ -791,6 +871,9 @@
           <button type="submit">Publish announcement</button>
         </form>
       </section>
+      </section>
+        </div>
+      </div>
     </section>
   </main>
 
