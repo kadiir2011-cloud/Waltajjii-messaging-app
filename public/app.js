@@ -1194,20 +1194,20 @@ async function loadFollowing() {
   }
 }
 
-async function loadComments(postId, host) {
-  host.replaceChildren(socialElement("p", "social-muted", "Loading comments..."));
+async function loadComments(postId, listHost) {
+  listHost.replaceChildren(socialElement("p", "social-muted", "Loading comments..."));
   try {
     const data = await api("/api/social/posts/" + postId + "/comments");
-    host.replaceChildren();
-    if (!data.comments.length) host.appendChild(socialElement("p", "social-muted", "No comments yet."));
+    listHost.replaceChildren();
+    if (!data.comments.length) listHost.appendChild(socialElement("p", "social-muted", "No comments yet."));
     data.comments.forEach(comment => {
       const item = socialElement("div", "social-comment");
       item.appendChild(socialElement("strong", "", comment.username));
       item.appendChild(socialElement("div", "", comment.content));
-      host.appendChild(item);
+      listHost.appendChild(item);
     });
   } catch (error) {
-    host.replaceChildren(socialElement("p", "social-muted", error.message));
+    listHost.replaceChildren(socialElement("p", "social-muted", error.message));
   }
 }
 
@@ -1241,9 +1241,11 @@ async function loadFeed() {
       card.appendChild(actions);
       const commentsHost = socialElement("div", "social-section");
       commentsHost.hidden = true;
+      const commentsList = socialElement("div", "social-comments-list");
+      commentsHost.appendChild(commentsList);
       commentsButton.addEventListener("click", async () => {
         commentsHost.hidden = !commentsHost.hidden;
-        if (!commentsHost.hidden) await loadComments(post.id, commentsHost);
+        if (!commentsHost.hidden) await loadComments(post.id, commentsList);
       });
       const commentForm = document.createElement("form");
       const commentInput = socialElement("input", "social-input");
@@ -1261,7 +1263,7 @@ async function loadFeed() {
             method: "POST", body: JSON.stringify({ content })
           });
           commentInput.value = "";
-          await loadComments(post.id, commentsHost);
+          await loadComments(post.id, commentsList);
           await loadFeed();
           await loadNotifications();
         } catch (error) { alert(error.message); }
