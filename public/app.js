@@ -36,6 +36,7 @@ let callSocket = null;
       statusBox.textContent = "Choose a recipient to begin.";
       loadUsers();
       loadGroups();
+      loadChannels();
       loadSocialData();
     }
 async function loadMyProfile() {
@@ -479,28 +480,16 @@ let activeCallUsername = null;
 const userIdsByUsername = new Map();
 const pendingIceCandidates = [];
 
-const meteredCredentialApiKey = "PASTE_YOUR_NEW_METERED_API_KEY_HERE";
-
 let rtcConfigurationPromise = null;
 
 async function getRtcConfiguration() {
   if (!rtcConfigurationPromise) {
-    rtcConfigurationPromise = fetch(
-      "https://waltajjii-calls.metered.live/api/v1/turn/credentials?apiKey=" +
-      encodeURIComponent(meteredCredentialApiKey)
-    )
-      .then(async response => {
-        if (!response.ok) {
-          throw new Error("Could not load TURN server settings.");
-        }
-
-        const iceServers = await response.json();
-
-        if (!Array.isArray(iceServers) || iceServers.length === 0) {
+    rtcConfigurationPromise = api("/api/calls/turn-credentials")
+      .then(data => {
+        if (!Array.isArray(data.iceServers) || data.iceServers.length === 0) {
           throw new Error("No ICE servers were returned.");
         }
-
-        return { iceServers };
+        return { iceServers: data.iceServers };
       })
       .catch(error => {
         rtcConfigurationPromise = null;
@@ -510,7 +499,6 @@ async function getRtcConfiguration() {
 
   return rtcConfigurationPromise;
 }
-
 function setCallStatus(message) {
   if (callStatus) callStatus.textContent = message;
 }
@@ -1041,6 +1029,137 @@ document.getElementById("remove-profile-picture-button").addEventListener("click
   } catch (error) {
     status.textContent = error.message;
   }
+});
+
+
+
+/* Waltajjii Phase 3: channels and admin broadcast announcements. */
+const channelSelect = document.getElementById("channel-select");
+const channelStatus = document.getElementById("channel-status");
+const channelMessagesBox = document.getElementById("channel-messages");
+const channelMessageForm = document.getElementById("channel-message-form");
+const channelMessageInput = document.getElementById("channel-message-input");
+let activeChannelId = null;
+let cachedChannels = [];
+let activeChannelCanPublish = false;
+
+async function loadChannels() {
+  if (!token) return;
+  try {
+    const data = await api("/api/channels");
+    cachedChannels = data.channels || [];
+    const previous = channelSelect.value;
+    channelSelect.replaceChildren();
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = "Select a channel";
+    channelSelect.appendChild(first);
+    cachedChannels.forEach(channel => {
+      const option = document.createElement("option");
+      option.value = String(channel.id);
+      option.textContent = `${channel.name} · ${channel.visibility} · ${channel.memberCount} members${channel.myRole ? " · joined" : ""}`;
+      channelSelect.appendChild(option);
+    });
+    if (cachedChannels.some(c => String(c.id) === previous)) channelSelect.value = previous;
+    channelStatus.textContent = cachedChannels.length ? "Choose a channel. Join public channels or open channels you belong to." : "No channels yet. Create the first channel.";
+  } catch (error) { channelStatus.textContent = error.message; }
+}
+
+async function openSelectedChannel() {
+  const id = Number(channelSelect.value);
+  if (!id) { channelStatus.textContent = "Select a channel first."; return; }
+  const channel = cachedChannels.find(item => item.id === id);
+  if (!channel || !channel.myRole) {
+    channelStatus.textContent = "Join this public channel first, or ask an admin to invite you to a private channel.";
+    return;
+  }
+  try {
+    const data = await api(`/api/channels/${id}/messages`);
+    activeChannelId = id;
+    activeChannelCanPublish = Boolean(data.canPublish);
+    channelMessagesBox.replaceChildren();
+    if (!data.messages.length) channelMessagesBox.textContent = "No announcements yet.";
+    data.messages.forEach(item => {
+      const article = document.createElement("article");
+      article.className = "message";
+      const heading = document.createElement("strong");
+      heading.textContent = item.sender + " · " + item.createdAt;
+      const body = document.createElement("div");
+      body.textContent = item.body;
+      article.append(heading, body);
+      channelMessagesBox.appendChild(article);
+    });
+    channelMessageInput.disabled = !activeChannelCanPublish;
+    channelMessageForm.querySelector("button").disabled = !activeChannelCanPublish;
+    channelMessageInput.placeholder = activeChannelCanPublish ? "Publish a channel announcement..." : "Only channel admins can publish announcements";
+    channelStatus.textContent = channel.myRole + (activeChannelCanPublish ? " — you can publish announcements." : " — read-only channel access.");
+  } catch (error) { channelStatus.textContent = error.message; }
+}
+
+document.getElementById("create-channel-button").addEventListener("click", async () => {
+  const name = prompt("Channel name (maximum 80 characters):");
+  if (!name || !name.trim()) return;
+  const description = prompt("Short channel description (optional, maximum 300 characters):") || "";
+  const visibility = (prompt("Type PUBLIC or PRIVATE:", "PUBLIC") || "PUBLIC").trim().toLowerCase();
+  if (!["public", "private"].includes(visibility)) { channelStatus.textContent = "Choose PUBLIC or PRIVATE."; return; }
+  try {
+    const data = await api("/api/channels", { method: "POST", body: JSON.stringify({ name: name.trim(), description: description.trim(), visibility }) });
+    await loadChannels();
+    channelSelect.value = String(data.channel.id);
+    await openSelectedChannel();
+    channelStatus.textContent = "Channel created. You are its owner.";
+  } catch (error) { channelStatus.textContent = error.message; }
+});
+document.getElementById("refresh-channels-button").addEventListener("click", loadChannels);
+document.getElementById("open-channel-button").addEventListener("click", openSelectedChannel);
+document.getElementById("join-channel-button").addEventListener("click", async () => {
+  const id = Number(channelSelect.value);
+  const channel = cachedChannels.find(item => item.id === id);
+  if (!channel || channel.visibility !== "public") { channelStatus.textContent = "Select a public channel to join."; return; }
+  try {
+    await api(`/api/channels/${id}/join`, { method: "POST" });
+    await loadChannels();
+    channelSelect.value = String(id);
+    await openSelectedChannel();
+    channelStatus.textContent = "You joined the channel.";
+  } catch (error) { channelStatus.textContent = error.message; }
+});
+document.getElementById("manage-channel-button").addEventListener("click", async () => {
+  const id = Number(channelSelect.value);
+  if (!id) { channelStatus.textContent = "Select a channel first."; return; }
+  try {
+    const data = await api(`/api/channels/${id}/members`);
+    alert("Channel members:\n" + data.members.map(m => `${m.username} (${m.role})`).join("\n"));
+    if (!data.canManage) { channelStatus.textContent = "Only channel admins can invite or remove members."; return; }
+    const action = (prompt("Type INVITE to add a member, REMOVE to remove a member, or CANCEL:") || "").toUpperCase();
+    if (action === "INVITE") {
+      const username = prompt("Username to invite:");
+      if (!username) return;
+      await api(`/api/channels/${id}/members`, { method: "POST", body: JSON.stringify({ username: username.trim() }) });
+      channelStatus.textContent = username.trim() + " invited.";
+    } else if (action === "REMOVE") {
+      const username = prompt("Username to remove:");
+      if (!username) return;
+      const target = data.members.find(m => m.username.toLowerCase() === username.trim().toLowerCase());
+      if (!target) { channelStatus.textContent = "That user is not a channel member."; return; }
+      await api(`/api/channels/${id}/members/${target.id}`, { method: "DELETE" });
+      channelStatus.textContent = target.username + " removed.";
+    }
+    await loadChannels();
+    channelSelect.value = String(id);
+  } catch (error) { channelStatus.textContent = error.message; }
+});
+channelMessageForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const body = channelMessageInput.value.trim();
+  if (!activeChannelId || !activeChannelCanPublish) { channelStatus.textContent = "Only channel admins can publish announcements."; return; }
+  if (!body) return;
+  try {
+    await api(`/api/channels/${activeChannelId}/messages`, { method: "POST", body: JSON.stringify({ body }) });
+    channelMessageInput.value = "";
+    await openSelectedChannel();
+    channelStatus.textContent = "Announcement published.";
+  } catch (error) { channelStatus.textContent = error.message; }
 });
 
 
