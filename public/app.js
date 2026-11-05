@@ -109,20 +109,34 @@ async function loadMyProfile() {
     const professionalLine = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
     document.getElementById("profile-professional-line").textContent = professionalLine || "Waltajjii member";
 
+    const sidebarUsername = document.getElementById("wt-sidebar-username");
+    const sidebarProfessional = document.getElementById("wt-sidebar-professional");
+    const sidebarAvatar = document.getElementById("wt-sidebar-avatar");
+    const sidebarFallback = document.getElementById("wt-sidebar-avatar-fallback");
+    if (sidebarUsername) sidebarUsername.textContent = user.username || "Your profile";
+    if (sidebarProfessional) sidebarProfessional.textContent = professionalLine || "Waltajjii member";
+
     if (user.avatarPath) {
       const response = await fetch(
-        "/api/uploads/profile-picture/" + user.id,
+        "/api/uploads/profile-picture/" + encodeURIComponent(user.id),
         { headers: { Authorization: "Bearer " + token } }
       );
-
-      if (response.ok) {
-        const imageBlob = await response.blob();
-        picturePreview.src = URL.createObjectURL(imageBlob);
-      } else {
-        picturePreview.removeAttribute("src");
+      if (!response.ok) throw new Error("Your profile picture could not be loaded. Please upload it again.");
+      const imageBlob = await response.blob();
+      const imageUrl = URL.createObjectURL(imageBlob);
+      picturePreview.src = imageUrl;
+      if (sidebarAvatar) {
+        sidebarAvatar.src = imageUrl;
+        sidebarAvatar.hidden = false;
       }
+      if (sidebarFallback) sidebarFallback.hidden = true;
     } else {
       picturePreview.removeAttribute("src");
+      if (sidebarAvatar) {
+        sidebarAvatar.removeAttribute("src");
+        sidebarAvatar.hidden = true;
+      }
+      if (sidebarFallback) sidebarFallback.hidden = false;
     }
 
     profileStatus.textContent = "";
@@ -1122,19 +1136,54 @@ document.getElementById("save-profile-button").addEventListener("click", async (
   }
 });
 
-// Upload or replace the profile picture.
-document.getElementById("upload-profile-picture-button").addEventListener("click", async () => {
-  const input = document.getElementById("profile-picture-input");
-  const status = document.getElementById("profile-status");
-  const file = input.files[0];
+// Upload or replace the profile picture with clear validation and feedback.
+const profilePictureInput = document.getElementById("profile-picture-input");
+const uploadProfilePictureButton = document.getElementById("upload-profile-picture-button");
 
+profilePictureInput.addEventListener("change", () => {
+  const file = profilePictureInput.files && profilePictureInput.files[0];
+  const status = document.getElementById("profile-status");
+  if (!file) return;
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    profilePictureInput.value = "";
+    status.textContent = "Please choose a JPG, PNG or WebP image.";
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    profilePictureInput.value = "";
+    status.textContent = "Please choose an image smaller than 2 MB.";
+    return;
+  }
+  status.textContent = "Picture selected: " + file.name;
+});
+
+uploadProfilePictureButton.addEventListener("click", async () => {
+  const input = profilePictureInput;
+  const status = document.getElementById("profile-status");
+  const file = input.files && input.files[0];
+
+  if (!token) {
+    status.textContent = "Please log in again before uploading your picture.";
+    return;
+  }
   if (!file) {
-    status.textContent = "Please select a picture first.";
+    status.textContent = "Choose a JPG, PNG or WebP picture first.";
+    input.focus();
+    return;
+  }
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    status.textContent = "Unsupported image format. Please use JPG, PNG or WebP.";
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    status.textContent = "This picture is too large. The maximum size is 2 MB.";
     return;
   }
 
   const formData = new FormData();
-  formData.append("avatar", file);
+  formData.append("avatar", file, file.name);
+  uploadProfilePictureButton.disabled = true;
+  status.textContent = "Uploading your profile picture…";
 
   try {
     const response = await fetch("/api/uploads/profile-picture", {
@@ -1142,15 +1191,17 @@ document.getElementById("upload-profile-picture-button").addEventListener("click
       headers: { Authorization: "Bearer " + token },
       body: formData
     });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Upload failed.");
-
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Upload failed (HTTP " + response.status + "). Please try again.");
+    }
     await loadMyProfile();
     input.value = "";
-    status.textContent = "Profile picture updated successfully.";
+    status.textContent = "Profile picture uploaded successfully.";
   } catch (error) {
-    status.textContent = error.message;
+    status.textContent = error.message || "Could not upload your profile picture. Please try again.";
+  } finally {
+    uploadProfilePictureButton.disabled = false;
   }
 });
 
@@ -1751,12 +1802,39 @@ document.getElementById("social-followers-tab").addEventListener("click", loadFo
 document.getElementById("social-notifications-tab").addEventListener("click", loadNotifications);
 
 
-// Phase 9: grouped navigation controls. Navigation changes layout only; it does not alter app data.
+// Phase 10: profile-first menu; workspace details open only after a menu selection.
 (function initWaltajjiiNavigation() {
   const shell = document.querySelector(".wt-app-shell");
   const toggle = document.getElementById("wt-nav-toggle");
   const sidebar = document.getElementById("wt-sidebar");
+  const home = document.getElementById("wt-home-placeholder");
+  const account = document.getElementById("wt-account-section");
   if (!shell || !toggle || !sidebar) return;
+
+  function showTarget(link) {
+    const targetId = decodeURIComponent((link.getAttribute("href") || "").slice(1));
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    if (home) home.hidden = true;
+
+    document.querySelectorAll(".wt-content-section").forEach(section => {
+      section.classList.remove("wt-section-active");
+    });
+    if (account) {
+      account.querySelectorAll(":scope > #profile-panel, :scope > #personalization-panel")
+        .forEach(panel => panel.classList.add("wt-subsection-hidden"));
+    }
+
+    const section = target.closest(".wt-content-section");
+    if (section) section.classList.add("wt-section-active");
+    if (section && section.id === "wt-account-section") {
+      target.classList.remove("wt-subsection-hidden");
+    }
+
+    sidebar.querySelectorAll("a[aria-current='location']").forEach(item => item.removeAttribute("aria-current"));
+    link.setAttribute("aria-current", "location");
+    requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
 
   toggle.addEventListener("click", () => {
     const isOpen = shell.classList.toggle("wt-sidebar-open");
@@ -1765,9 +1843,9 @@ document.getElementById("social-notifications-tab").addEventListener("click", lo
   });
 
   sidebar.querySelectorAll('a[href^="#"]').forEach(link => {
-    link.addEventListener("click", () => {
-      sidebar.querySelectorAll("a[aria-current='location']").forEach(item => item.removeAttribute("aria-current"));
-      link.setAttribute("aria-current", "location");
+    link.addEventListener("click", event => {
+      event.preventDefault();
+      showTarget(link);
       if (window.matchMedia("(max-width: 820px)").matches) {
         shell.classList.remove("wt-sidebar-open");
         toggle.setAttribute("aria-expanded", "false");
