@@ -1275,6 +1275,36 @@ async function loadFeed() {
   }
 }
 
+
+async function loadFollowers() {
+  const host = document.getElementById("social-followers-list");
+  host.replaceChildren(socialElement("p", "social-empty", "Loading..."));
+  try {
+    const data = await api("/api/social/followers");
+    host.replaceChildren();
+    if (!data.users.length) {
+      host.appendChild(socialElement("p", "social-empty", "You do not have followers yet."));
+      return;
+    }
+    data.users.forEach(user => {
+      const card = socialElement("article", "social-card");
+      const head = socialElement("div", "social-card-head");
+      const avatar = socialElement("img", "social-avatar");
+      avatar.alt = user.username + " profile picture";
+      if (user.avatarPath) avatar.src = "/api/uploads/profile-picture/" + encodeURIComponent(user.id);
+      const identity = socialElement("div");
+      identity.appendChild(socialElement("strong", "", user.username));
+      const details = [user.professionalTitle, user.organization, user.bio].filter(Boolean).join(" · ");
+      if (details) identity.appendChild(socialElement("div", "social-muted", details));
+      head.append(avatar, identity);
+      card.appendChild(head);
+      host.appendChild(card);
+    });
+  } catch (error) {
+    host.replaceChildren(socialElement("p", "social-empty", error.message));
+  }
+}
+
 async function loadNotifications() {
   const host = document.getElementById("social-notification-list");
   host.replaceChildren(socialElement("p", "social-empty", "Loading..."));
@@ -1298,7 +1328,7 @@ async function loadNotifications() {
 }
 
 async function loadSocialData() {
-  await Promise.all([loadDiscover(), loadFeed(), loadRequests(), loadFollowing(), loadNotifications()]);
+  await Promise.all([loadDiscover(), loadFeed(), loadRequests(), loadFollowing(), loadFollowers(), loadNotifications()]);
 }
 
 document.getElementById("social-search-button").addEventListener("click", loadDiscover);
@@ -1333,4 +1363,5 @@ document.getElementById("social-discover-tab").addEventListener("click", loadDis
 document.getElementById("social-feed-tab").addEventListener("click", loadFeed);
 document.getElementById("social-requests-tab").addEventListener("click", loadRequests);
 document.getElementById("social-following-tab").addEventListener("click", loadFollowing);
+document.getElementById("social-followers-tab").addEventListener("click", loadFollowers);
 document.getElementById("social-notifications-tab").addEventListener("click", loadNotifications);
