@@ -295,12 +295,12 @@
     for (const node of nodes) {
       const parent = node.parentElement;
       if (!parent || parent.closest("script,style,textarea,input,option,.message,.social-post,.social-comment,#profile-bio-display,[contenteditable='true']")) continue;
-      const original = node.__waltajjiiOriginal || node.nodeValue.trim();
+      const current = node.nodeValue.trim();
+      const original = node.__waltajjiiOriginal || current;
       const translated = phrases[original]?.[index];
       if (!translated) continue;
       if (!node.__waltajjiiOriginal) node.__waltajjiiOriginal = original;
-      if (node.nodeValue.trim() === original) node.nodeValue = node.nodeValue.replace(original, translated);
-      else if (node.nodeValue.trim() === phrases[original]?.[0]) node.nodeValue = node.nodeValue.replace(phrases[original][0], translated);
+      if (current !== translated) node.nodeValue = node.nodeValue.replace(current, translated);
     }
   }
 
