@@ -170,6 +170,17 @@
       .profile-hero { gap: 10px; }
       #profile-picture-preview { width: 72px !important; height: 72px !important; }
     }
+    /* Arabic interface direction */
+    html[dir="rtl"] body { direction: rtl; text-align: right; }
+    html[dir="rtl"] header { text-align: right; }
+    html[dir="rtl"] header .brand { justify-content: flex-start; }
+    html[dir="rtl"] header .brand-tagline { margin-left: 0; margin-right: 66px; }
+    html[dir="rtl"] .profile-heading, html[dir="rtl"] .profile-hero,
+    html[dir="rtl"] .social-card-head { direction: rtl; }
+    html[dir="rtl"] .profile-field, html[dir="rtl"] .social-section { text-align: right; }
+    html[dir="rtl"] .social-comment { border-left: 0; border-right: 3px solid #dbe7eb; }
+    html[dir="rtl"] #message-form, html[dir="rtl"] .group-message-form { direction: rtl; }
+    html[dir="rtl"] input, html[dir="rtl"] textarea, html[dir="rtl"] select { text-align: right; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
@@ -187,12 +198,12 @@
     <select id="language-select" aria-label="Choose language"
             style="max-width:220px; margin-top:10px;">
       <option value="om">Afaan Oromoo</option>
-      <option value="am">áŠ áˆ›áˆ­áŠ›</option>
+      <option value="am">አማርኛ</option>
       <option value="en" selected>English</option>
-      <option value="ar">Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©</option>
+      <option value="ar">العربية</option>
       <option value="so">Soomaali</option>
-      <option value="fr">FranÃ§ais</option>
-      <option value="zh">ä¸­æ–‡ï¼ˆç®€ä½“ï¼‰</option>
+      <option value="fr">Français</option>
+      <option value="zh">简体中文</option>
     </select>
   </header>
 
