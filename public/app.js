@@ -484,22 +484,12 @@ let rtcConfigurationPromise = null;
 
 async function getRtcConfiguration() {
   if (!rtcConfigurationPromise) {
-    rtcConfigurationPromise = fetch(
-      "https://waltajjii-calls.metered.live/api/v1/turn/credentials?apiKey=" +
-      encodeURIComponent(meteredCredentialApiKey)
-    )
-      .then(async response => {
-        if (!response.ok) {
-          throw new Error("Could not load TURN server settings.");
-        }
-
-        const iceServers = await response.json();
-
-        if (!Array.isArray(iceServers) || iceServers.length === 0) {
+    rtcConfigurationPromise = api("/api/calls/turn-credentials")
+      .then(data => {
+        if (!Array.isArray(data.iceServers) || data.iceServers.length === 0) {
           throw new Error("No ICE servers were returned.");
         }
-
-        return { iceServers };
+        return { iceServers: data.iceServers };
       })
       .catch(error => {
         rtcConfigurationPromise = null;
@@ -509,7 +499,6 @@ async function getRtcConfiguration() {
 
   return rtcConfigurationPromise;
 }
-
 function setCallStatus(message) {
   if (callStatus) callStatus.textContent = message;
 }
