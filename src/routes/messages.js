@@ -65,7 +65,7 @@ router.post("/", authenticate, (req, res) => {
     });
   }
 
-  if (mediaPath && !/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath)) {
+  if (mediaPath && !/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath)) {
   return res.status(400).json({
     error: "Invalid media file."
   });
