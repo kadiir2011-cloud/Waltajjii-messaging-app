@@ -52,7 +52,7 @@
       "end-call-button": "Bilbila cufi",
       "message-placeholder": "Ergaa barreessi...",
       "send-button": "Ergi",
-      "footer-text": "Waltajjii · Guddina jalqabaa"
+      "footer-text": "Waltajjii™ · © 2026 · Kan Kedir Negesso Tukeni uume"
     },
     am: {
       "app-subtitle": "በውይይት ይገናኙ",
@@ -79,7 +79,7 @@
       "end-call-button": "ጥሪውን ጨርስ",
       "message-placeholder": "መልዕክት ይጻፉ...",
       "send-button": "ላክ",
-      "footer-text": "ዋልታጂ · የመጀመሪያ የእድገት ስሪት"
+      "footer-text": "ዋልታጂ™ · © 2026 · በKedir Negesso Tukeni የተፈጠረ"
     },
     ar: {
       "app-subtitle": "تواصلوا من خلال المحادثة",
@@ -106,7 +106,7 @@
       "end-call-button": "إنهاء المكالمة",
       "message-placeholder": "اكتب رسالة...",
       "send-button": "إرسال",
-      "footer-text": "والتاجي · نسخة تطوير أولية"
+      "footer-text": "Waltajjii™ · © 2026 · من إنشاء Kedir Negesso Tukeni"
     },
     so: {
       "app-subtitle": "Ku xidhnow wada sheekaysi",
@@ -133,7 +133,7 @@
       "end-call-button": "Dhammee wicitaanka",
       "message-placeholder": "Qor farriin...",
       "send-button": "Dir",
-      "footer-text": "Waltajjii · Nooca horumarinta bilowga ah"
+      "footer-text": "Waltajjii™ · © 2026 · Waxaa sameeyay Kedir Negesso Tukeni"
     },
     fr: {
       "app-subtitle": "Connectez-vous par la conversation",
@@ -160,7 +160,7 @@
       "end-call-button": "Terminer l'appel",
       "message-placeholder": "Écrivez un message...",
       "send-button": "Envoyer",
-      "footer-text": "Waltajjii · Version de développement initiale"
+      "footer-text": "Waltajjii™ · © 2026 · Créé par Kedir Negesso Tukeni"
     },
     zh: {
       "app-subtitle": "通过交流建立联系",
@@ -187,7 +187,7 @@
       "end-call-button": "结束通话",
       "message-placeholder": "输入消息...",
       "send-button": "发送",
-      "footer-text": "Waltajjii · 早期开发版本"
+      "footer-text": "Waltajjii™ · © 2026 · 由 Kedir Negesso Tukeni 创建"
     }
   };
 
