@@ -132,6 +132,310 @@
     .social-comment { border-left:3px solid #dbe7eb; padding:7px 10px; margin:7px 0; }
     .social-empty { color:var(--wt-muted); padding:12px 0; }
 
+
+    /* Phase 4.1: mobile-first layout and touch accessibility */
+    html { -webkit-text-size-adjust: 100%; }
+    body { min-width: 320px; }
+    button, input, select, textarea { font: inherit; }
+    button, a, input, select, textarea { touch-action: manipulation; }
+    button { min-height: 44px; }
+    input, select, textarea { min-height: 44px; font-size: 16px; }
+    img, video { max-width: 100%; }
+    .message, .group-messages, #messages, .social-card { overflow-wrap: anywhere; }
+    :focus-visible { outline: 3px solid #e0a52b; outline-offset: 2px; }
+    @media (max-width: 640px) {
+      header { padding: 16px; }
+      header .brand { gap: 10px; }
+      header .brand-tagline { margin-left: 0; }
+      main { width: 100%; margin: 8px auto; padding: 8px; }
+      .panel, #profile-panel, .social-panel, .group-panel { padding: 14px; border-radius: 14px; }
+      .profile-heading { align-items: flex-start; flex-direction: column; }
+      .profile-hero { flex-wrap: wrap; }
+      .social-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .social-tabs button, .social-actions button { width: 100%; min-width: 0; }
+      .social-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .row { align-items: stretch; }
+      .row > button { flex: 1 1 140px; }
+      #messages, .group-messages { max-height: 50vh; }
+      #message-form, .group-message-form { align-items: stretch; flex-direction: column; }
+      #message-form button, .group-message-form button { width: 100%; }
+      #message-form input, .group-message-form input { width: 100%; }
+      footer { padding: 16px 10px; }
+    }
+    @media (max-width: 380px) {
+      header { padding: 14px 12px; }
+      main { padding: 6px; }
+      .panel, #profile-panel, .social-panel, .group-panel { padding: 12px; }
+      .social-tabs, .social-actions { grid-template-columns: 1fr; }
+      .profile-hero { gap: 10px; }
+      #profile-picture-preview { width: 72px !important; height: 72px !important; }
+    }
+    /* Arabic interface direction */
+    html[dir="rtl"] body { direction: rtl; text-align: right; }
+    html[dir="rtl"] header { text-align: right; }
+    html[dir="rtl"] header .brand { justify-content: flex-start; }
+    html[dir="rtl"] header .brand-tagline { margin-left: 0; margin-right: 66px; }
+    html[dir="rtl"] .profile-heading, html[dir="rtl"] .profile-hero,
+    html[dir="rtl"] .social-card-head { direction: rtl; }
+    html[dir="rtl"] .profile-field, html[dir="rtl"] .social-section { text-align: right; }
+    html[dir="rtl"] .social-comment { border-left: 0; border-right: 3px solid #dbe7eb; }
+    html[dir="rtl"] #message-form, html[dir="rtl"] .group-message-form { direction: rtl; }
+    html[dir="rtl"] input, html[dir="rtl"] textarea, html[dir="rtl"] select { text-align: right; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+
+
+    /* Phase 4.7: unified Waltajjii visual system */
+    :root {
+      color-scheme: light;
+      --wt-navy: #102b43;
+      --wt-navy-2: #183b55;
+      --wt-teal: #087f78;
+      --wt-teal-dark: #066b66;
+      --wt-page: #f3f6f8;
+      --wt-surface: #ffffff;
+      --wt-surface-soft: #f7fafb;
+      --wt-text: #172b3a;
+      --wt-muted: #657887;
+      --wt-border: #dce5eb;
+      --wt-shadow: 0 10px 30px rgba(16,43,67,.07);
+      --wt-radius: 18px;
+    }
+    html { scroll-behavior: smooth; background: var(--wt-page); }
+    body {
+      background: var(--wt-page);
+      color: var(--wt-text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    header {
+      position: relative;
+      padding: 22px max(18px, calc((100% - 1180px)/2));
+      background: linear-gradient(118deg, var(--wt-navy) 0%, #17445a 58%, var(--wt-teal) 100%);
+      box-shadow: 0 5px 20px rgba(16,43,67,.15);
+    }
+    header .brand { gap: 13px; }
+    .brand-logo { filter: drop-shadow(0 3px 5px rgba(0,0,0,.16)); }
+    .brand h1 { font-weight: 750; letter-spacing: -.035em; }
+    header .brand-tagline { color: rgba(255,255,255,.88); font-size: .96rem; }
+    #language-label { display: inline-block; margin-top: 14px; color: rgba(255,255,255,.9); font-size: .88rem; }
+    #language-select {
+      display: block;
+      width: min(100%, 230px);
+      margin: 5px 0 0;
+      border: 1px solid rgba(255,255,255,.35) !important;
+      background: rgba(255,255,255,.97);
+      color: var(--wt-navy);
+    }
+    main { width: min(100% - 32px, 1180px); max-width: 1180px; margin: 28px auto; padding: 0; }
+    .panel, #profile-panel, .social-panel, .group-panel, #call-panel {
+      background: var(--wt-surface);
+      border: 1px solid var(--wt-border);
+      border-radius: var(--wt-radius);
+      box-shadow: var(--wt-shadow);
+    }
+    .panel { padding: clamp(18px, 2.5vw, 30px); margin-bottom: 22px; }
+    #auth-panel { max-width: 520px; margin: clamp(28px, 6vh, 72px) auto; }
+    #auth-panel h2, #chat-panel h2, .social-panel h2, .group-panel h2 {
+      color: var(--wt-navy);
+      letter-spacing: -.025em;
+    }
+    h2, h3, h4 { line-height: 1.25; }
+    h3 { color: var(--wt-navy-2); }
+    input, select, textarea {
+      color: var(--wt-text);
+      background: var(--wt-surface);
+      border: 1px solid var(--wt-border) !important;
+      border-radius: 11px !important;
+      box-shadow: inset 0 1px 2px rgba(16,43,67,.025);
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--wt-teal) !important;
+      outline: 3px solid rgba(8,127,120,.14);
+      outline-offset: 1px;
+    }
+    button {
+      min-height: 44px;
+      padding: 10px 16px;
+      border-radius: 11px;
+      background: var(--wt-teal);
+      box-shadow: 0 2px 5px rgba(8,127,120,.12);
+      font-weight: 650;
+      letter-spacing: .005em;
+    }
+    button:hover { background: var(--wt-teal-dark); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { box-shadow: none; transform: none; }
+    button.secondary { background: #eaf1f4; color: var(--wt-navy); }
+    button.danger { background: #fff0f0; color: #a33232; }
+    .muted, #status, #auth-status { color: var(--wt-muted); }
+    #profile-panel, .social-panel, .group-panel { padding: clamp(16px, 2.3vw, 26px); }
+    #profile-panel { margin: 22px 0; }
+    .profile-hero {
+      border: 1px solid #e3edef;
+      background: linear-gradient(120deg, #f0f7f7, #f7f9fc);
+    }
+    .profile-section-title { margin-top: 25px; color: var(--wt-navy-2); }
+    .profile-field label, label { color: #40596a; font-weight: 600; }
+    .social-panel { margin-top: 22px; }
+    .social-tabs {
+      position: relative;
+      padding: 5px;
+      border-radius: 13px;
+      background: var(--wt-surface-soft);
+      border: 1px solid var(--wt-border);
+    }
+    .social-tabs button {
+      min-height: 40px;
+      padding: 8px 12px;
+      box-shadow: none;
+    }
+    .social-card {
+      background: var(--wt-surface-soft);
+      border-color: var(--wt-border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .social-comment { background: #f7fafb; border-radius: 0 10px 10px 0; }
+    #recipient { max-width: 100%; }
+    #load-button { margin: 0 0 14px; }
+    #call-panel {
+      padding: clamp(15px, 2vw, 22px) !important;
+      border-color: var(--wt-border) !important;
+      background: var(--wt-surface-soft);
+    }
+    #call-panel video {
+      width: min(100%, 320px) !important;
+      aspect-ratio: 16 / 10;
+      object-fit: cover;
+      background: #10202b !important;
+      border-radius: 13px !important;
+    }
+    #call-panel > div { align-items: center; }
+    #call-status, #status, #auth-status, #profile-status, #group-status, #channel-status {
+      overflow-wrap: anywhere;
+    }
+    #messages, .group-messages {
+      border: 1px solid var(--wt-border);
+      border-radius: 14px;
+      background: #f8fafb;
+      padding: clamp(12px, 2vw, 18px);
+      scroll-behavior: smooth;
+    }
+    .message {
+      width: fit-content;
+      max-width: min(82%, 680px);
+      padding: 11px 14px;
+      border: 1px solid #dce9e7;
+      border-radius: 14px 14px 14px 4px;
+      background: #eaf4f2;
+      box-shadow: 0 2px 5px rgba(16,43,67,.035);
+    }
+    .message.mine {
+      margin-left: auto;
+      border-color: #d5e4f3;
+      border-radius: 14px 14px 4px 14px;
+      background: #e9f1fb;
+    }
+    .message img, .message video { border-radius: 10px; }
+    #message-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+      gap: 10px;
+      align-items: center;
+      margin: 12px 0 22px;
+      padding: 12px;
+      border: 1px solid var(--wt-border);
+      border-radius: 15px;
+      background: var(--wt-surface);
+    }
+    #message-form input { margin: 0; min-width: 0; }
+    #message-form button { min-width: 92px; }
+    .group-panel { margin-top: 20px; }
+    .group-panel .row { margin: 10px 0; }
+    footer { color: var(--wt-muted); }
+    @media (min-width: 900px) {
+      #profile-panel .profile-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .social-tabs { flex-wrap: nowrap; }
+      .social-tabs button { flex: 1 1 auto; }
+      #call-panel > div:first-of-type { gap: 18px !important; }
+    }
+    @media (max-width: 700px) {
+      main { width: min(100% - 20px, 620px); margin: 14px auto; }
+      header { padding: 17px 16px; }
+      .panel { padding: 16px; }
+      #auth-panel { margin: 20px auto; }
+      #message-form {
+        grid-template-columns: minmax(0,1fr);
+        padding: 10px;
+      }
+      #message-form input[type="file"] { width: 100%; }
+      #message-form button { width: 100%; }
+      .message { max-width: 94%; }
+      .social-tabs { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .social-tabs button { width: 100%; min-width: 0; }
+      .social-actions { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      #call-panel > div:first-of-type video { width: min(100%, 100%) !important; }
+      #call-panel > div:last-of-type { display: grid !important; grid-template-columns: repeat(2, minmax(0,1fr)); }
+      #call-panel > div:last-of-type button { width: 100%; }
+    }
+    @media (max-width: 390px) {
+      main { width: calc(100% - 14px); }
+      header { padding: 14px 12px; }
+      .brand h1 { font-size: 1.8rem; }
+      #profile-panel, .social-panel, .group-panel { padding: 12px; }
+      .social-tabs, .social-actions { grid-template-columns: 1fr; }
+      #call-panel > div:last-of-type { grid-template-columns: 1fr; }
+      #profile-picture-preview { width: 72px !important; height: 72px !important; }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --wt-page: #0d1720;
+        --wt-surface: #142330;
+        --wt-surface-soft: #192b39;
+        --wt-text: #e7eef3;
+        --wt-muted: #a8b8c4;
+        --wt-border: #304453;
+        --wt-navy: #dceaf2;
+        --wt-navy-2: #c3d8e5;
+        --wt-shadow: 0 10px 30px rgba(0,0,0,.18);
+      }
+      html, body { background: var(--wt-page); color: var(--wt-text); }
+      .panel, #profile-panel, .social-panel, .group-panel, #call-panel,
+      #message-form { background: var(--wt-surface); border-color: var(--wt-border); }
+      input, select, textarea { background: #10202c; color: var(--wt-text); border-color: var(--wt-border) !important; }
+      .profile-hero, .social-card, #messages, .group-messages { background: var(--wt-surface-soft); border-color: var(--wt-border); }
+      .profile-field label, label, .profile-section-title, h3 { color: #c3d8e5; }
+      .social-tabs { background: #10202c; border-color: var(--wt-border); }
+      .message { background: #1d3a42; color: #e7eef3; border-color: #31545b; }
+      .message.mine { background: #203b59; border-color: #385a78; }
+      .social-comment { background: #10202c; }
+      button.secondary { background: #2a3d4b; color: #e7eef3; }
+      button.danger { background: #492b32; color: #ffdadd; }
+    }
+    html[dir="rtl"] header .brand-tagline { margin-right: 67px; }
+    html[dir="rtl"] .message { margin-left: 0; margin-right: 0; border-radius: 14px 14px 4px 14px; }
+    html[dir="rtl"] .message.mine { margin-right: auto; margin-left: 0; border-radius: 14px 14px 14px 4px; }
+    html[dir="rtl"] #message-form { direction: rtl; }
+
+
+    @media (min-width: 1100px) {
+      .social-panel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 22px;
+        align-items: start;
+      }
+      .social-panel > #social-heading,
+      .social-panel > .social-muted,
+      .social-panel > .social-tabs { grid-column: 1 / -1; }
+      #social-discover, #social-feed { grid-column: auto; min-width: 0; }
+      #social-requests, #social-following, #social-followers,
+      #social-notifications { grid-column: 1 / -1; }
+    }
+
   </style>
 </head>
 <body>
@@ -145,12 +449,12 @@
     <select id="language-select" aria-label="Choose language"
             style="max-width:220px; margin-top:10px;">
       <option value="om">Afaan Oromoo</option>
-      <option value="am">áŠ áˆ›áˆ­áŠ›</option>
+      <option value="am">አማርኛ</option>
       <option value="en" selected>English</option>
-      <option value="ar">Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©</option>
+      <option value="ar">العربية</option>
       <option value="so">Soomaali</option>
-      <option value="fr">FranÃ§ais</option>
-      <option value="zh">ä¸­æ–‡ï¼ˆç®€ä½“ï¼‰</option>
+      <option value="fr">Français</option>
+      <option value="zh">简体中文</option>
     </select>
   </header>
 
@@ -418,10 +722,10 @@
     </section>
   </main>
 
-  <footer>WALTAJJII™ · © 2026 · Created by Kedir Negesso Tukeni</footer>
+  <footer id="footer-text">WALTAJJII™ · © 2026 · Created by Kedir Negesso Tukeni</footer>
 
 <script src="/socket.io/socket.io.js" defer></script>
-  <script src="/language.js" defer></script>
+  <script src="/language.js?v=footer-translation-1" defer></script>
   <script src="/dynamic-language.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
