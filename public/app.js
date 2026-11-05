@@ -36,6 +36,7 @@ let callSocket = null;
       statusBox.textContent = "Choose a recipient to begin.";
       loadUsers();
       loadGroups();
+      loadChannels();
       loadSocialData();
     }
 async function loadMyProfile() {
@@ -956,7 +957,6 @@ groupMessageForm.addEventListener("submit", async event => {
     groupMessageInput.focus();
   }
 });
-if (typeof loadChannels === 'function') { /* initialized below; loaded after login */ }
 // Keep the biography character counter in sync with typing.
 document.getElementById("profile-bio-input").addEventListener("input", event => {
   document.getElementById("bio-counter").textContent = event.target.value.length;
