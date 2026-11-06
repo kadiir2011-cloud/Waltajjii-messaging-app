@@ -122,6 +122,12 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
     WHERE m.id = ?
   `).get(result.lastInsertRowid);
 
+  // Notify the recipient's authenticated Socket.IO session(s) immediately.
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`user:${receiver.id}`).emit("message:new", message);
+  }
+
   res.status(201).json({ message });
 });
 
