@@ -6,6 +6,7 @@ const path = require("path");
 const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
+const db = require("./db");
 
 require("dotenv").config();
 
@@ -186,6 +187,41 @@ io.on("connection", (socket) => {
     if (!targetUserId || socket.data.typingTo === targetUserId) {
       stopSocketTyping(socket);
     }
+  });
+
+  // A recipient confirms delivery only after the authenticated client receives the message.
+  socket.on("message:delivered", (data = {}, acknowledge = () => {}) => {
+    const messageId = Number(data.messageId);
+    if (!Number.isSafeInteger(messageId) || messageId < 1) {
+      return acknowledge({ ok: false, error: "Invalid message." });
+    }
+
+    const updated = db.prepare(`
+      UPDATE messages
+      SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
+      WHERE id = ? AND receiver_id = ?
+    `).run(messageId, socket.data.userId);
+
+    if (!updated.changes) {
+      return acknowledge({ ok: false, error: "Message not found for this recipient." });
+    }
+
+    const receipt = db.prepare(`
+      SELECT m.id AS messageId, m.sender_id AS senderId,
+             m.receiver_id AS receiverId, s.username AS sender,
+             r.username AS recipient, m.delivered_at AS deliveredAt,
+             m.read_at AS readAt
+      FROM messages m
+      JOIN users s ON s.id = m.sender_id
+      JOIN users r ON r.id = m.receiver_id
+      WHERE m.id = ?
+    `).get(messageId);
+
+    io.to(`user:${receipt.senderId}`).emit("message:status", {
+      ...receipt,
+      status: receipt.readAt ? "read" : "delivered"
+    });
+    acknowledge({ ok: true });
   });
 
   socket.on("call:offer", (data = {}, acknowledge = () => {}) => {
