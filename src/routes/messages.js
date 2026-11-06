@@ -320,9 +320,11 @@ router.delete("/:messageId", authenticate, (req, res) => {
     return res.status(400).json({ error: "Choose a valid message deletion option." });
   }
   const message = db.prepare(
-    "SELECT id, sender_id AS senderId, receiver_id AS receiverId, " +
-    "deleted_for_everyone_at AS deletedAt FROM messages " +
-    "WHERE id = ? AND (sender_id = ? OR receiver_id = ?) AND deleted_for_everyone_at IS NULL"
+    "SELECT m.id, m.sender_id AS senderId, m.receiver_id AS receiverId, " +
+    "s.username AS sender, r.username AS recipient, " +
+    "m.deleted_for_everyone_at AS deletedAt FROM messages m " +
+    "JOIN users s ON s.id = m.sender_id JOIN users r ON r.id = m.receiver_id " +
+    "WHERE m.id = ? AND (m.sender_id = ? OR m.receiver_id = ?)"
   ).get(messageId, req.auth.userId, req.auth.userId);
   if (!message || message.deletedAt) return res.status(404).json({ error: "Message not found." });
   if (scope === "everyone") {
@@ -342,7 +344,7 @@ router.delete("/:messageId", authenticate, (req, res) => {
   }
   const io = req.app.get("io");
   if (io) {
-    const payload = { messageId, sender: message.senderId, recipient: message.receiverId, scope };
+    const payload = { messageId, sender: message.sender, recipient: message.recipient, scope };
     if (scope === "everyone") {
       io.to("user:" + message.senderId).emit("message:delete:update", payload);
       io.to("user:" + message.receiverId).emit("message:delete:update", payload);
@@ -366,7 +368,7 @@ router.post("/:messageId/reactions", authenticate, (req, res) => {
            (SELECT username FROM users WHERE id = sender_id) AS sender,
            (SELECT username FROM users WHERE id = receiver_id) AS recipient
     FROM messages
-    WHERE id = ? AND (sender_id = ? OR receiver_id = ?)
+    WHERE id = ? AND (sender_id = ? OR receiver_id = ?) AND deleted_for_everyone_at IS NULL
   `).get(messageId, req.auth.userId, req.auth.userId);
   if (!message) return res.status(404).json({ error: "Message not found." });
 
