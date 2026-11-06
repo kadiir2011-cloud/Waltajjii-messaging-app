@@ -635,6 +635,7 @@ items.forEach(item => {
     recipient.addEventListener("change", () => {
       stopTypingIndicator();
       if (typingLine) typingLine.textContent = "";
+      clearReplyComposer();
       refreshPresenceUI();
       loadConversation();
     });
