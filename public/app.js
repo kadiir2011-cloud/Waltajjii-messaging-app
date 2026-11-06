@@ -517,6 +517,19 @@ items.forEach(item => {
   time.textContent = item.createdAt;
 
   element.append(label, content, time);
+  if (item.sender === currentUsername) {
+    const receipt = document.createElement("small");
+    receipt.className = "wt-message-receipt";
+    const state = item.readAt ? "read" : item.deliveredAt ? "delivered" : "sent";
+    receipt.textContent = state === "read" ? "  ✓✓ Read" : state === "delivered" ? "  ✓✓ Delivered" : "  ✓ Sent";
+    receipt.title = item.readAt
+      ? "Read at " + item.readAt
+      : item.deliveredAt
+        ? "Delivered at " + item.deliveredAt
+        : "Sent";
+    receipt.style.cssText = "display:block;margin-top:3px;color:#64748b;font-size:0.78rem;";
+    element.appendChild(receipt);
+  }
   messagesBox.appendChild(element);
 });
       messagesBox.scrollTop = messagesBox.scrollHeight;
@@ -534,6 +547,9 @@ items.forEach(item => {
           "/api/messages/conversation/" + encodeURIComponent(username)
         );
         renderMessages(data.messages);
+        await api("/api/messages/conversation/" + encodeURIComponent(username) + "/read", {
+          method: "POST"
+        });
         statusBox.textContent = "Conversation with " + username + " loaded.";
       } catch (error) {
         statusBox.textContent = error.message;
@@ -783,15 +799,28 @@ function registerMessagingSocketHandlers(socket) {
     }
   });
 
-  // Refresh only the conversation currently open when a new message arrives.
+  // Confirm durable delivery as soon as this authenticated client receives the message.
   socket.on("message:new", data => {
-    if (!data || !currentUsername || !recipient || !recipient.value) return;
+    if (!data || !currentUsername) return;
+
+    if (data.recipient === currentUsername && data.id != null) {
+      socket.emit("message:delivered", { messageId: data.id });
+    }
+
+    if (!recipient || !recipient.value) return;
     const selectedUsername = recipient.value;
     const belongsToOpenConversation =
       (data.sender === selectedUsername && data.recipient === currentUsername) ||
       (data.sender === currentUsername && data.recipient === selectedUsername);
 
     if (belongsToOpenConversation) {
+      loadConversation();
+    }
+  });
+
+  socket.on("message:status", data => {
+    if (!data || !currentUsername || !recipient?.value) return;
+    if (data.sender === currentUsername && data.recipient === recipient.value) {
       loadConversation();
     }
   });
