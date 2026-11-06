@@ -41,6 +41,8 @@ const authPanel = document.getElementById("auth-panel");
     const recipient = document.getElementById("recipient");
     const messagesBox = document.getElementById("messages");
     const messageForm = document.getElementById("message-form");
+    let replyingToMessage = null;
+    let replyComposer = null;
     const messageInput = document.getElementById("message-input");
 const mediaInput = document.getElementById("media-input");
     let recordedVoiceFile = null;
@@ -351,6 +353,14 @@ items.forEach(item => {
   const label = document.createElement("strong");
   label.textContent = item.sender + " â†’ " + item.recipient;
 
+  if (item.replyToMessageId) {
+    const quote = document.createElement("div");
+    quote.className = "wt-reply-quote";
+    quote.style.cssText = "padding:7px 10px;margin:0 0 8px;border-left:3px solid #0d9488;background:rgba(100,116,139,.10);border-radius:6px;font-size:.85rem;";
+    quote.textContent = "↪ " + (item.replyToSender || "Original message") + ": " + (item.replyToBody || "Message unavailable");
+    element.appendChild(quote);
+  }
+
   const content = document.createElement("div");
   const isVoiceMessage = Boolean(item.mediaPath && item.mediaType === "document" && String(item.body || "").startsWith("[Voice message]"));
   content.textContent = isVoiceMessage ? String(item.body || "").replace(/^\[Voice message\]\s*/, "") : (item.body || "");
@@ -517,6 +527,47 @@ items.forEach(item => {
   time.textContent = item.createdAt;
 
   element.append(label, content, time);
+
+  const messageActions = document.createElement("div");
+  messageActions.className = "wt-message-actions";
+  messageActions.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;";
+  const replyButton = document.createElement("button");
+  replyButton.type = "button";
+  replyButton.textContent = "↩ Reply";
+  replyButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+  replyButton.addEventListener("click", () => {
+    replyingToMessage = item;
+    showReplyComposer();
+    messageInput.focus();
+  });
+  messageActions.appendChild(replyButton);
+
+  ["👍","❤️","😂","😮","😢","🎉","🙏","🔥"].forEach(emoji => {
+    const reactionButton = document.createElement("button");
+    reactionButton.type = "button";
+    reactionButton.textContent = emoji;
+    reactionButton.title = "React with " + emoji;
+    reactionButton.style.cssText = "font-size:.9rem;padding:3px 6px;min-width:30px;";
+    reactionButton.addEventListener("click", async () => {
+      try {
+        const result = await api("/api/messages/" + item.id + "/reactions", {
+          method: "POST", body: JSON.stringify({ emoji })
+        });
+        item.reactions = result.reactions;
+        loadConversation();
+      } catch (error) { statusBox.textContent = error.message; }
+    });
+    messageActions.appendChild(reactionButton);
+  });
+
+  (item.reactions || []).forEach(reaction => {
+    const chip = document.createElement("span");
+    chip.textContent = reaction.emoji + " " + reaction.count;
+    chip.title = reaction.usernames || "Reaction";
+    chip.style.cssText = "font-size:.78rem;padding:3px 7px;border:1px solid " + (reaction.reactedByMe ? "#0d9488" : "rgba(100,116,139,.5)") + ";border-radius:14px;background:" + (reaction.reactedByMe ? "rgba(13,148,136,.12)" : "transparent");
+    messageActions.appendChild(chip);
+  });
+  element.appendChild(messageActions);
   if (item.sender === currentUsername) {
     const receipt = document.createElement("small");
     receipt.className = "wt-message-receipt";
@@ -533,6 +584,30 @@ items.forEach(item => {
   messagesBox.appendChild(element);
 });
       messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    function showReplyComposer() {
+      if (!replyComposer) {
+        replyComposer = document.createElement("div");
+        replyComposer.id = "reply-composer";
+        replyComposer.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;margin:8px 0;border-left:3px solid #0d9488;background:rgba(13,148,136,.09);border-radius:7px;";
+        messageForm.parentNode.insertBefore(replyComposer, messageForm);
+      }
+      replyComposer.replaceChildren();
+      const preview = document.createElement("span");
+      const excerpt = String(replyingToMessage?.body || "Shared media").slice(0, 120);
+      preview.textContent = "Replying to " + (replyingToMessage?.sender || "message") + ": " + excerpt;
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", clearReplyComposer);
+      replyComposer.append(preview, cancel);
+      replyComposer.hidden = false;
+    }
+
+    function clearReplyComposer() {
+      replyingToMessage = null;
+      if (replyComposer) replyComposer.hidden = true;
     }
 
     async function loadConversation() {
@@ -693,6 +768,7 @@ items.forEach(item => {
         body: JSON.stringify({
           receiverUsername,
           body: isVoiceFile ? "[Voice message]" + (body ? " " + body : "") : body,
+          replyToMessageId: replyingToMessage?.id || null,
           mediaPath: uploadResult.fileId,
           mediaType: uploadResult.mediaType
         })
@@ -701,6 +777,7 @@ items.forEach(item => {
       mediaInput.value = "";
       messageInput.value = "";
       if (isVoiceFile) clearVoiceRecording();
+      clearReplyComposer();
 
       await loadConversation();
       statusBox.textContent = "Message with media sent.";
@@ -710,10 +787,11 @@ items.forEach(item => {
 
       await api("/api/messages", {
         method: "POST",
-        body: JSON.stringify({ receiverUsername, body })
+        body: JSON.stringify({ receiverUsername, body, replyToMessageId: replyingToMessage?.id || null })
       });
 
       messageInput.value = "";
+      clearReplyComposer();
       await loadConversation();
       statusBox.textContent = "Message sent.";
     }
@@ -816,6 +894,14 @@ function registerMessagingSocketHandlers(socket) {
     if (belongsToOpenConversation) {
       loadConversation();
     }
+  });
+
+  socket.on("message:reaction:update", data => {
+    if (!data || !recipient?.value) return;
+    const belongsToOpenConversation =
+      (data.sender === currentUsername && data.recipient === recipient.value) ||
+      (data.sender === recipient.value && data.recipient === currentUsername);
+    if (belongsToOpenConversation) loadConversation();
   });
 
   socket.on("message:status", data => {
