@@ -55,6 +55,9 @@ const io = new Server(server, {
   }
 });
 
+// Make the authenticated Socket.IO server available to API routes.
+app.set("io", io);
+
 // Verify each connection using the existing Waltajjii login token.
 io.use((socket, next) => {
   try {
