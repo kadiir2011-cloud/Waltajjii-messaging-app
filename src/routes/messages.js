@@ -186,7 +186,7 @@ router.post("/conversation/:username/read", authenticate, (req, res) => {
     WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL
   `).run(other.id, req.auth.userId);
 
-  const receipts = db.prepare(`
+  const receiptById = db.prepare(`
     SELECT m.id AS messageId, m.sender_id AS senderId,
            m.receiver_id AS receiverId, s.username AS sender,
            r.username AS recipient, m.delivered_at AS deliveredAt,
@@ -194,9 +194,11 @@ router.post("/conversation/:username/read", authenticate, (req, res) => {
     FROM messages m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
-    WHERE m.sender_id = ? AND m.receiver_id = ? AND m.read_at IS NOT NULL
-      AND m.id IN (${unread.map(() => "?").join(",")})
-  `).all(other.id, req.auth.userId, ...unread.map(row => row.id));
+    WHERE m.id = ? AND m.sender_id = ? AND m.receiver_id = ?
+  `);
+  const receipts = unread
+    .map(row => receiptById.get(row.id, other.id, req.auth.userId))
+    .filter(Boolean);
 
   const io = req.app.get("io");
   if (io) {
