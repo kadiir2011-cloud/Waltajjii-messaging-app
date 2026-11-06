@@ -353,6 +353,13 @@ items.forEach(item => {
   const label = document.createElement("strong");
   label.textContent = item.sender + " â†’ " + item.recipient;
 
+  if (item.forwardedFromUsername) {
+    const forwarded = document.createElement("small");
+    forwarded.textContent = "↪ Forwarded from " + item.forwardedFromUsername;
+    forwarded.style.cssText = "display:block;margin:3px 0 7px;color:#64748b;font-size:.78rem;";
+    element.appendChild(forwarded);
+  }
+
   if (item.replyToMessageId) {
     const quote = document.createElement("div");
     quote.className = "wt-reply-quote";
@@ -528,6 +535,7 @@ items.forEach(item => {
 
   element.append(label, content, time);
 
+  if (!item.deletedAt) {
   const messageActions = document.createElement("div");
   messageActions.className = "wt-message-actions";
   messageActions.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;";
@@ -567,7 +575,57 @@ items.forEach(item => {
     chip.style.cssText = "font-size:.78rem;padding:3px 7px;border:1px solid " + (reaction.reactedByMe ? "#0d9488" : "rgba(100,116,139,.5)") + ";border-radius:14px;background:" + (reaction.reactedByMe ? "rgba(13,148,136,.12)" : "transparent");
     messageActions.appendChild(chip);
   });
+  const forwardButton = document.createElement("button");
+  forwardButton.type = "button";
+  forwardButton.textContent = "↗ Forward";
+  forwardButton.title = "Forward this message to another conversation";
+  forwardButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+  forwardButton.addEventListener("click", async () => {
+    const targetUsername = prompt("Enter the recipient username:");
+    if (!targetUsername || !targetUsername.trim()) return;
+    forwardButton.disabled = true;
+    try {
+      await api("/api/messages/" + item.id + "/forward", {
+        method: "POST", body: JSON.stringify({ receiverUsername: targetUsername.trim() })
+      });
+      statusBox.textContent = "Message forwarded to " + targetUsername.trim() + ".";
+    } catch (error) { statusBox.textContent = error.message; }
+    finally { forwardButton.disabled = false; }
+  });
+  messageActions.appendChild(forwardButton);
+
+  const deleteMeButton = document.createElement("button");
+  deleteMeButton.type = "button";
+  deleteMeButton.textContent = "Delete for me";
+  deleteMeButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+  deleteMeButton.addEventListener("click", async () => {
+    if (!confirm("Hide this message from your conversation?")) return;
+    deleteMeButton.disabled = true;
+    try {
+      await api("/api/messages/" + item.id, { method: "DELETE", body: JSON.stringify({ scope: "me" }) });
+      await loadConversation();
+    } catch (error) { statusBox.textContent = error.message; deleteMeButton.disabled = false; }
+  });
+  messageActions.appendChild(deleteMeButton);
+
+  if (item.sender === currentUsername) {
+    const deleteEveryoneButton = document.createElement("button");
+    deleteEveryoneButton.type = "button";
+    deleteEveryoneButton.textContent = "Delete for everyone";
+    deleteEveryoneButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+    deleteEveryoneButton.addEventListener("click", async () => {
+      if (!confirm("Delete this message for both participants? It will be replaced with a deletion notice.")) return;
+      deleteEveryoneButton.disabled = true;
+      try {
+        await api("/api/messages/" + item.id, { method: "DELETE", body: JSON.stringify({ scope: "everyone" }) });
+        await loadConversation();
+      } catch (error) { statusBox.textContent = error.message; deleteEveryoneButton.disabled = false; }
+    });
+    messageActions.appendChild(deleteEveryoneButton);
+  }
+
   element.appendChild(messageActions);
+  }
   if (item.sender === currentUsername) {
     const receipt = document.createElement("small");
     receipt.className = "wt-message-receipt";
@@ -899,6 +957,14 @@ function registerMessagingSocketHandlers(socket) {
 
   socket.on("message:reaction:update", data => {
     if (!data || !recipient?.value) return;
+    const belongsToOpenConversation =
+      (data.sender === currentUsername && data.recipient === recipient.value) ||
+      (data.sender === recipient.value && data.recipient === currentUsername);
+    if (belongsToOpenConversation) loadConversation();
+  });
+
+  socket.on("message:delete:update", data => {
+    if (!data || !currentUsername || !recipient?.value) return;
     const belongsToOpenConversation =
       (data.sender === currentUsername && data.recipient === recipient.value) ||
       (data.sender === recipient.value && data.recipient === currentUsername);
