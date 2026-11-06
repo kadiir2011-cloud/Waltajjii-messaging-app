@@ -190,6 +190,7 @@ callSocket = window.io({
   auth: { token: token }
 });
 registerCallSocketHandlers(callSocket);
+registerMessagingSocketHandlers(callSocket);
 callSocket.on("connect", () => {
   console.log("Waltajjii call connection ready.");
 });
@@ -658,6 +659,23 @@ async function getRtcConfiguration() {
 }
 function setCallStatus(message) {
   if (callStatus) callStatus.textContent = message;
+}
+
+function registerMessagingSocketHandlers(socket) {
+  if (!socket) return;
+
+  // Refresh only the conversation currently open when a new message arrives.
+  socket.on("message:new", data => {
+    if (!data || !currentUsername || !recipient || !recipient.value) return;
+    const selectedUsername = recipient.value;
+    const belongsToOpenConversation =
+      (data.sender === selectedUsername && data.recipient === currentUsername) ||
+      (data.sender === currentUsername && data.recipient === selectedUsername);
+
+    if (belongsToOpenConversation) {
+      loadConversation();
+    }
+  });
 }
 
 function registerCallSocketHandlers(socket) {
