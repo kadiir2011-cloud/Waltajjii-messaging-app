@@ -92,6 +92,20 @@ io.use((socket, next) => {
 });
 
 const activeCalls = new Map();
+const onlineUsers = new Map();
+
+function stopSocketTyping(socket) {
+  const targetUserId = socket.data.typingTo;
+  if (!targetUserId) return;
+
+  io.to(`user:${targetUserId}`).emit("typing:update", {
+    userId: socket.data.userId,
+    username: socket.data.username,
+    isTyping: false
+  });
+
+  socket.data.typingTo = null;
+}
 
 function endTrackedCall(userId, targetUserId, notify = true) {
   const user = String(userId);
@@ -124,7 +138,55 @@ io.on("connection", (socket) => {
     socket.data.username
   );
 
-  socket.join(`user:${socket.data.userId}`);
+  const userId = String(socket.data.userId);
+  const userRoom = `user:${userId}`;
+  const wasOnline = onlineUsers.has(userId);
+
+  socket.join(userRoom);
+  onlineUsers.set(userId, socket.data.username);
+
+  // Give the new session a current snapshot, then notify others on first login.
+  socket.emit("presence:snapshot", {
+    users: Array.from(onlineUsers, ([id, username]) => ({
+      userId: id,
+      username
+    }))
+  });
+
+  if (!wasOnline) {
+    io.emit("presence:update", {
+      userId,
+      username: socket.data.username,
+      online: true
+    });
+  }
+
+  socket.on("typing:start", (data = {}) => {
+    const targetUserId = String(data.targetUserId || "");
+    if (
+      !targetUserId ||
+      targetUserId === userId ||
+      !io.sockets.adapter.rooms.has(`user:${targetUserId}`)
+    ) return;
+
+    if (socket.data.typingTo && socket.data.typingTo !== targetUserId) {
+      stopSocketTyping(socket);
+    }
+
+    socket.data.typingTo = targetUserId;
+    io.to(`user:${targetUserId}`).emit("typing:update", {
+      userId: socket.data.userId,
+      username: socket.data.username,
+      isTyping: true
+    });
+  });
+
+  socket.on("typing:stop", (data = {}) => {
+    const targetUserId = String(data.targetUserId || "");
+    if (!targetUserId || socket.data.typingTo === targetUserId) {
+      stopSocketTyping(socket);
+    }
+  });
 
   socket.on("call:offer", (data = {}, acknowledge = () => {}) => {
     try {
@@ -228,11 +290,24 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    const userId = String(socket.data.userId);
-    const targetUserId = activeCalls.get(userId);
+    const disconnectedUserId = String(socket.data.userId);
+    const targetUserId = activeCalls.get(disconnectedUserId);
+
+    stopSocketTyping(socket);
 
     if (targetUserId) {
-      endTrackedCall(userId, targetUserId, true);
+      endTrackedCall(disconnectedUserId, targetUserId, true);
+    }
+
+    // A user remains online while any of their other tabs/devices are connected.
+    const remainingSessions = io.sockets.adapter.rooms.get(`user:${disconnectedUserId}`)?.size || 0;
+    if (remainingSessions === 0) {
+      onlineUsers.delete(disconnectedUserId);
+      io.emit("presence:update", {
+        userId: disconnectedUserId,
+        username: socket.data.username,
+        online: false
+      });
     }
 
     console.log(

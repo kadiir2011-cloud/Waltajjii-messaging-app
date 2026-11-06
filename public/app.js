@@ -51,6 +51,68 @@ const mediaInput = document.getElementById("media-input");
     let token = null;
     let currentUsername = null;
 let callSocket = null;
+const onlineUserIds = new Set();
+let presenceLine = null;
+let typingLine = null;
+let typingTargetUserId = null;
+let typingStopTimer = null;
+
+function ensurePresenceElements() {
+  if (!presenceLine && messagesBox?.parentNode) {
+    presenceLine = document.createElement("div");
+    presenceLine.className = "wt-presence-status";
+    presenceLine.style.cssText = "font-size:0.9rem;margin:0.35rem 0;color:#64748b;";
+    messagesBox.parentNode.insertBefore(presenceLine, messagesBox);
+  }
+
+  if (!typingLine && messageForm?.parentNode) {
+    typingLine = document.createElement("div");
+    typingLine.className = "wt-typing-indicator";
+    typingLine.setAttribute("aria-live", "polite");
+    typingLine.style.cssText = "min-height:1.25rem;font-size:0.88rem;color:#087f78;margin:0.2rem 0;";
+    messageForm.parentNode.insertBefore(typingLine, messageForm);
+  }
+}
+
+function refreshPresenceUI() {
+  ensurePresenceElements();
+
+  Array.from(recipient.options).forEach(option => {
+    if (!option.value) return;
+    const userId = userIdsByUsername.get(option.value);
+    const baseLabel = option.dataset.baseLabel || option.textContent.replace(/ · (Online|Offline)$/, "");
+    option.dataset.baseLabel = baseLabel;
+    option.textContent = baseLabel + (onlineUserIds.has(String(userId)) ? " · Online" : " · Offline");
+  });
+
+  if (!presenceLine) return;
+  const selectedUsername = recipient.value;
+  if (!selectedUsername) {
+    presenceLine.textContent = "Contact status will appear here.";
+    presenceLine.style.color = "#64748b";
+    return;
+  }
+
+  const selectedUserId = userIdsByUsername.get(selectedUsername);
+  const online = onlineUserIds.has(String(selectedUserId));
+  presenceLine.textContent = selectedUsername + (online ? " is online" : " is offline");
+  presenceLine.style.color = online ? "#15803d" : "#64748b";
+}
+
+function stopTypingIndicator() {
+  if (typingStopTimer) {
+    clearTimeout(typingStopTimer);
+    typingStopTimer = null;
+  }
+
+  if (callSocket && typingTargetUserId) {
+    callSocket.emit("typing:stop", { targetUserId: typingTargetUserId });
+  }
+
+  typingTargetUserId = null;
+  if (typingLine) typingLine.textContent = "";
+}
+
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
       if (token) headers.Authorization = "Bearer " + token;
@@ -145,6 +207,13 @@ async function loadMyProfile() {
   }
 }
     function showLogin() {
+      stopTypingIndicator();
+      if (callSocket) {
+        callSocket.disconnect();
+        callSocket = null;
+      }
+      onlineUserIds.clear();
+      refreshPresenceUI();
       token = null;
       currentUsername = null;
       authPanel.style.display = "block";
@@ -255,8 +324,10 @@ callSocket.on("connect_error", (error) => {
   option.textContent = professionalLabel
     ? `${user.username} — ${professionalLabel}`
     : (user.bio ? `${user.username} — ${user.bio}` : user.username);
+  option.dataset.baseLabel = option.textContent;
   recipient.appendChild(option);
-}); 
+});
+        refreshPresenceUI();
         statusBox.textContent = data.users.length
           ? "Choose a recipient, then load the conversation."
           : "No other users yet. Create a second account to test messaging.";
@@ -470,7 +541,29 @@ items.forEach(item => {
     }
 
     document.getElementById("load-button").addEventListener("click", loadConversation);
-    recipient.addEventListener("change", loadConversation);
+    recipient.addEventListener("change", () => {
+      stopTypingIndicator();
+      if (typingLine) typingLine.textContent = "";
+      refreshPresenceUI();
+      loadConversation();
+    });
+
+    messageInput.addEventListener("input", () => {
+      const targetUserId = userIdsByUsername.get(recipient.value);
+      if (!recipient.value || !targetUserId || !messageInput.value.trim()) {
+        stopTypingIndicator();
+        return;
+      }
+
+      if (String(typingTargetUserId) !== String(targetUserId)) {
+        stopTypingIndicator();
+        typingTargetUserId = targetUserId;
+        if (callSocket) callSocket.emit("typing:start", { targetUserId });
+      }
+
+      if (typingStopTimer) clearTimeout(typingStopTimer);
+      typingStopTimer = setTimeout(stopTypingIndicator, 1200);
+    });
 
     const recordVoiceButton = document.getElementById("record-voice-button");
     const voiceStatus = document.getElementById("voice-recording-status");
@@ -663,6 +756,32 @@ function setCallStatus(message) {
 
 function registerMessagingSocketHandlers(socket) {
   if (!socket) return;
+
+  socket.on("presence:snapshot", data => {
+    onlineUserIds.clear();
+    (data?.users || []).forEach(user => onlineUserIds.add(String(user.userId)));
+    refreshPresenceUI();
+  });
+
+  socket.on("presence:update", data => {
+    if (!data || data.userId == null) return;
+    if (data.online) onlineUserIds.add(String(data.userId));
+    else onlineUserIds.delete(String(data.userId));
+    refreshPresenceUI();
+  });
+
+  socket.on("typing:update", data => {
+    if (!data || !recipient.value) return;
+    const selectedUserId = userIdsByUsername.get(recipient.value);
+    if (String(data.userId) !== String(selectedUserId)) return;
+
+    ensurePresenceElements();
+    if (typingLine) {
+      typingLine.textContent = data.isTyping
+        ? data.username + " is typing…"
+        : "";
+    }
+  });
 
   // Refresh only the conversation currently open when a new message arrives.
   socket.on("message:new", data => {
