@@ -168,4 +168,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_moments_user ON moments(user_id, id);
 `);
 
+/* Phase 13: durable direct-message delivery and read receipts. */
+const messageColumnNames = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
+for (const [column, definition] of [
+  ["delivered_at", "TEXT"],
+  ["read_at", "TEXT"]
+]) {
+  if (!messageColumnNames.includes(column)) {
+    db.exec(`ALTER TABLE messages ADD COLUMN ${column} ${definition}`);
+  }
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_messages_receipts ON messages(receiver_id, sender_id, read_at, delivered_at)");
+
 module.exports = db;

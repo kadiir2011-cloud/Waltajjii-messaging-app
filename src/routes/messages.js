@@ -115,7 +115,8 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
     SELECT m.id, s.username AS sender, r.username AS recipient,
            m.body, m.media_path AS mediaPath,
            m.media_type AS mediaType,
-           m.created_at AS createdAt
+           m.created_at AS createdAt,
+           m.delivered_at AS deliveredAt, m.read_at AS readAt
     FROM messages m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
@@ -145,7 +146,8 @@ router.get("/conversation/:username", authenticate, (req, res) => {
     SELECT m.id, s.username AS sender, r.username AS recipient,
            m.body, m.media_path AS mediaPath,
            m.media_type AS mediaType,
-           m.created_at AS createdAt
+           m.created_at AS createdAt,
+           m.delivered_at AS deliveredAt, m.read_at AS readAt
     FROM messages m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
@@ -156,6 +158,59 @@ router.get("/conversation/:username", authenticate, (req, res) => {
   `).all(req.auth.userId, other.id, other.id, req.auth.userId);
 
   res.json({ messages });
+});
+
+// Mark incoming messages in this conversation as read when the recipient opens it.
+router.post("/conversation/:username/read", authenticate, (req, res) => {
+  const other = db.prepare(
+    "SELECT id FROM users WHERE username = ?"
+  ).get(String(req.params.username || ""));
+
+  if (!other) {
+    return res.status(404).json({ error: "User not found." });
+  }
+
+  const unread = db.prepare(`
+    SELECT id FROM messages
+    WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL
+  `).all(other.id, req.auth.userId);
+
+  if (!unread.length) {
+    return res.json({ updated: 0 });
+  }
+
+  db.prepare(`
+    UPDATE messages
+    SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+        read_at = CURRENT_TIMESTAMP
+    WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL
+  `).run(other.id, req.auth.userId);
+
+  const receiptById = db.prepare(`
+    SELECT m.id AS messageId, m.sender_id AS senderId,
+           m.receiver_id AS receiverId, s.username AS sender,
+           r.username AS recipient, m.delivered_at AS deliveredAt,
+           m.read_at AS readAt
+    FROM messages m
+    JOIN users s ON s.id = m.sender_id
+    JOIN users r ON r.id = m.receiver_id
+    WHERE m.id = ? AND m.sender_id = ? AND m.receiver_id = ?
+  `);
+  const receipts = unread
+    .map(row => receiptById.get(row.id, other.id, req.auth.userId))
+    .filter(Boolean);
+
+  const io = req.app.get("io");
+  if (io) {
+    receipts.forEach(receipt => {
+      io.to(`user:${receipt.senderId}`).emit("message:status", {
+        ...receipt,
+        status: "read"
+      });
+    });
+  }
+
+  res.json({ updated: receipts.length });
 });
 
 
