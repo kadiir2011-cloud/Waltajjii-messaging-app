@@ -46,11 +46,16 @@ router.post("/", authenticate, (req, res) => {
   let body = String(req.body.body || "").trim();
   const mediaPath = String(req.body.mediaPath || "").trim();
   const mediaType = String(req.body.mediaType || "").trim();
+  const replyToMessageId = req.body.replyToMessageId == null || req.body.replyToMessageId === "" ? null : Number(req.body.replyToMessageId);
 
   if (!receiverUsername) {
     return res.status(400).json({
       error: "Please select a recipient."
     });
+  }
+
+  if (replyToMessageId !== null && (!Number.isSafeInteger(replyToMessageId) || replyToMessageId < 1)) {
+    return res.status(400).json({ error: "Invalid reply target." });
   }
 
   if (body.length > 2000) {
@@ -93,6 +98,19 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
     });
   }
 
+  if (replyToMessageId !== null) {
+    const replyTarget = db.prepare(`
+      SELECT id FROM messages
+      WHERE id = ? AND (
+        (sender_id = ? AND receiver_id = ?) OR
+        (sender_id = ? AND receiver_id = ?)
+      )
+    `).get(replyToMessageId, req.auth.userId, receiver.id, receiver.id, req.auth.userId);
+    if (!replyTarget) {
+      return res.status(400).json({ error: "The message you are replying to is not in this conversation." });
+    }
+  }
+
   if (receiver.id === req.auth.userId) {
     return res.status(400).json({
       error: "You cannot message yourself."
@@ -101,14 +119,15 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
 
   const result = db.prepare(`
     INSERT INTO messages
-      (sender_id, receiver_id, body, media_path, media_type)
-    VALUES (?, ?, ?, ?, ?)
+      (sender_id, receiver_id, body, media_path, media_type, reply_to_message_id)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     req.auth.userId,
     receiver.id,
     body,
     mediaPath || null,
-    mediaPath ? mediaType : null
+    mediaPath ? mediaType : null,
+    replyToMessageId
   );
 
   const message = db.prepare(`
@@ -116,10 +135,15 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
            m.body, m.media_path AS mediaPath,
            m.media_type AS mediaType,
            m.created_at AS createdAt,
-           m.delivered_at AS deliveredAt, m.read_at AS readAt
+           m.delivered_at AS deliveredAt, m.read_at AS readAt,
+           m.reply_to_message_id AS replyToMessageId,
+           replySender.username AS replyToSender,
+           replyMessage.body AS replyToBody
     FROM messages m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
+    LEFT JOIN messages replyMessage ON replyMessage.id = m.reply_to_message_id
+    LEFT JOIN users replySender ON replySender.id = replyMessage.sender_id
     WHERE m.id = ?
   `).get(result.lastInsertRowid);
 
@@ -147,16 +171,43 @@ router.get("/conversation/:username", authenticate, (req, res) => {
            m.body, m.media_path AS mediaPath,
            m.media_type AS mediaType,
            m.created_at AS createdAt,
-           m.delivered_at AS deliveredAt, m.read_at AS readAt
+           m.delivered_at AS deliveredAt, m.read_at AS readAt,
+           m.reply_to_message_id AS replyToMessageId,
+           replySender.username AS replyToSender,
+           replyMessage.body AS replyToBody
     FROM messages m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
+    LEFT JOIN messages replyMessage ON replyMessage.id = m.reply_to_message_id
+    LEFT JOIN users replySender ON replySender.id = replyMessage.sender_id
     WHERE (m.sender_id = ? AND m.receiver_id = ?)
        OR (m.sender_id = ? AND m.receiver_id = ?)
     ORDER BY m.id ASC
     LIMIT 200
   `).all(req.auth.userId, other.id, other.id, req.auth.userId);
 
+  const ids = messages.map(message => message.id);
+  const reactions = ids.length ? db.prepare(`
+    SELECT mr.message_id AS messageId, mr.emoji, COUNT(*) AS count,
+           MAX(CASE WHEN mr.user_id = ? THEN 1 ELSE 0 END) AS reactedByMe,
+           GROUP_CONCAT(u.username, ', ') AS usernames
+    FROM message_reactions mr
+    JOIN users u ON u.id = mr.user_id
+    WHERE mr.message_id IN (${ids.map(() => "?").join(",")})
+    GROUP BY mr.message_id, mr.emoji
+    ORDER BY mr.emoji
+  `).all(req.auth.userId, ...ids) : [];
+  const byMessage = new Map();
+  reactions.forEach(reaction => {
+    if (!byMessage.has(reaction.messageId)) byMessage.set(reaction.messageId, []);
+    byMessage.get(reaction.messageId).push({
+      emoji: reaction.emoji,
+      count: reaction.count,
+      reactedByMe: Boolean(reaction.reactedByMe),
+      usernames: reaction.usernames || ""
+    });
+  });
+  messages.forEach(message => { message.reactions = byMessage.get(message.id) || []; });
   res.json({ messages });
 });
 
@@ -211,6 +262,60 @@ router.post("/conversation/:username/read", authenticate, (req, res) => {
   }
 
   res.json({ updated: receipts.length });
+});
+
+
+// Toggle an emoji reaction on a message in the authenticated user's conversation.
+router.post("/:messageId/reactions", authenticate, (req, res) => {
+  const messageId = Number(req.params.messageId);
+  const emoji = String(req.body.emoji || "").trim();
+  const allowedEmojis = new Set(["👍", "❤️", "😂", "😮", "😢", "🎉", "🙏", "🔥"]);
+  if (!Number.isSafeInteger(messageId) || messageId < 1 || !allowedEmojis.has(emoji)) {
+    return res.status(400).json({ error: "Choose a supported reaction." });
+  }
+
+  const message = db.prepare(`
+    SELECT id, sender_id AS senderId, receiver_id AS receiverId,
+           (SELECT username FROM users WHERE id = sender_id) AS sender,
+           (SELECT username FROM users WHERE id = receiver_id) AS recipient
+    FROM messages
+    WHERE id = ? AND (sender_id = ? OR receiver_id = ?)
+  `).get(messageId, req.auth.userId, req.auth.userId);
+  if (!message) return res.status(404).json({ error: "Message not found." });
+
+  const existing = db.prepare(
+    "SELECT 1 FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?"
+  ).get(messageId, req.auth.userId, emoji);
+  if (existing) {
+    db.prepare("DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?")
+      .run(messageId, req.auth.userId, emoji);
+  } else {
+    db.prepare("INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)")
+      .run(messageId, req.auth.userId, emoji);
+  }
+
+  const reactions = db.prepare(`
+    SELECT mr.emoji, COUNT(*) AS count,
+           MAX(CASE WHEN mr.user_id = ? THEN 1 ELSE 0 END) AS reactedByMe,
+           GROUP_CONCAT(u.username, ', ') AS usernames
+    FROM message_reactions mr
+    JOIN users u ON u.id = mr.user_id
+    WHERE mr.message_id = ?
+    GROUP BY mr.emoji
+    ORDER BY mr.emoji
+  `).all(req.auth.userId, messageId).map(row => ({
+    emoji: row.emoji, count: row.count,
+    reactedByMe: Boolean(row.reactedByMe),
+    usernames: row.usernames || ""
+  }));
+
+  const payload = { messageId, sender: message.sender, recipient: message.recipient, reactions };
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`user:${message.senderId}`).emit("message:reaction:update", payload);
+    io.to(`user:${message.receiverId}`).emit("message:reaction:update", payload);
+  }
+  res.json({ reactions });
 });
 
 
