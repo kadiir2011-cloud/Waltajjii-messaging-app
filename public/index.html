@@ -477,6 +477,33 @@
     body[data-wt-theme="dark"][data-wt-wallpaper="soft"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="sky"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="warm"] #messages { background:#121e27; }
     @media(max-width:560px) { .personalization-grid { grid-template-columns:1fr; } }
 
+    /* Phase 10: profile-first navigation and click-to-open workspace */
+    .wt-sidebar { gap:16px; }
+    .wt-profile-nav { display:flex; align-items:center; gap:11px; padding:12px 10px; color:#f4fbfc; text-decoration:none; border:1px solid #ffffff2b; border-radius:14px; background:#ffffff12; min-width:0; }
+    .wt-profile-nav:hover, .wt-profile-nav:focus-visible { background:#ffffff20; outline-offset:2px; }
+    #wt-sidebar-avatar, .wt-profile-fallback { width:46px; height:46px; flex:0 0 46px; border-radius:50%; object-fit:cover; border:2px solid #ffffff80; background:#087f78; }
+    .wt-profile-fallback { display:grid; place-items:center; color:#fff; font-size:1.15rem; }
+    .wt-profile-nav-copy { display:flex; flex-direction:column; min-width:0; flex:1; }
+    .wt-profile-nav-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.92rem; }
+    .wt-profile-nav-copy small { color:#c3d7df; font-size:.72rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .wt-profile-chevron { color:#b9d3dc; font-size:1.4rem; }
+    .wt-nav-note { margin:0; padding:10px 12px; color:#c3d7df; font-size:.78rem; line-height:1.45; }
+    .wt-home-placeholder { border:1px solid var(--wt-border); border-radius:16px; padding:26px; background:var(--wt-surface); color:var(--wt-muted); }
+    #wt-account-section > #personalization-panel, #wt-account-section > #profile-panel,
+    .wt-content-section:not(#wt-account-section) { display:none; }
+    .wt-content-section.wt-section-active { display:block; }
+    /* Ensure selected non-account workspaces override the hidden default. */
+    .wt-content-section:not(#wt-account-section).wt-section-active { display:block; }
+    #wt-account-section.wt-section-active > #personalization-panel,
+    #wt-account-section.wt-section-active > #profile-panel { display:block; }
+    #wt-account-section.wt-section-active > #personalization-panel.wt-subsection-hidden,
+    #wt-account-section.wt-section-active > #profile-panel.wt-subsection-hidden { display:none; }
+    .wt-nav-group a[aria-current="location"] { background:#ffffff20; color:#fff; font-weight:700; }
+    @media(max-width:820px) {
+      .wt-sidebar { gap:12px; }
+      .wt-profile-nav { margin-bottom:2px; }
+    }
+
     /* Phase 9: grouped expandable navigation and responsive workspace */
     #chat-panel { padding: 0; overflow: hidden; }
     .wt-app-shell { display: grid; grid-template-columns: 248px minmax(0,1fr); min-height: 760px; }
@@ -580,17 +607,22 @@
     <section class="panel" id="chat-panel">
       <div class="wt-app-shell">
         <aside class="wt-sidebar" id="wt-sidebar" aria-label="Waltajjii main navigation">
-          <div class="wt-sidebar-brand"><span class="wt-sidebar-mark">W</span><div><strong>Waltajjii</strong><small>Your communication space</small></div></div>
-          <nav class="wt-nav-groups">
-            <details class="wt-nav-group" open>
+          <a class="wt-profile-nav" href="#profile-panel" aria-label="Open your profile">
+            <img id="wt-sidebar-avatar" alt="" src="" hidden>
+            <span class="wt-profile-fallback" id="wt-sidebar-avatar-fallback">●</span>
+            <span class="wt-profile-nav-copy"><strong id="wt-sidebar-username">Your profile</strong><small id="wt-sidebar-professional">View profile and status</small></span>
+            <span class="wt-profile-chevron">›</span>
+          </a>
+          <nav class="wt-nav-groups" aria-label="Main menu">
+            <details class="wt-nav-group">
               <summary><span class="wt-nav-icon">◉</span><span>Communication</span></summary>
               <a href="#wt-communication-section">Direct messages</a>
-              <a href="#call-panel">Voice and video calls</a>
-              <a href="#message-form">Send a message</a>
+              <a href="#call-panel">Voice calls</a>
+              <a href="#call-panel">Video calls</a>
             </details>
             <details class="wt-nav-group">
               <summary><span class="wt-nav-icon">◎</span><span>Social</span></summary>
-              <a href="#wt-social-section">Moments and social feed</a>
+              <a href="#wt-social-section">Moments</a>
               <a href="#social-discover">Discover people</a>
               <a href="#social-notifications">Notifications</a>
             </details>
@@ -601,14 +633,21 @@
             </details>
             <details class="wt-nav-group">
               <summary><span class="wt-nav-icon">◌</span><span>My account</span></summary>
-              <a href="#profile-panel">My profile</a>
               <a href="#personalization-panel">Appearance and personalization</a>
+            </details>
+            <details class="wt-nav-group">
+              <summary><span class="wt-nav-icon">▣</span><span>Saved Accounts</span></summary>
+              <p class="wt-nav-note">Saved account details will appear here when this feature is enabled.</p>
             </details>
           </nav>
           <div class="wt-sidebar-foot"><span class="wt-sidebar-dot"></span> Connected space</div>
         </aside>
         <div class="wt-main-content">
           <button type="button" class="wt-nav-toggle" id="wt-nav-toggle" aria-expanded="false" aria-controls="wt-sidebar">☰ Menu</button>
+          <div class="wt-home-placeholder" id="wt-home-placeholder">
+            <h2>Welcome to Waltajjii</h2>
+            <p>Choose an item from the menu to open messages, calls, social spaces, communities or your profile.</p>
+          </div>
       <div class="row">
         <h2 style="margin-right:auto">Messages</h2>
         <button type="button" id="logout-button">Log out</button>
