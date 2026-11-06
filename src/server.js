@@ -6,9 +6,9 @@ const path = require("path");
 const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
-const db = require("./db");
 
 require("dotenv").config();
+const db = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
