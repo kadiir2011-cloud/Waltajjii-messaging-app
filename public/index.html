@@ -492,6 +492,8 @@
     #wt-account-section > #personalization-panel, #wt-account-section > #profile-panel,
     .wt-content-section:not(#wt-account-section) { display:none; }
     .wt-content-section.wt-section-active { display:block; }
+    /* Ensure selected non-account workspaces override the hidden default. */
+    .wt-content-section:not(#wt-account-section).wt-section-active { display:block; }
     #wt-account-section.wt-section-active > #personalization-panel,
     #wt-account-section.wt-section-active > #profile-panel { display:block; }
     #wt-account-section.wt-section-active > #personalization-panel.wt-subsection-hidden,
