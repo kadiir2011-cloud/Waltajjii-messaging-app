@@ -180,4 +180,24 @@ for (const [column, definition] of [
 }
 db.exec("CREATE INDEX IF NOT EXISTS idx_messages_receipts ON messages(receiver_id, sender_id, read_at, delivered_at)");
 
+/* Phase 14: direct-message replies and emoji reactions. */
+const replyColumnNames = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
+if (!replyColumnNames.includes("reply_to_message_id")) {
+  db.exec("ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL");
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_reactions (
+    message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    emoji TEXT NOT NULL CHECK(length(emoji) BETWEEN 1 AND 16),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id, emoji),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_message_reactions_message
+  ON message_reactions(message_id, emoji);
+`);
+
+
 module.exports = db;
