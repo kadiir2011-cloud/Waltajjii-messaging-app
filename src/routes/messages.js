@@ -136,6 +136,8 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
            m.media_type AS mediaType,
            m.created_at AS createdAt,
            m.delivered_at AS deliveredAt, m.read_at AS readAt,
+           m.deleted_for_everyone_at AS deletedAt,
+           m.forwarded_from_username AS forwardedFromUsername,
            m.reply_to_message_id AS replyToMessageId,
            replySender.username AS replyToSender,
            replyMessage.body AS replyToBody
@@ -172,6 +174,8 @@ router.get("/conversation/:username", authenticate, (req, res) => {
            m.media_type AS mediaType,
            m.created_at AS createdAt,
            m.delivered_at AS deliveredAt, m.read_at AS readAt,
+           m.deleted_for_everyone_at AS deletedAt,
+           m.forwarded_from_username AS forwardedFromUsername,
            m.reply_to_message_id AS replyToMessageId,
            replySender.username AS replyToSender,
            replyMessage.body AS replyToBody
@@ -180,8 +184,8 @@ router.get("/conversation/:username", authenticate, (req, res) => {
     JOIN users r ON r.id = m.receiver_id
     LEFT JOIN messages replyMessage ON replyMessage.id = m.reply_to_message_id
     LEFT JOIN users replySender ON replySender.id = replyMessage.sender_id
-    WHERE (m.sender_id = ? AND m.receiver_id = ?)
-       OR (m.sender_id = ? AND m.receiver_id = ?)
+    WHERE ((m.sender_id = ? AND m.receiver_id = ? AND m.deleted_for_sender_at IS NULL)
+       OR (m.sender_id = ? AND m.receiver_id = ? AND m.deleted_for_receiver_at IS NULL))
     ORDER BY m.id ASC
     LIMIT 200
   `).all(req.auth.userId, other.id, other.id, req.auth.userId);
@@ -265,6 +269,91 @@ router.post("/conversation/:username/read", authenticate, (req, res) => {
 });
 
 
+// Forward a visible, non-deleted message to another direct conversation.
+router.post("/:messageId/forward", authenticate, (req, res) => {
+  const messageId = Number(req.params.messageId);
+  const receiverUsername = String(req.body.receiverUsername || "").trim();
+  if (!Number.isSafeInteger(messageId) || messageId < 1 || !receiverUsername) {
+    return res.status(400).json({ error: "Choose a valid message and recipient." });
+  }
+  const source = db.prepare(
+    "SELECT m.id, m.sender_id AS senderId, m.receiver_id AS receiverId, " +
+    "m.body, m.media_path AS mediaPath, m.media_type AS mediaType, " +
+    "m.deleted_for_everyone_at AS deletedAt, " +
+    "m.deleted_for_sender_at AS deletedForSenderAt, " +
+    "m.deleted_for_receiver_at AS deletedForReceiverAt, " +
+    "m.forwarded_from_username AS forwardedFromUsername, s.username AS originalSender " +
+    "FROM messages m JOIN users s ON s.id = m.sender_id " +
+    "WHERE m.id = ? AND (m.sender_id = ? OR m.receiver_id = ?)"
+  ).get(messageId, req.auth.userId, req.auth.userId);
+  if (!source || source.deletedAt ||
+      (source.senderId === req.auth.userId && source.deletedForSenderAt) ||
+      (source.receiverId === req.auth.userId && source.deletedForReceiverAt)) {
+    return res.status(404).json({ error: "This message is no longer available to forward." });
+  }
+  const receiver = db.prepare("SELECT id FROM users WHERE username = ?").get(receiverUsername);
+  if (!receiver) return res.status(404).json({ error: "Recipient not found." });
+  if (receiver.id === req.auth.userId) return res.status(400).json({ error: "You cannot forward a message to yourself." });
+  const result = db.prepare(
+    "INSERT INTO messages (sender_id, receiver_id, body, media_path, media_type, forwarded_from_username) " +
+    "VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(req.auth.userId, receiver.id, source.body, source.mediaPath, source.mediaType,
+    source.forwardedFromUsername || source.originalSender);
+  const message = db.prepare(
+    "SELECT m.id, s.username AS sender, r.username AS recipient, m.body, " +
+    "m.media_path AS mediaPath, m.media_type AS mediaType, m.created_at AS createdAt, " +
+    "m.delivered_at AS deliveredAt, m.read_at AS readAt, " +
+    "m.forwarded_from_username AS forwardedFromUsername " +
+    "FROM messages m JOIN users s ON s.id = m.sender_id " +
+    "JOIN users r ON r.id = m.receiver_id WHERE m.id = ?"
+  ).get(result.lastInsertRowid);
+  const io = req.app.get("io");
+  if (io) io.to("user:" + receiver.id).emit("message:new", message);
+  res.status(201).json({ message });
+});
+
+// Hide a message for the authenticated user, or replace it with a deletion notice for both participants.
+router.delete("/:messageId", authenticate, (req, res) => {
+  const messageId = Number(req.params.messageId);
+  const scope = String(req.body?.scope || "me");
+  if (!Number.isSafeInteger(messageId) || messageId < 1 || !["me", "everyone"].includes(scope)) {
+    return res.status(400).json({ error: "Choose a valid message deletion option." });
+  }
+  const message = db.prepare(
+    "SELECT m.id, m.sender_id AS senderId, m.receiver_id AS receiverId, " +
+    "s.username AS sender, r.username AS recipient, " +
+    "m.deleted_for_everyone_at AS deletedAt FROM messages m " +
+    "JOIN users s ON s.id = m.sender_id JOIN users r ON r.id = m.receiver_id " +
+    "WHERE m.id = ? AND (m.sender_id = ? OR m.receiver_id = ?)"
+  ).get(messageId, req.auth.userId, req.auth.userId);
+  if (!message || message.deletedAt) return res.status(404).json({ error: "Message not found." });
+  if (scope === "everyone") {
+    if (message.senderId !== req.auth.userId) {
+      return res.status(403).json({ error: "Only the sender can delete this message for everyone." });
+    }
+    db.prepare(
+      "UPDATE messages SET deleted_for_everyone_at = CURRENT_TIMESTAMP, " +
+      "body = '[This message was deleted]', media_path = NULL, media_type = NULL " +
+      "WHERE id = ? AND deleted_for_everyone_at IS NULL"
+    ).run(messageId);
+    db.prepare("DELETE FROM message_reactions WHERE message_id = ?").run(messageId);
+  } else if (message.senderId === req.auth.userId) {
+    db.prepare("UPDATE messages SET deleted_for_sender_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_for_sender_at IS NULL").run(messageId);
+  } else {
+    db.prepare("UPDATE messages SET deleted_for_receiver_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_for_receiver_at IS NULL").run(messageId);
+  }
+  const io = req.app.get("io");
+  if (io) {
+    const payload = { messageId, sender: message.sender, recipient: message.recipient, scope };
+    if (scope === "everyone") {
+      io.to("user:" + message.senderId).emit("message:delete:update", payload);
+      io.to("user:" + message.receiverId).emit("message:delete:update", payload);
+    } else {
+      io.to("user:" + req.auth.userId).emit("message:delete:update", payload);
+    }
+  }
+  res.json({ message: scope === "everyone" ? "Message deleted for everyone." : "Message deleted for you." });
+});
 // Toggle an emoji reaction on a message in the authenticated user's conversation.
 router.post("/:messageId/reactions", authenticate, (req, res) => {
   const messageId = Number(req.params.messageId);
@@ -279,7 +368,7 @@ router.post("/:messageId/reactions", authenticate, (req, res) => {
            (SELECT username FROM users WHERE id = sender_id) AS sender,
            (SELECT username FROM users WHERE id = receiver_id) AS recipient
     FROM messages
-    WHERE id = ? AND (sender_id = ? OR receiver_id = ?)
+    WHERE id = ? AND (sender_id = ? OR receiver_id = ?) AND deleted_for_everyone_at IS NULL
   `).get(messageId, req.auth.userId, req.auth.userId);
   if (!message) return res.status(404).json({ error: "Message not found." });
 
