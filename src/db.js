@@ -199,5 +199,20 @@ db.exec(`
   ON message_reactions(message_id, emoji);
 `);
 
+/* Phase 15: forwarding and reversible per-user / everyone message deletion. */
+const phase15Columns = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
+for (const [column, definition] of [
+  ["deleted_for_sender_at", "TEXT"],
+  ["deleted_for_receiver_at", "TEXT"],
+  ["deleted_for_everyone_at", "TEXT"],
+  ["forwarded_from_username", "TEXT"]
+]) {
+  if (!phase15Columns.includes(column)) {
+    db.exec("ALTER TABLE messages ADD COLUMN " + column + " " + definition);
+  }
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_messages_deleted_for_sender ON messages(sender_id, deleted_for_sender_at, id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_messages_deleted_for_receiver ON messages(receiver_id, deleted_for_receiver_at, id)");
+
 
 module.exports = db;
