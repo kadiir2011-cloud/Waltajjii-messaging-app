@@ -157,7 +157,7 @@ router.get("/:filename", authenticate, async (req, res) => {
   const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename);
   const contentTypes = {
     ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": String(permittedMessage.body || "").startsWith("[Voice message]") ? "audio/webm" : "video/webm",
+    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": permittedMessage.mediaType === "audio" || String(permittedMessage.body || "").startsWith("[Voice message]") ? "audio/webm" : "video/webm",
     ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
     ".pdf": "application/pdf", ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
