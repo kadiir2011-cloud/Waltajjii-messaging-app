@@ -136,6 +136,7 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
            m.media_type AS mediaType,
            m.created_at AS createdAt,
            m.delivered_at AS deliveredAt, m.read_at AS readAt,
+           m.forwarded_from_username AS forwardedFromUsername,
            m.reply_to_message_id AS replyToMessageId,
            replySender.username AS replyToSender,
            replyMessage.body AS replyToBody
@@ -264,6 +265,53 @@ router.post("/conversation/:username/read", authenticate, (req, res) => {
   res.json({ updated: receipts.length });
 });
 
+
+// Forward a visible direct message to another user's conversation.
+router.post("/:messageId/forward", authenticate, (req, res) => {
+  const messageId = Number(req.params.messageId);
+  const receiverUsername = String(req.body.receiverUsername || "").trim();
+  if (!Number.isSafeInteger(messageId) || messageId < 1 || !receiverUsername) {
+    return res.status(400).json({ error: "Choose a valid message and recipient." });
+  }
+
+  const source = db.prepare(
+    "SELECT m.id, m.sender_id AS senderId, m.receiver_id AS receiverId, " +
+    "m.body, m.media_path AS mediaPath, m.media_type AS mediaType, " +
+    "m.forwarded_from_username AS forwardedFromUsername, s.username AS originalSender " +
+    "FROM messages m JOIN users s ON s.id = m.sender_id " +
+    "WHERE m.id = ? AND (m.sender_id = ? OR m.receiver_id = ?)"
+  ).get(messageId, req.auth.userId, req.auth.userId);
+  if (!source) {
+    return res.status(404).json({ error: "This message is no longer available to forward." });
+  }
+
+  const receiver = db.prepare("SELECT id FROM users WHERE username = ?").get(receiverUsername);
+  if (!receiver) return res.status(404).json({ error: "Recipient not found." });
+  if (receiver.id === req.auth.userId) {
+    return res.status(400).json({ error: "You cannot forward a message to yourself." });
+  }
+
+  const result = db.prepare(
+    "INSERT INTO messages (sender_id, receiver_id, body, media_path, media_type, forwarded_from_username) " +
+    "VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(
+    req.auth.userId, receiver.id, source.body, source.mediaPath, source.mediaType,
+    source.forwardedFromUsername || source.originalSender
+  );
+
+  const message = db.prepare(
+    "SELECT m.id, s.username AS sender, r.username AS recipient, m.body, " +
+    "m.media_path AS mediaPath, m.media_type AS mediaType, m.created_at AS createdAt, " +
+    "m.delivered_at AS deliveredAt, m.read_at AS readAt, " +
+    "m.forwarded_from_username AS forwardedFromUsername " +
+    "FROM messages m JOIN users s ON s.id = m.sender_id " +
+    "JOIN users r ON r.id = m.receiver_id WHERE m.id = ?"
+  ).get(result.lastInsertRowid);
+
+  const io = req.app.get("io");
+  if (io) io.to("user:" + receiver.id).emit("message:new", message);
+  res.status(201).json({ message });
+});
 
 // Toggle an emoji reaction on a message in the authenticated user's conversation.
 router.post("/:messageId/reactions", authenticate, (req, res) => {

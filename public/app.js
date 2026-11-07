@@ -353,6 +353,13 @@ items.forEach(item => {
   const label = document.createElement("strong");
   label.textContent = item.sender + " â†’ " + item.recipient;
 
+  if (item.forwardedFromUsername) {
+    const forwarded = document.createElement("small");
+    forwarded.textContent = "↪ Forwarded from " + item.forwardedFromUsername;
+    forwarded.style.cssText = "display:block;margin:3px 0 7px;color:#64748b;font-size:.78rem;";
+    element.appendChild(forwarded);
+  }
+
   if (item.replyToMessageId) {
     const quote = document.createElement("div");
     quote.className = "wt-reply-quote";
@@ -467,6 +474,29 @@ items.forEach(item => {
   video.style.display = "block";
   video.style.marginTop = "8px";
 
+  const durationLabel = document.createElement("small");
+  durationLabel.textContent = "Duration: loading…";
+  durationLabel.style.cssText = "display:block;margin-top:5px;color:#64748b;font-size:.82rem;";
+
+  function formatVideoDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "";
+    const total = Math.floor(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    return hours > 0
+      ? hours + ":" + String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0")
+      : minutes + ":" + String(secs).padStart(2, "0");
+  }
+
+  video.addEventListener("loadedmetadata", () => {
+    const duration = formatVideoDuration(video.duration);
+    durationLabel.textContent = duration ? "Duration: " + duration : "Duration unavailable";
+  });
+  video.addEventListener("error", () => {
+    durationLabel.textContent = "Video duration unavailable";
+  });
+
   fetch(mediaUrl, {
     headers: {
       Authorization: "Bearer " + token
@@ -480,13 +510,15 @@ items.forEach(item => {
     })
     .then(blob => {
       video.src = URL.createObjectURL(blob);
+      video.load();
     })
     .catch(error => {
       console.error("Could not load shared video:", error);
       video.textContent = "Video could not be loaded.";
+      durationLabel.textContent = "Video duration unavailable";
     });
 
-  content.appendChild(video);
+  content.append(video, durationLabel);
 
 } else if (item.mediaType === "document") {
   const link = document.createElement("a");
@@ -567,6 +599,29 @@ items.forEach(item => {
     chip.style.cssText = "font-size:.78rem;padding:3px 7px;border:1px solid " + (reaction.reactedByMe ? "#0d9488" : "rgba(100,116,139,.5)") + ";border-radius:14px;background:" + (reaction.reactedByMe ? "rgba(13,148,136,.12)" : "transparent");
     messageActions.appendChild(chip);
   });
+
+  const forwardButton = document.createElement("button");
+  forwardButton.type = "button";
+  forwardButton.textContent = "↗ Forward";
+  forwardButton.title = "Forward this message to another conversation";
+  forwardButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+  forwardButton.addEventListener("click", async () => {
+    const targetUsername = prompt("Enter the recipient username:");
+    if (!targetUsername || !targetUsername.trim()) return;
+    forwardButton.disabled = true;
+    try {
+      await api("/api/messages/" + item.id + "/forward", {
+        method: "POST",
+        body: JSON.stringify({ receiverUsername: targetUsername.trim() })
+      });
+      statusBox.textContent = "Message forwarded to " + targetUsername.trim() + ".";
+    } catch (error) {
+      statusBox.textContent = error.message;
+    } finally {
+      forwardButton.disabled = false;
+    }
+  });
+  messageActions.appendChild(forwardButton);
   element.appendChild(messageActions);
   if (item.sender === currentUsername) {
     const receipt = document.createElement("small");
@@ -695,18 +750,41 @@ items.forEach(item => {
           voiceStream = null;
           const type = voiceRecorder.mimeType || "audio/webm";
           const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
-          const blob = new Blob(voiceChunks, { type });
+          const blob = new Blob(voiceChunks, { type: type.split(";")[0] });
+
+          recordVoiceButton.textContent = "🎙 Record again";
+          recordVoiceButton.classList.remove("is-recording");
+
+          if (!blob.size) {
+            recordedVoiceFile = null;
+            voicePreview.replaceChildren();
+            voicePreview.hidden = true;
+            voiceStatus.textContent = "No audio was captured. Check your microphone input and try again.";
+            return;
+          }
+
           recordedVoiceFile = new File([blob], "waltajjii-voice-message." + extension, { type: type.split(";")[0] });
           const previewAudio = document.createElement("audio");
           previewAudio.controls = true;
+          previewAudio.preload = "metadata";
+          previewAudio.addEventListener("loadedmetadata", () => {
+            const duration = Number.isFinite(previewAudio.duration) ? previewAudio.duration : 0;
+            if (duration > 0) {
+              voiceStatus.textContent = "Voice message ready (" + Math.round(duration) + " seconds). Press Send to share it.";
+            } else {
+              voiceStatus.textContent = "Audio was recorded, but its duration could not be read. Please record again.";
+            }
+          }, { once: true });
+          previewAudio.addEventListener("error", () => {
+            voiceStatus.textContent = "The recording could not be played. Please record again and check your microphone.";
+          }, { once: true });
           previewAudio.src = URL.createObjectURL(blob);
+          previewAudio.load();
           voicePreview.replaceChildren(previewAudio);
           voicePreview.hidden = false;
-          voiceStatus.textContent = "Voice message ready. Press Send to share it.";
-          recordVoiceButton.textContent = "🎙 Record again";
-          recordVoiceButton.classList.remove("is-recording");
+          voiceStatus.textContent = "Checking recording…";
         });
-        voiceRecorder.start();
+        voiceRecorder.start(250);
         recordVoiceButton.textContent = "■ Stop recording";
         recordVoiceButton.classList.add("is-recording");
         voiceStatus.textContent = "Recording… speak now.";
