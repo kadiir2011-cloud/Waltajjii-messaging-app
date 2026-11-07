@@ -1040,6 +1040,10 @@ function registerMessagingSocketHandlers(socket) {
     }
   });
 
+  socket.on("group:message:updated", data => {
+    if (data && String(data.groupId) === String(activeGroupId)) openSelectedGroup();
+  });
+
   socket.on("typing:update", data => {
     if (!data || !recipient.value) return;
     const selectedUserId = userIdsByUsername.get(recipient.value);
@@ -1591,7 +1595,7 @@ groupMessageForm.addEventListener("submit", async event => {
   const file = document.getElementById("group-media-input").files[0];
   if (!activeGroupId) { groupStatus.textContent = "Open a group before sending."; return; }
   if (!body && !file) { groupStatus.textContent = "Write a message or choose a file."; return; }
-  const button = groupMessageForm.querySelector("button[type=submit>");
+  const button = groupMessageForm.querySelector("button[type=submit]");
   button.disabled = true;
   try {
     let mediaPath="", mediaType="";
