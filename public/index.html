@@ -354,6 +354,9 @@
     #message-form button { min-width: 92px; }
     .group-panel { margin-top: 20px; }
     .group-panel .row { margin: 10px 0; }
+    .group-members { margin: 10px 0; color: var(--wt-muted); font-size: .9rem; }
+    .group-member-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    .group-member-chip { display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid var(--wt-border); border-radius: 999px; background: var(--wt-surface-soft); color: var(--wt-text); }
     footer { color: var(--wt-muted); }
     @media (min-width: 900px) {
       #profile-panel .profile-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -880,6 +883,7 @@
           <button type="button" id="manage-group-button">View / manage members</button>
         </div>
         <p id="group-status" role="status" aria-live="polite" class="muted">Log in to view your groups.</p>
+        <div id="group-members" class="group-members" aria-live="polite"></div>
         <div id="group-messages" aria-live="polite" class="group-messages">Choose a group and select Open group.</div>
         <form id="group-message-form" class="group-message-form">
           <input id="group-message-input" maxlength="2000" placeholder="Write a group message..." autocomplete="off">

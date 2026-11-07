@@ -1017,6 +1017,29 @@ function registerMessagingSocketHandlers(socket) {
     refreshPresenceUI();
   });
 
+  // Group activity is delivered only to authenticated members of each group room.
+  socket.on("groups:updated", data => {
+    loadGroups();
+    if (data?.removed && String(data.groupId) === String(activeGroupId)) {
+      activeGroupId = null;
+      groupMessagesBox.textContent = "You are no longer a member of this group.";
+      groupMembersBox.replaceChildren();
+    }
+  });
+
+  socket.on("group:message", data => {
+    if (data && String(data.groupId) === String(activeGroupId)) {
+      openSelectedGroup();
+    }
+  });
+
+  socket.on("group:members:updated", data => {
+    if (data && String(data.groupId) === String(activeGroupId)) {
+      loadGroupMembers(activeGroupId);
+      loadGroups();
+    }
+  });
+
   socket.on("typing:update", data => {
     if (!data || !recipient.value) return;
     const selectedUserId = userIdsByUsername.get(recipient.value);
@@ -1347,6 +1370,7 @@ const groupStatus = document.getElementById("group-status");
 const groupMessagesBox = document.getElementById("group-messages");
 const groupMessageForm = document.getElementById("group-message-form");
 const groupMessageInput = document.getElementById("group-message-input");
+const groupMembersBox = document.getElementById("group-members");
 let activeGroupId = null;
 let cachedGroups = [];
 
@@ -1373,6 +1397,28 @@ async function loadGroups() {
       : "You are not in any groups yet. Choose Create group.";
   } catch (error) {
     groupStatus.textContent = error.message;
+  }
+}
+
+async function loadGroupMembers(groupId) {
+  if (!groupId || !groupMembersBox) return;
+  try {
+    const data = await api(`/api/groups/${groupId}/members`);
+    groupMembersBox.replaceChildren();
+    const heading = document.createElement("strong");
+    heading.textContent = `Members (${data.members.length})`;
+    groupMembersBox.appendChild(heading);
+    const list = document.createElement("div");
+    list.className = "group-member-list";
+    data.members.forEach(member => {
+      const item = document.createElement("span");
+      item.className = "group-member-chip";
+      item.textContent = member.username + (member.role === "admin" ? " · Admin" : "");
+      list.appendChild(item);
+    });
+    groupMembersBox.appendChild(list);
+  } catch (error) {
+    groupMembersBox.textContent = error.message;
   }
 }
 
@@ -1407,6 +1453,7 @@ async function openSelectedGroup() {
     const data = await api(`/api/groups/${id}/messages`);
     activeGroupId = id;
     renderGroupMessages(data.messages || []);
+    await loadGroupMembers(id);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
   } catch (error) {
@@ -1455,6 +1502,7 @@ document.getElementById("manage-group-button").addEventListener("click", async (
   }
   try {
     const data = await api(`/api/groups/${id}/members`);
+    await loadGroupMembers(id);
     const memberList = data.members.map(m => `${m.username} (${m.role})`).join("\n");
     alert("Group members:\n" + memberList);
     if (!data.canManage) {
@@ -1487,6 +1535,7 @@ document.getElementById("manage-group-button").addEventListener("click", async (
     }
     await loadGroups();
     groupSelect.value = String(id);
+    await loadGroupMembers(id);
   } catch (error) {
     groupStatus.textContent = error.message;
   }
