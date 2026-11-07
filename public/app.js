@@ -474,6 +474,29 @@ items.forEach(item => {
   video.style.display = "block";
   video.style.marginTop = "8px";
 
+  const durationLabel = document.createElement("small");
+  durationLabel.textContent = "Duration: loading…";
+  durationLabel.style.cssText = "display:block;margin-top:5px;color:#64748b;font-size:.82rem;";
+
+  function formatVideoDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "";
+    const total = Math.floor(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    return hours > 0
+      ? hours + ":" + String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0")
+      : minutes + ":" + String(secs).padStart(2, "0");
+  }
+
+  video.addEventListener("loadedmetadata", () => {
+    const duration = formatVideoDuration(video.duration);
+    durationLabel.textContent = duration ? "Duration: " + duration : "Duration unavailable";
+  });
+  video.addEventListener("error", () => {
+    durationLabel.textContent = "Video duration unavailable";
+  });
+
   fetch(mediaUrl, {
     headers: {
       Authorization: "Bearer " + token
@@ -487,13 +510,15 @@ items.forEach(item => {
     })
     .then(blob => {
       video.src = URL.createObjectURL(blob);
+      video.load();
     })
     .catch(error => {
       console.error("Could not load shared video:", error);
       video.textContent = "Video could not be loaded.";
+      durationLabel.textContent = "Video duration unavailable";
     });
 
-  content.appendChild(video);
+  content.append(video, durationLabel);
 
 } else if (item.mediaType === "document") {
   const link = document.createElement("a");
