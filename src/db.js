@@ -199,6 +199,12 @@ db.exec(`
   ON message_reactions(message_id, emoji);
 `);
 
+/* Phase 17: record when a sender edits a text message. */
+const editColumns = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
+if (!editColumns.includes("edited_at")) {
+  db.exec("ALTER TABLE messages ADD COLUMN edited_at TEXT");
+}
+
 /* Phase 16: per-user message hiding and sender-controlled deletion for everyone. */
 const deletionColumns = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
 for (const [column, definition] of [
