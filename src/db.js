@@ -199,5 +199,11 @@ db.exec(`
   ON message_reactions(message_id, emoji);
 `);
 
+/* Phase 15A: retain the original sender when a direct message is forwarded. */
+const forwardingColumns = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
+if (!forwardingColumns.includes("forwarded_from_username")) {
+  db.exec("ALTER TABLE messages ADD COLUMN forwarded_from_username TEXT");
+}
+
 
 module.exports = db;
