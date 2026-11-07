@@ -67,6 +67,11 @@
     .group-messages { min-height: 120px; max-height: 35vh; overflow-y: auto; border: 1px solid #dce7e3; border-radius: 10px; padding: 12px; margin: 12px 0; overflow-wrap: anywhere; }
     .group-message-form { display: flex; gap: 8px; align-items: center; }
     .group-message-form input { flex: 1; min-width: 0; margin: 0; }
+    .group-message-form .voice-record-button { white-space: nowrap; background:#183b55; }
+    .group-message-form .voice-record-button.is-recording { background:#b42318; }
+    .group-voice-recording-status { color:var(--wt-muted); font-size:.82rem; }
+    .group-voice-recording-preview { flex-basis:100%; padding:9px 12px; border-radius:12px; background:var(--wt-surface-soft); }
+    .group-voice-recording-preview audio { width:min(100%,420px); }
     @media (max-width: 480px) { .group-message-form { align-items: stretch; flex-direction: column; } .group-message-form button { width: 100%; } }
     footer { text-align: center; color: #526b64; font-size: 13px; padding: 18px; }
     @media (max-width: 480px) {
@@ -888,6 +893,9 @@
         <form id="group-message-form" class="group-message-form">
           <input id="group-message-input" maxlength="2000" placeholder="Write a group message..." autocomplete="off">
           <input id="group-media-input" type="file" aria-label="Attach image, video, audio or document" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/webm,audio/ogg,audio/mp4,audio/mpeg,audio/wav,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv">
+          <button type="button" id="group-record-voice-button" class="voice-record-button">🎙 Record voice</button>
+          <span id="group-voice-recording-status" class="voice-recording-status" aria-live="polite"></span>
+          <div id="group-voice-recording-preview" class="voice-recording-preview" hidden></div>
           <button type="submit">Send to group</button>
         </form>
       </section>
