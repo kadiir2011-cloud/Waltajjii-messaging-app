@@ -1375,6 +1375,15 @@ const groupMessagesBox = document.getElementById("group-messages");
 const groupMessageForm = document.getElementById("group-message-form");
 const groupMessageInput = document.getElementById("group-message-input");
 const groupMembersBox = document.getElementById("group-members");
+const groupRecordVoiceButton = document.getElementById("group-record-voice-button");
+const groupVoiceStatus = document.getElementById("group-voice-recording-status");
+const groupVoicePreview = document.getElementById("group-voice-recording-preview");
+const groupMediaInput = document.getElementById("group-media-input");
+let groupRecordedVoiceFile = null;
+let groupVoiceRecorder = null;
+let groupVoiceStream = null;
+let groupVoiceChunks = [];
+let groupVoicePreviewUrl = null;
 let activeGroupId = null;
 let cachedGroups = [];
 
@@ -1589,10 +1598,94 @@ document.getElementById("manage-group-button").addEventListener("click", async (
   }
 });
 
+function clearGroupVoiceRecording() {
+  groupRecordedVoiceFile = null;
+  if (groupVoicePreviewUrl) URL.revokeObjectURL(groupVoicePreviewUrl);
+  groupVoicePreviewUrl = null;
+  groupVoicePreview.replaceChildren();
+  groupVoicePreview.hidden = true;
+  groupVoiceStatus.textContent = "";
+  groupRecordVoiceButton.textContent = "🎙 Record voice";
+  groupRecordVoiceButton.classList.remove("is-recording");
+}
+
+groupMediaInput.addEventListener("change", () => {
+  if (groupMediaInput.files && groupMediaInput.files.length) clearGroupVoiceRecording();
+});
+
+groupRecordVoiceButton.addEventListener("click", async () => {
+  if (groupVoiceRecorder && groupVoiceRecorder.state === "recording") {
+    groupVoiceRecorder.stop();
+    return;
+  }
+  if (!activeGroupId) {
+    groupVoiceStatus.textContent = "Open a group before recording.";
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    groupVoiceStatus.textContent = "Voice recording is not supported in this browser.";
+    return;
+  }
+  try {
+    groupMediaInput.value = "";
+    clearGroupVoiceRecording();
+    groupVoiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+    const mimeType = candidates.find(type => MediaRecorder.isTypeSupported(type));
+    groupVoiceRecorder = mimeType ? new MediaRecorder(groupVoiceStream, { mimeType }) : new MediaRecorder(groupVoiceStream);
+    groupVoiceChunks = [];
+    groupVoiceRecorder.addEventListener("dataavailable", event => {
+      if (event.data && event.data.size) groupVoiceChunks.push(event.data);
+    });
+    groupVoiceRecorder.addEventListener("stop", () => {
+      if (groupVoiceStream) groupVoiceStream.getTracks().forEach(track => track.stop());
+      groupVoiceStream = null;
+      const type = groupVoiceRecorder.mimeType || "audio/webm";
+      const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+      const blob = new Blob(groupVoiceChunks, { type: type.split(";")[0] });
+      groupRecordVoiceButton.textContent = "🎙 Record again";
+      groupRecordVoiceButton.classList.remove("is-recording");
+      if (!blob.size) {
+        groupVoiceStatus.textContent = "No audio was captured. Check your microphone and try again.";
+        return;
+      }
+      groupRecordedVoiceFile = new File([blob], "waltajjii-group-voice." + extension, { type: type.split(";")[0] });
+      const previewAudio = document.createElement("audio");
+      previewAudio.controls = true;
+      previewAudio.preload = "metadata";
+      previewAudio.addEventListener("loadedmetadata", () => {
+        const duration = Number.isFinite(previewAudio.duration) ? previewAudio.duration : 0;
+        groupVoiceStatus.textContent = duration > 0
+          ? "Voice recording ready (" + Math.round(duration) + " seconds). Press Send to group."
+          : "Recording ready. Press Send to group.";
+      }, { once: true });
+      previewAudio.addEventListener("error", () => {
+        groupVoiceStatus.textContent = "The recording preview could not be played. Please record again.";
+      }, { once: true });
+      groupVoicePreviewUrl = URL.createObjectURL(blob);
+      previewAudio.src = groupVoicePreviewUrl;
+      previewAudio.load();
+      groupVoicePreview.replaceChildren(previewAudio);
+      groupVoicePreview.hidden = false;
+      groupVoiceStatus.textContent = "Checking recording…";
+    });
+    groupVoiceRecorder.start(250);
+    groupRecordVoiceButton.textContent = "■ Stop recording";
+    groupRecordVoiceButton.classList.add("is-recording");
+    groupVoiceStatus.textContent = "Recording… speak now.";
+  } catch (error) {
+    if (groupVoiceStream) groupVoiceStream.getTracks().forEach(track => track.stop());
+    groupVoiceStream = null;
+    groupVoiceStatus.textContent = error.name === "NotAllowedError"
+      ? "Microphone access was denied. Allow microphone access and try again."
+      : "Could not start recording. Please check your microphone.";
+  }
+});
+
 groupMessageForm.addEventListener("submit", async event => {
   event.preventDefault();
   const body = groupMessageInput.value.trim();
-  const file = document.getElementById("group-media-input").files[0];
+  const file = groupRecordedVoiceFile || groupMediaInput.files[0];
   if (!activeGroupId) { groupStatus.textContent = "Open a group before sending."; return; }
   if (!body && !file) { groupStatus.textContent = "Write a message or choose a file."; return; }
   const button = groupMessageForm.querySelector("button[type=submit]");
@@ -1611,7 +1704,8 @@ groupMessageForm.addEventListener("submit", async event => {
       body:JSON.stringify({body,mediaPath,mediaType,replyToMessageId:groupMessageInput.dataset.replyTo||null})
     });
     groupMessageInput.value="";delete groupMessageInput.dataset.replyTo;groupMessageInput.placeholder="Write a group message...";
-    document.getElementById("group-media-input").value="";
+    groupMediaInput.value="";
+    clearGroupVoiceRecording();
     await openSelectedGroup();groupStatus.textContent="Group message sent.";
   } catch(error){groupStatus.textContent=error.message;}
   finally{button.disabled=false;groupMessageInput.focus();}
