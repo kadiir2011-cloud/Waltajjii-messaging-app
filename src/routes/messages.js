@@ -101,7 +101,7 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
   if (replyToMessageId !== null) {
     const replyTarget = db.prepare(`
       SELECT id FROM messages
-      WHERE id = ? AND (
+      WHERE id = ? AND deleted_at IS NULL AND (
         (sender_id = ? AND receiver_id = ?) OR
         (sender_id = ? AND receiver_id = ?)
       )
@@ -169,8 +169,10 @@ router.get("/conversation/:username", authenticate, (req, res) => {
 
   const messages = db.prepare(`
     SELECT m.id, s.username AS sender, r.username AS recipient,
-           m.body, m.media_path AS mediaPath,
-           m.media_type AS mediaType,
+           CASE WHEN m.deleted_at IS NOT NULL THEN 'This message was deleted' ELSE m.body END AS body,
+           CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.media_path END AS mediaPath,
+           CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.media_type END AS mediaType,
+           m.deleted_at AS deletedAt,
            m.created_at AS createdAt,
            m.delivered_at AS deliveredAt, m.read_at AS readAt,
            m.reply_to_message_id AS replyToMessageId,
@@ -181,11 +183,15 @@ router.get("/conversation/:username", authenticate, (req, res) => {
     JOIN users r ON r.id = m.receiver_id
     LEFT JOIN messages replyMessage ON replyMessage.id = m.reply_to_message_id
     LEFT JOIN users replySender ON replySender.id = replyMessage.sender_id
-    WHERE (m.sender_id = ? AND m.receiver_id = ?)
-       OR (m.sender_id = ? AND m.receiver_id = ?)
+    WHERE ((m.sender_id = ? AND m.receiver_id = ?)
+       OR (m.sender_id = ? AND m.receiver_id = ?))
+      AND NOT EXISTS (
+        SELECT 1 FROM message_hidden_for h
+        WHERE h.message_id = m.id AND h.user_id = ?
+      )
     ORDER BY m.id ASC
     LIMIT 200
-  `).all(req.auth.userId, other.id, other.id, req.auth.userId);
+  `).all(req.auth.userId, other.id, other.id, req.auth.userId, req.auth.userId);
 
   const ids = messages.map(message => message.id);
   const reactions = ids.length ? db.prepare(`
@@ -266,6 +272,42 @@ router.post("/conversation/:username/read", authenticate, (req, res) => {
 });
 
 
+// Delete a message for the current user, or for both participants when requested by its sender.
+router.delete("/:messageId/delete", authenticate, (req, res) => {
+  const messageId = Number(req.params.messageId);
+  const scope = String(req.body.scope || "me");
+  if (!Number.isSafeInteger(messageId) || messageId < 1 || !["me", "everyone"].includes(scope)) {
+    return res.status(400).json({ error: "Choose a valid deletion option." });
+  }
+  const message = db.prepare(
+    "SELECT id, sender_id AS senderId, receiver_id AS receiverId FROM messages " +
+    "WHERE id = ? AND (sender_id = ? OR receiver_id = ?)"
+  ).get(messageId, req.auth.userId, req.auth.userId);
+  if (!message) return res.status(404).json({ error: "Message not found." });
+
+  if (scope === "everyone") {
+    if (message.senderId !== req.auth.userId) {
+      return res.status(403).json({ error: "Only the sender can delete this message for everyone." });
+    }
+    db.prepare(
+      "UPDATE messages SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ?, " +
+      "body = 'This message was deleted', media_path = NULL, media_type = NULL " +
+      "WHERE id = ? AND deleted_at IS NULL"
+    ).run(req.auth.userId, messageId);
+  } else {
+    db.prepare(
+      "INSERT OR IGNORE INTO message_hidden_for (message_id, user_id) VALUES (?, ?)"
+    ).run(messageId, req.auth.userId);
+  }
+
+  const io = req.app.get("io");
+  if (io) {
+    io.to("user:" + message.senderId).emit("message:deleted", { messageId, scope });
+    io.to("user:" + message.receiverId).emit("message:deleted", { messageId, scope });
+  }
+  res.json({ success: true, scope });
+});
+
 // Forward a visible direct message to another user's conversation.
 router.post("/:messageId/forward", authenticate, (req, res) => {
   const messageId = Number(req.params.messageId);
@@ -279,7 +321,7 @@ router.post("/:messageId/forward", authenticate, (req, res) => {
     "m.body, m.media_path AS mediaPath, m.media_type AS mediaType, " +
     "m.forwarded_from_username AS forwardedFromUsername, s.username AS originalSender " +
     "FROM messages m JOIN users s ON s.id = m.sender_id " +
-    "WHERE m.id = ? AND (m.sender_id = ? OR m.receiver_id = ?)"
+    "WHERE m.id = ? AND m.deleted_at IS NULL AND (m.sender_id = ? OR m.receiver_id = ?)"
   ).get(messageId, req.auth.userId, req.auth.userId);
   if (!source) {
     return res.status(404).json({ error: "This message is no longer available to forward." });
@@ -327,7 +369,7 @@ router.post("/:messageId/reactions", authenticate, (req, res) => {
            (SELECT username FROM users WHERE id = sender_id) AS sender,
            (SELECT username FROM users WHERE id = receiver_id) AS recipient
     FROM messages
-    WHERE id = ? AND (sender_id = ? OR receiver_id = ?)
+    WHERE id = ? AND deleted_at IS NULL AND (sender_id = ? OR receiver_id = ?)
   `).get(messageId, req.auth.userId, req.auth.userId);
   if (!message) return res.status(404).json({ error: "Message not found." });
 

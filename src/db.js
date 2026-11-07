@@ -199,6 +199,27 @@ db.exec(`
   ON message_reactions(message_id, emoji);
 `);
 
+/* Phase 16: per-user message hiding and sender-controlled deletion for everyone. */
+const deletionColumns = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
+for (const [column, definition] of [
+  ["deleted_at", "TEXT"],
+  ["deleted_by", "INTEGER REFERENCES users(id)"]
+]) {
+  if (!deletionColumns.includes(column)) db.exec(`ALTER TABLE messages ADD COLUMN ${column} ${definition}`);
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_hidden_for (
+    message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_message_hidden_user
+  ON message_hidden_for(user_id, message_id);
+`);
+
 /* Phase 15A: retain the original sender when a direct message is forwarded. */
 const forwardingColumns = db.prepare("PRAGMA table_info(messages)").all().map(column => column.name);
 if (!forwardingColumns.includes("forwarded_from_username")) {
