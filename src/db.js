@@ -233,4 +233,30 @@ if (!forwardingColumns.includes("forwarded_from_username")) {
 }
 
 
+
+/* Phase 19: group media, replies, reactions, edits and deletions. */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_message_reactions (
+    group_message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    emoji TEXT NOT NULL CHECK(length(emoji) BETWEEN 1 AND 16),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_message_id, user_id, emoji),
+    FOREIGN KEY (group_message_id) REFERENCES group_messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_message_reactions_message
+  ON group_message_reactions(group_message_id, emoji);
+`);
+const groupMessageColumns = db.prepare("PRAGMA table_info(group_messages)").all().map(column => column.name);
+for (const [column, definition] of [
+  ["media_path", "TEXT"],
+  ["media_type", "TEXT"],
+  ["reply_to_message_id", "INTEGER REFERENCES group_messages(id) ON DELETE SET NULL"],
+  ["edited_at", "TEXT"],
+  ["deleted_at", "TEXT"]
+]) {
+  if (!groupMessageColumns.includes(column)) db.exec(`ALTER TABLE group_messages ADD COLUMN ${column} ${definition}`);
+}
+
 module.exports = db;

@@ -1040,6 +1040,10 @@ function registerMessagingSocketHandlers(socket) {
     }
   });
 
+  socket.on("group:message:updated", data => {
+    if (data && String(data.groupId) === String(activeGroupId)) openSelectedGroup();
+  });
+
   socket.on("typing:update", data => {
     if (!data || !recipient.value) return;
     const selectedUserId = userIdsByUsername.get(recipient.value);
@@ -1424,18 +1428,62 @@ async function loadGroupMembers(groupId) {
 
 function renderGroupMessages(items) {
   groupMessagesBox.replaceChildren();
-  if (!items.length) {
-    groupMessagesBox.textContent = "No messages in this group yet.";
-    return;
-  }
+  if (!items.length) { groupMessagesBox.textContent = "No messages in this group yet."; return; }
   items.forEach(item => {
     const wrap = document.createElement("div");
     wrap.className = "message" + (item.sender === currentUsername ? " mine" : "");
     const label = document.createElement("strong");
-    label.textContent = `${item.sender} · ${item.createdAt}`;
+    label.textContent = `${item.sender} · ${item.createdAt}${item.editedAt ? " · Edited" : ""}`;
     const body = document.createElement("div");
     body.textContent = item.body;
     wrap.append(label, body);
+    if (item.replyToMessageId) {
+      const reply = document.createElement("small");
+      reply.textContent = `↪ Reply to ${item.replyToSender || "message"}: ${item.replyToBody || ""}`;
+      wrap.appendChild(reply);
+    }
+    if (item.mediaPath && !item.deletedAt) {
+      const media = document.createElement("a");
+      media.href = "#";
+      media.textContent = item.mediaType === "video" ? "▶ Open video" : item.mediaType === "image" ? "🖼 Open image" : item.mediaType === "audio" ? "🎧 Play voice message" : "📎 Download document";
+      media.addEventListener("click", async ev => {
+        ev.preventDefault();
+        try {
+          const response = await fetch("/api/uploads/" + encodeURIComponent(item.mediaPath), {headers:{Authorization:"Bearer "+token}});
+          if (!response.ok) throw new Error("Media could not be loaded.");
+          const url = URL.createObjectURL(await response.blob());
+          if (item.mediaType === "image") {
+            const img = document.createElement("img"); img.src=url; img.alt="Group image"; img.style.maxWidth="240px"; img.style.display="block"; wrap.appendChild(img);
+          } else if (item.mediaType === "video" || item.mediaType === "audio") {
+            const player = document.createElement(item.mediaType === "video" ? "video" : "audio");
+            player.controls=true; player.src=url; player.style.maxWidth="100%"; wrap.appendChild(player);
+          } else {
+            const download=document.createElement("a"); download.href=url; download.download=item.mediaPath; download.textContent="Download file"; wrap.appendChild(download); download.click();
+          }
+        } catch(error) { groupStatus.textContent=error.message; }
+      });
+      wrap.appendChild(media);
+    }
+    if (!item.deletedAt) {
+      const actions = document.createElement("div");
+      ["👍","❤️","😂","😮","😢","🙏","🎉","🔥"].forEach(emoji => {
+        const button=document.createElement("button"); button.type="button"; button.textContent=emoji;
+        button.addEventListener("click", async()=>{try{await api(`/api/groups/${activeGroupId}/messages/${item.id}/reactions`,{method:"POST",body:JSON.stringify({emoji})});}catch(e){groupStatus.textContent=e.message;}});
+        actions.appendChild(button);
+      });
+      (item.reactions||[]).forEach(r=>{const count=document.createElement("small");count.textContent=`${r.emoji} ${r.count}`;actions.appendChild(count);});
+      const replyButton=document.createElement("button");replyButton.type="button";replyButton.textContent="Reply";
+      replyButton.addEventListener("click",()=>{groupMessageInput.dataset.replyTo=String(item.id);groupMessageInput.placeholder=`Replying to ${item.sender}…`;groupMessageInput.focus();});
+      actions.appendChild(replyButton);
+      if (item.sender === currentUsername) {
+        const edit=document.createElement("button");edit.type="button";edit.textContent="Edit";
+        edit.addEventListener("click",async()=>{const body=prompt("Edit your message:",item.body);if(body===null)return;try{await api(`/api/groups/${activeGroupId}/messages/${item.id}`,{method:"PATCH",body:JSON.stringify({body})});}catch(e){groupStatus.textContent=e.message;}});
+        actions.appendChild(edit);
+      }
+      const del=document.createElement("button");del.type="button";del.textContent="Delete";
+      del.addEventListener("click",async()=>{if(!confirm("Delete this group message?"))return;try{await api(`/api/groups/${activeGroupId}/messages/${item.id}`,{method:"DELETE"});}catch(e){groupStatus.textContent=e.message;}});
+      actions.appendChild(del); wrap.appendChild(actions);
+    }
     groupMessagesBox.appendChild(wrap);
   });
   groupMessagesBox.scrollTop = groupMessagesBox.scrollHeight;
@@ -1544,31 +1592,31 @@ document.getElementById("manage-group-button").addEventListener("click", async (
 groupMessageForm.addEventListener("submit", async event => {
   event.preventDefault();
   const body = groupMessageInput.value.trim();
-  if (!activeGroupId) {
-    groupStatus.textContent = "Open a group before sending a message.";
-    return;
-  }
-  if (!body) {
-    groupStatus.textContent = "Write a message first.";
-    return;
-  }
+  const file = document.getElementById("group-media-input").files[0];
+  if (!activeGroupId) { groupStatus.textContent = "Open a group before sending."; return; }
+  if (!body && !file) { groupStatus.textContent = "Write a message or choose a file."; return; }
   const button = groupMessageForm.querySelector("button[type=submit]");
   button.disabled = true;
   try {
-    await api(`/api/groups/${activeGroupId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ body })
+    let mediaPath="", mediaType="";
+    if(file){
+      const fd=new FormData();fd.append("media",file);
+      const response=await fetch("/api/uploads",{method:"POST",headers:{Authorization:"Bearer "+token},body:fd});
+      const uploaded=await response.json();if(!response.ok)throw new Error(uploaded.error||"Upload failed.");
+      mediaPath=uploaded.fileId;mediaType=uploaded.mediaType;
+      if(file.type.startsWith("audio/"))mediaType="audio";
+    }
+    await api(`/api/groups/${activeGroupId}/messages`,{
+      method:"POST",
+      body:JSON.stringify({body,mediaPath,mediaType,replyToMessageId:groupMessageInput.dataset.replyTo||null})
     });
-    groupMessageInput.value = "";
-    await openSelectedGroup();
-    groupStatus.textContent = "Group message sent.";
-  } catch (error) {
-    groupStatus.textContent = error.message;
-  } finally {
-    button.disabled = false;
-    groupMessageInput.focus();
-  }
+    groupMessageInput.value="";delete groupMessageInput.dataset.replyTo;groupMessageInput.placeholder="Write a group message...";
+    document.getElementById("group-media-input").value="";
+    await openSelectedGroup();groupStatus.textContent="Group message sent.";
+  } catch(error){groupStatus.textContent=error.message;}
+  finally{button.disabled=false;groupMessageInput.focus();}
 });
+
 // Keep the biography character counter in sync with typing.
 document.getElementById("profile-bio-input").addEventListener("input", event => {
   document.getElementById("bio-counter").textContent = event.target.value.length;
