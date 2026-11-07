@@ -173,6 +173,7 @@ router.get("/conversation/:username", authenticate, (req, res) => {
            CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.media_path END AS mediaPath,
            CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.media_type END AS mediaType,
            m.deleted_at AS deletedAt,
+           m.edited_at AS editedAt,
            m.created_at AS createdAt,
            m.delivered_at AS deliveredAt, m.read_at AS readAt,
            m.reply_to_message_id AS replyToMessageId,
@@ -306,6 +307,53 @@ router.delete("/:messageId/delete", authenticate, (req, res) => {
     io.to("user:" + message.receiverId).emit("message:deleted", { messageId, scope });
   }
   res.json({ success: true, scope });
+});
+
+// Edit a text message only when requested by its original sender.
+router.patch("/:messageId/edit", authenticate, (req, res) => {
+  const messageId = Number(req.params.messageId);
+  const body = String(req.body.body || "").trim();
+  if (!Number.isSafeInteger(messageId) || messageId < 1) {
+    return res.status(400).json({ error: "Invalid message." });
+  }
+  if (!body || body.length > 2000) {
+    return res.status(400).json({ error: "Edited message must contain 1 to 2000 characters." });
+  }
+
+  const message = db.prepare(
+    "SELECT id, sender_id AS senderId, receiver_id AS receiverId, media_path AS mediaPath, " +
+    "deleted_at AS deletedAt FROM messages WHERE id = ? AND (sender_id = ? OR receiver_id = ?)"
+  ).get(messageId, req.auth.userId, req.auth.userId);
+
+  if (!message) return res.status(404).json({ error: "Message not found." });
+  if (message.senderId !== req.auth.userId) {
+    return res.status(403).json({ error: "Only the sender can edit this message." });
+  }
+  if (message.deletedAt) {
+    return res.status(400).json({ error: "A deleted message cannot be edited." });
+  }
+  if (message.mediaPath) {
+    return res.status(400).json({ error: "Only text messages can be edited." });
+  }
+
+  const result = db.prepare(
+    "UPDATE messages SET body = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+  ).run(body, messageId);
+  if (!result.changes) return res.status(409).json({ error: "This message could not be edited." });
+
+  const updated = db.prepare(
+    "SELECT m.id, s.username AS sender, r.username AS recipient, m.body, " +
+    "m.edited_at AS editedAt, m.created_at AS createdAt " +
+    "FROM messages m JOIN users s ON s.id = m.sender_id " +
+    "JOIN users r ON r.id = m.receiver_id WHERE m.id = ?"
+  ).get(messageId);
+
+  const io = req.app.get("io");
+  if (io) {
+    io.to("user:" + message.senderId).emit("message:edited", updated);
+    io.to("user:" + message.receiverId).emit("message:edited", updated);
+  }
+  res.json({ message: updated });
 });
 
 // Forward a visible direct message to another user's conversation.
