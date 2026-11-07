@@ -141,15 +141,23 @@ router.get("/:filename", authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid media filename." });
   }
   const message = db.prepare(`
-    SELECT id, body FROM messages
+    SELECT id, body, media_type AS mediaType FROM messages
     WHERE media_path = ? AND (sender_id = ? OR receiver_id = ?)
     LIMIT 1
   `).get(filename, req.auth.userId, req.auth.userId);
-  if (!message) return res.status(404).json({ error: "Media not found." });
+  const groupMessage = db.prepare(`
+    SELECT gm.id, gm.body, gm.media_type AS mediaType
+    FROM group_messages gm
+    JOIN group_members mine ON mine.group_id = gm.group_id AND mine.user_id = ?
+    WHERE gm.media_path = ? AND gm.deleted_at IS NULL
+    LIMIT 1
+  `).get(req.auth.userId, filename);
+  const permittedMessage = message || groupMessage;
+  if (!permittedMessage) return res.status(404).json({ error: "Media not found." });
   const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(filename);
   const contentTypes = {
     ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": String(message.body || "").startsWith("[Voice message]") ? "audio/webm" : "video/webm",
+    ".gif": "image/gif", ".mp4": "video/mp4", ".webm": String(permittedMessage.body || "").startsWith("[Voice message]") ? "audio/webm" : "video/webm",
     ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
     ".pdf": "application/pdf", ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
