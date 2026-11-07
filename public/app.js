@@ -372,7 +372,7 @@ items.forEach(item => {
   const isVoiceMessage = Boolean(item.mediaPath && item.mediaType === "document" && String(item.body || "").startsWith("[Voice message]"));
   content.textContent = isVoiceMessage ? String(item.body || "").replace(/^\[Voice message\]\s*/, "") : (item.body || "");
 
-  if (item.mediaPath && item.mediaType) {
+  if (item.mediaPath && item.mediaType && !item.deletedAt) {
     const mediaUrl =
       "/api/uploads/" + encodeURIComponent(item.mediaPath);
 
@@ -622,6 +622,47 @@ items.forEach(item => {
     }
   });
   messageActions.appendChild(forwardButton);
+  if (!item.deletedAt) {
+    const deleteMeButton = document.createElement("button");
+    deleteMeButton.type = "button";
+    deleteMeButton.textContent = "🗑 Delete for me";
+    deleteMeButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+    deleteMeButton.addEventListener("click", async () => {
+      if (!confirm("Remove this message from your conversation?")) return;
+      deleteMeButton.disabled = true;
+      try {
+        await api("/api/messages/" + item.id + "/delete", {
+          method: "DELETE", body: JSON.stringify({ scope: "me" })
+        });
+        await loadConversation();
+      } catch (error) {
+        statusBox.textContent = error.message;
+        deleteMeButton.disabled = false;
+      }
+    });
+    messageActions.appendChild(deleteMeButton);
+
+    if (item.sender === currentUsername) {
+      const deleteEveryoneButton = document.createElement("button");
+      deleteEveryoneButton.type = "button";
+      deleteEveryoneButton.textContent = "🗑 Delete for everyone";
+      deleteEveryoneButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+      deleteEveryoneButton.addEventListener("click", async () => {
+        if (!confirm("Delete this message for both you and the recipient?")) return;
+        deleteEveryoneButton.disabled = true;
+        try {
+          await api("/api/messages/" + item.id + "/delete", {
+            method: "DELETE", body: JSON.stringify({ scope: "everyone" })
+          });
+          await loadConversation();
+        } catch (error) {
+          statusBox.textContent = error.message;
+          deleteEveryoneButton.disabled = false;
+        }
+      });
+      messageActions.appendChild(deleteEveryoneButton);
+    }
+  }
   element.appendChild(messageActions);
   if (item.sender === currentUsername) {
     const receipt = document.createElement("small");
@@ -973,6 +1014,11 @@ function registerMessagingSocketHandlers(socket) {
     if (belongsToOpenConversation) {
       loadConversation();
     }
+  });
+
+  socket.on("message:deleted", data => {
+    if (!data || !recipient?.value) return;
+    loadConversation();
   });
 
   socket.on("message:reaction:update", data => {
