@@ -145,6 +145,13 @@ io.on("connection", (socket) => {
   const wasOnline = onlineUsers.has(userId);
 
   socket.join(userRoom);
+
+  // Join every group room this authenticated user currently belongs to.
+  const groupMemberships = db.prepare(
+    "SELECT group_id FROM group_members WHERE user_id = ?"
+  ).all(socket.data.userId);
+  groupMemberships.forEach(({ group_id }) => socket.join(`group:${group_id}`));
+
   onlineUsers.set(userId, socket.data.username);
 
   // Give the new session a current snapshot, then notify others on first login.
