@@ -46,6 +46,7 @@ app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/social", require("./routes/social"));
 app.use("/api/moments", require("./routes/moments"));
 app.use("/api/calls", require("./routes/calls"));
+app.use("/api/backup", require("./routes/backup"));
 
 const server = http.createServer(app);
 
