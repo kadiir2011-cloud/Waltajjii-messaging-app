@@ -557,8 +557,14 @@ items.forEach(item => {
   const time = document.createElement("small");
   time.className = "muted";
   time.textContent = item.createdAt;
-
   element.append(label, content, time);
+  if (item.editedAt && !item.deletedAt) {
+    const edited = document.createElement("small");
+    edited.textContent = "Edited";
+    edited.title = "Edited at " + item.editedAt;
+    edited.style.cssText = "display:inline-block;margin-left:7px;color:#64748b;font-size:.75rem;";
+    element.appendChild(edited);
+  }
 
   const messageActions = document.createElement("div");
   messageActions.className = "wt-message-actions";
@@ -573,6 +579,33 @@ items.forEach(item => {
     messageInput.focus();
   });
   messageActions.appendChild(replyButton);
+
+  if (item.sender === currentUsername && !item.deletedAt && !item.mediaPath) {
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "✏️ Edit";
+    editButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+    editButton.addEventListener("click", async () => {
+      const revisedText = prompt("Edit your message (maximum 2000 characters):", item.body || "");
+      if (revisedText === null) return;
+      if (!revisedText.trim()) {
+        alert("Message cannot be empty.");
+        return;
+      }
+      editButton.disabled = true;
+      try {
+        await api("/api/messages/" + item.id + "/edit", {
+          method: "PATCH",
+          body: JSON.stringify({ body: revisedText })
+        });
+        await loadConversation();
+      } catch (error) {
+        statusBox.textContent = error.message;
+        editButton.disabled = false;
+      }
+    });
+    messageActions.appendChild(editButton);
+  }
 
   ["👍","❤️","😂","😮","😢","🎉","🙏","🔥"].forEach(emoji => {
     const reactionButton = document.createElement("button");
@@ -1019,6 +1052,15 @@ function registerMessagingSocketHandlers(socket) {
   socket.on("message:deleted", data => {
     if (!data || !recipient?.value) return;
     loadConversation();
+  });
+
+  socket.on("message:edited", data => {
+    if (!data || !recipient?.value) return;
+    const selectedUsername = recipient.value;
+    const belongsToOpenConversation =
+      (data.sender === currentUsername && data.recipient === selectedUsername) ||
+      (data.sender === selectedUsername && data.recipient === currentUsername);
+    if (belongsToOpenConversation) loadConversation();
   });
 
   socket.on("message:reaction:update", data => {
