@@ -353,6 +353,13 @@ items.forEach(item => {
   const label = document.createElement("strong");
   label.textContent = item.sender + " â†’ " + item.recipient;
 
+  if (item.forwardedFromUsername) {
+    const forwarded = document.createElement("small");
+    forwarded.textContent = "↪ Forwarded from " + item.forwardedFromUsername;
+    forwarded.style.cssText = "display:block;margin:3px 0 7px;color:#64748b;font-size:.78rem;";
+    element.appendChild(forwarded);
+  }
+
   if (item.replyToMessageId) {
     const quote = document.createElement("div");
     quote.className = "wt-reply-quote";
@@ -567,6 +574,29 @@ items.forEach(item => {
     chip.style.cssText = "font-size:.78rem;padding:3px 7px;border:1px solid " + (reaction.reactedByMe ? "#0d9488" : "rgba(100,116,139,.5)") + ";border-radius:14px;background:" + (reaction.reactedByMe ? "rgba(13,148,136,.12)" : "transparent");
     messageActions.appendChild(chip);
   });
+
+  const forwardButton = document.createElement("button");
+  forwardButton.type = "button";
+  forwardButton.textContent = "↗ Forward";
+  forwardButton.title = "Forward this message to another conversation";
+  forwardButton.style.cssText = "font-size:.78rem;padding:4px 8px;";
+  forwardButton.addEventListener("click", async () => {
+    const targetUsername = prompt("Enter the recipient username:");
+    if (!targetUsername || !targetUsername.trim()) return;
+    forwardButton.disabled = true;
+    try {
+      await api("/api/messages/" + item.id + "/forward", {
+        method: "POST",
+        body: JSON.stringify({ receiverUsername: targetUsername.trim() })
+      });
+      statusBox.textContent = "Message forwarded to " + targetUsername.trim() + ".";
+    } catch (error) {
+      statusBox.textContent = error.message;
+    } finally {
+      forwardButton.disabled = false;
+    }
+  });
+  messageActions.appendChild(forwardButton);
   element.appendChild(messageActions);
   if (item.sender === currentUsername) {
     const receipt = document.createElement("small");
