@@ -725,18 +725,41 @@ items.forEach(item => {
           voiceStream = null;
           const type = voiceRecorder.mimeType || "audio/webm";
           const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
-          const blob = new Blob(voiceChunks, { type });
+          const blob = new Blob(voiceChunks, { type: type.split(";")[0] });
+
+          recordVoiceButton.textContent = "🎙 Record again";
+          recordVoiceButton.classList.remove("is-recording");
+
+          if (!blob.size) {
+            recordedVoiceFile = null;
+            voicePreview.replaceChildren();
+            voicePreview.hidden = true;
+            voiceStatus.textContent = "No audio was captured. Check your microphone input and try again.";
+            return;
+          }
+
           recordedVoiceFile = new File([blob], "waltajjii-voice-message." + extension, { type: type.split(";")[0] });
           const previewAudio = document.createElement("audio");
           previewAudio.controls = true;
+          previewAudio.preload = "metadata";
+          previewAudio.addEventListener("loadedmetadata", () => {
+            const duration = Number.isFinite(previewAudio.duration) ? previewAudio.duration : 0;
+            if (duration > 0) {
+              voiceStatus.textContent = "Voice message ready (" + Math.round(duration) + " seconds). Press Send to share it.";
+            } else {
+              voiceStatus.textContent = "Audio was recorded, but its duration could not be read. Please record again.";
+            }
+          }, { once: true });
+          previewAudio.addEventListener("error", () => {
+            voiceStatus.textContent = "The recording could not be played. Please record again and check your microphone.";
+          }, { once: true });
           previewAudio.src = URL.createObjectURL(blob);
+          previewAudio.load();
           voicePreview.replaceChildren(previewAudio);
           voicePreview.hidden = false;
-          voiceStatus.textContent = "Voice message ready. Press Send to share it.";
-          recordVoiceButton.textContent = "🎙 Record again";
-          recordVoiceButton.classList.remove("is-recording");
+          voiceStatus.textContent = "Checking recording…";
         });
-        voiceRecorder.start();
+        voiceRecorder.start(250);
         recordVoiceButton.textContent = "■ Stop recording";
         recordVoiceButton.classList.add("is-recording");
         voiceStatus.textContent = "Recording… speak now.";
