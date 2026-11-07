@@ -78,6 +78,14 @@ router.post("/", (req, res) => {
   });
 
   const groupId = create();
+  const io = req.app.get("io");
+  if (io) {
+    const memberIds = [req.auth.userId, ...users.map(user => user.id)];
+    memberIds.forEach(userId => {
+      io.in(`user:${userId}`).socketsJoin(`group:${groupId}`);
+      io.to(`user:${userId}`).emit("groups:updated", { groupId });
+    });
+  }
   res.status(201).json({ group: db.prepare("SELECT id, name, created_by AS createdBy, created_at AS createdAt FROM groups WHERE id = ?").get(groupId) });
 });
 
@@ -113,6 +121,12 @@ router.post("/:id/members", (req, res) => {
     }
     throw e;
   }
+  const io = req.app.get("io");
+  if (io) {
+    io.in(`user:${user.id}`).socketsJoin(`group:${groupId}`);
+    io.to(`user:${user.id}`).emit("groups:updated", { groupId });
+    io.to(`group:${groupId}`).emit("group:members:updated", { groupId });
+  }
   res.status(201).json({ message: "Member added." });
 });
 
@@ -127,6 +141,12 @@ router.delete("/:id/members/:userId", (req, res) => {
   }
   const result = db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, userId);
   if (!result.changes) return res.status(404).json({ error: "Member not found." });
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`group:${groupId}`).emit("group:members:updated", { groupId });
+    io.in(`user:${userId}`).socketsLeave(`group:${groupId}`);
+    io.to(`user:${userId}`).emit("groups:updated", { groupId, removed: true });
+  }
   res.json({ message: "Member removed." });
 });
 
@@ -159,6 +179,8 @@ router.post("/:id/messages", (req, res) => {
       u.username AS sender, gm.body, gm.created_at AS createdAt
     FROM group_messages gm JOIN users u ON u.id = gm.sender_id WHERE gm.id = ?
   `).get(result.lastInsertRowid);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:message", message);
   res.status(201).json({ message });
 });
 
