@@ -101,7 +101,7 @@ if (mediaPath && !["image", "video", "document"].includes(mediaType)) {
   if (replyToMessageId !== null) {
     const replyTarget = db.prepare(`
       SELECT id FROM messages
-      WHERE id = ? AND (
+      WHERE id = ? AND deleted_at IS NULL AND (
         (sender_id = ? AND receiver_id = ?) OR
         (sender_id = ? AND receiver_id = ?)
       )
@@ -321,7 +321,7 @@ router.post("/:messageId/forward", authenticate, (req, res) => {
     "m.body, m.media_path AS mediaPath, m.media_type AS mediaType, " +
     "m.forwarded_from_username AS forwardedFromUsername, s.username AS originalSender " +
     "FROM messages m JOIN users s ON s.id = m.sender_id " +
-    "WHERE m.id = ? AND (m.sender_id = ? OR m.receiver_id = ?)"
+    "WHERE m.id = ? AND m.deleted_at IS NULL AND (m.sender_id = ? OR m.receiver_id = ?)"
   ).get(messageId, req.auth.userId, req.auth.userId);
   if (!source) {
     return res.status(404).json({ error: "This message is no longer available to forward." });
@@ -369,7 +369,7 @@ router.post("/:messageId/reactions", authenticate, (req, res) => {
            (SELECT username FROM users WHERE id = sender_id) AS sender,
            (SELECT username FROM users WHERE id = receiver_id) AS recipient
     FROM messages
-    WHERE id = ? AND (sender_id = ? OR receiver_id = ?)
+    WHERE id = ? AND deleted_at IS NULL AND (sender_id = ? OR receiver_id = ?)
   `).get(messageId, req.auth.userId, req.auth.userId);
   if (!message) return res.status(404).json({ error: "Message not found." });
 
