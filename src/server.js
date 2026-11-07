@@ -17,6 +17,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       imgSrc: ["'self'", "data:", "blob:"],
+      mediaSrc: ["'self'", "blob:"],
       connectSrc: ["'self'"]
     }
   }
