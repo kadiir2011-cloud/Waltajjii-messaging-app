@@ -150,17 +150,41 @@ router.delete("/:id/members/:userId", (req, res) => {
   res.json({ message: "Member removed." });
 });
 
+
+function groupMessageFor(groupId, messageId, viewerId) {
+  const message = db.prepare(`
+    SELECT gm.id, gm.group_id AS groupId, gm.sender_id AS senderId,
+      u.username AS sender, gm.body,
+      CASE WHEN gm.deleted_at IS NOT NULL THEN NULL ELSE gm.media_path END AS mediaPath,
+      CASE WHEN gm.deleted_at IS NOT NULL THEN NULL ELSE gm.media_type END AS mediaType,
+      gm.reply_to_message_id AS replyToMessageId,
+      reply.body AS replyToBody, replyUser.username AS replyToSender,
+      gm.edited_at AS editedAt, gm.deleted_at AS deletedAt,
+      gm.created_at AS createdAt
+    FROM group_messages gm
+    JOIN users u ON u.id = gm.sender_id
+    LEFT JOIN group_messages reply ON reply.id = gm.reply_to_message_id
+    LEFT JOIN users replyUser ON replyUser.id = reply.sender_id
+    WHERE gm.group_id = ? AND gm.id = ?
+  `).get(groupId, messageId);
+  if (!message) return null;
+  message.body = message.deletedAt ? "This message was deleted" : message.body;
+  message.reactions = db.prepare(`
+    SELECT emoji, COUNT(*) AS count,
+      MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS reactedByMe
+    FROM group_message_reactions WHERE group_message_id = ?
+    GROUP BY emoji ORDER BY emoji
+  `).all(viewerId, messageId).map(r => ({...r, reactedByMe: Boolean(r.reactedByMe)}));
+  return message;
+}
+
 router.get("/:id/messages", (req, res) => {
   const groupId = Number(req.params.id);
   if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) {
     return res.status(404).json({ error: "Group not found." });
   }
-  const messages = db.prepare(`
-    SELECT gm.id, gm.group_id AS groupId, gm.sender_id AS senderId,
-      u.username AS sender, gm.body, gm.created_at AS createdAt
-    FROM group_messages gm JOIN users u ON u.id = gm.sender_id
-    WHERE gm.group_id = ? ORDER BY gm.id ASC LIMIT 300
-  `).all(groupId);
+  const ids = db.prepare("SELECT id FROM group_messages WHERE group_id = ? ORDER BY id ASC LIMIT 300").all(groupId);
+  const messages = ids.map(row => groupMessageFor(groupId, row.id, req.auth.userId));
   res.json({ messages });
 });
 
@@ -169,19 +193,80 @@ router.post("/:id/messages", (req, res) => {
   if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) {
     return res.status(404).json({ error: "Group not found." });
   }
-  const body = String(req.body.body || "").trim();
-  if (!body || body.length > 2000) {
-    return res.status(400).json({ error: "Group messages must contain 1–2000 characters." });
+  let body = String(req.body.body || "").trim();
+  const mediaPath = String(req.body.mediaPath || "").trim();
+  const mediaType = String(req.body.mediaType || "").trim();
+  const replyToMessageId = req.body.replyToMessageId == null || req.body.replyToMessageId === "" ? null : Number(req.body.replyToMessageId);
+  if (body.length > 2000 || (!body && !mediaPath)) {
+    return res.status(400).json({ error: "Write a message or attach a file (maximum 2000 characters)." });
   }
-  const result = db.prepare("INSERT INTO group_messages (group_id, sender_id, body) VALUES (?, ?, ?)").run(groupId, req.auth.userId, body);
-  const message = db.prepare(`
-    SELECT gm.id, gm.group_id AS groupId, gm.sender_id AS senderId,
-      u.username AS sender, gm.body, gm.created_at AS createdAt
-    FROM group_messages gm JOIN users u ON u.id = gm.sender_id WHERE gm.id = ?
-  `).get(result.lastInsertRowid);
+  if (mediaPath && !/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath)) {
+    return res.status(400).json({ error: "Invalid media file." });
+  }
+  if (mediaPath && !["image", "video", "document", "audio"].includes(mediaType)) {
+    return res.status(400).json({ error: "Invalid media type." });
+  }
+  if (replyToMessageId !== null) {
+    if (!Number.isSafeInteger(replyToMessageId) || !db.prepare("SELECT id FROM group_messages WHERE id = ? AND group_id = ? AND deleted_at IS NULL").get(replyToMessageId, groupId)) {
+      return res.status(400).json({ error: "Reply target is not in this group." });
+    }
+  }
+  if (!body) body = mediaType === "video" ? "[Video]" : mediaType === "audio" ? "[Voice message]" : mediaType === "document" ? "[Document]" : "[Image]";
+  const result = db.prepare(`
+    INSERT INTO group_messages (group_id, sender_id, body, media_path, media_type, reply_to_message_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(groupId, req.auth.userId, body, mediaPath || null, mediaPath ? mediaType : null, replyToMessageId);
+  const message = groupMessageFor(groupId, result.lastInsertRowid, req.auth.userId);
   const io = req.app.get("io");
   if (io) io.to(`group:${groupId}`).emit("group:message", message);
   res.status(201).json({ message });
+});
+
+router.post("/:id/messages/:messageId/reactions", (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  const emoji = String(req.body.emoji || "");
+  const allowed = ["👍","❤️","😂","😮","😢","🙏","🎉","🔥"];
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({error:"Group not found."});
+  if (!Number.isSafeInteger(messageId) || !allowed.includes(emoji)) return res.status(400).json({error:"Choose a supported reaction."});
+  const message = db.prepare("SELECT id FROM group_messages WHERE id = ? AND group_id = ? AND deleted_at IS NULL").get(messageId, groupId);
+  if (!message) return res.status(404).json({error:"Message not found."});
+  const existing = db.prepare("SELECT 1 FROM group_message_reactions WHERE group_message_id = ? AND user_id = ? AND emoji = ?").get(messageId, req.auth.userId, emoji);
+  if (existing) db.prepare("DELETE FROM group_message_reactions WHERE group_message_id = ? AND user_id = ? AND emoji = ?").run(messageId, req.auth.userId, emoji);
+  else db.prepare("INSERT INTO group_message_reactions (group_message_id, user_id, emoji) VALUES (?, ?, ?)").run(messageId, req.auth.userId, emoji);
+  const updated = groupMessageFor(groupId, messageId, req.auth.userId);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
+  res.json({message: updated});
+});
+
+router.patch("/:id/messages/:messageId", (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  const body = String(req.body.body || "").trim();
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({error:"Group not found."});
+  if (!body || body.length > 2000) return res.status(400).json({error:"Message must contain 1–2000 characters."});
+  const msg = db.prepare("SELECT sender_id AS senderId, media_path AS mediaPath, deleted_at AS deletedAt FROM group_messages WHERE id = ? AND group_id = ?").get(messageId, groupId);
+  if (!msg) return res.status(404).json({error:"Message not found."});
+  if (msg.senderId !== req.auth.userId) return res.status(403).json({error:"Only the sender can edit this message."});
+  if (msg.mediaPath || msg.deletedAt) return res.status(400).json({error:"Only active text messages can be edited."});
+  db.prepare("UPDATE group_messages SET body = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?").run(body, messageId);
+  const updated = groupMessageFor(groupId, messageId, req.auth.userId);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
+  res.json({message: updated});
+});
+
+router.delete("/:id/messages/:messageId", (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({error:"Group not found."});
+  const msg = db.prepare("SELECT sender_id AS senderId FROM group_messages WHERE id = ? AND group_id = ?").get(messageId, groupId);
+  if (!msg) return res.status(404).json({error:"Message not found."});
+  if (msg.senderId !== req.auth.userId && !isAdmin(groupId, req.auth.userId)) return res.status(403).json({error:"Only the sender or a group admin can delete this message."});
+  db.prepare("UPDATE group_messages SET body = 'This message was deleted', media_path = NULL, media_type = NULL, deleted_at = CURRENT_TIMESTAMP WHERE id = ?").run(messageId);
+  db.prepare("DELETE FROM group_message_reactions WHERE group_message_id = ?").run(messageId);
+  const updated = groupMessageFor(groupId, messageId, req.auth.userId);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
+  res.json({message: updated});
 });
 
 module.exports = router;
