@@ -1,5 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const QRCode = require("qrcode");
 const db = require("../db");
 
 const router = express.Router();
@@ -38,6 +39,36 @@ function logGroupActivity(groupId, actorId, eventType, subjectUserId = null, det
 }
 
 router.use(authenticate);
+
+// Generate invitation QR images on the server so the browser does not depend on a third-party CDN.
+router.post("/invitation/qr", async (req, res) => {
+  const value = String(req.body.url || "").trim();
+  if (!value || value.length > 2048) return res.status(400).json({ error: "A valid invitation URL is required." });
+  let parsed;
+  try {
+    parsed = new URL(value);
+    const configuredOrigin = process.env.PUBLIC_APP_URL
+      ? new URL(process.env.PUBLIC_APP_URL).origin
+      : `${req.protocol}://${req.get("host")}`;
+    if (!["https:", "http:"].includes(parsed.protocol) || parsed.origin !== configuredOrigin ||
+        !parsed.pathname.includes("/")) {
+      return res.status(400).json({ error: "Only this Waltajjii app's invitation links can be encoded." });
+    }
+  } catch {
+    return res.status(400).json({ error: "The invitation URL is invalid." });
+  }
+  try {
+    const dataUrl = await QRCode.toDataURL(value, {
+      errorCorrectionLevel: "H",
+      width: 240,
+      margin: 2
+    });
+    res.json({ dataUrl });
+  } catch (error) {
+    console.error("Invitation QR generation failed:", error.message);
+    res.status(500).json({ error: "The QR code could not be generated. You can still use the invitation link." });
+  }
+});
 
 // List only groups the signed-in user belongs to.
 router.get("/", (req, res) => {
