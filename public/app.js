@@ -2087,8 +2087,16 @@ function socialUserCard(user, mode) {
   identity.appendChild(socialElement("strong", "", user.fullName || "Waltajjii member"));
   const professional = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
   if (professional) identity.appendChild(socialElement("div", "social-muted", professional));
-  if (user.bio) identity.appendChild(socialElement("div", "social-muted", user.bio));
   head.append(avatar, identity);
+  const privateDetails = socialElement("details", "profile-private-details");
+  privateDetails.appendChild(socialElement("summary", "", "View profile details"));
+  privateDetails.appendChild(socialElement("div", "social-muted", "Username: @" + (user.username || "")));
+  if (user.bio) privateDetails.appendChild(socialElement("div", "social-muted", user.bio));
+  if (user.department) privateDetails.appendChild(socialElement("div", "social-muted", "Department: " + user.department));
+  if (user.location) privateDetails.appendChild(socialElement("div", "social-muted", "Location: " + user.location));
+  if (user.website) privateDetails.appendChild(socialElement("div", "social-muted", "Website: " + user.website));
+  card.appendChild(head);
+  if (privateDetails.childNodes.length > 1) card.appendChild(privateDetails);
   card.appendChild(head);
 
   if (mode === "discover") {
@@ -2172,6 +2180,11 @@ async function loadRequests() {
     data.incoming.forEach(request => {
       const card = socialElement("article", "social-card");
       card.appendChild(socialElement("strong", "", request.fullName || "Waltajjii member"));
+      const requestDetails = socialElement("details", "profile-private-details");
+      requestDetails.appendChild(socialElement("summary", "", "View profile details"));
+      requestDetails.appendChild(socialElement("div", "social-muted", "Username: @" + (request.username || "")));
+      if (request.bio) requestDetails.appendChild(socialElement("div", "social-muted", request.bio));
+      card.appendChild(requestDetails);
       const actions = socialElement("div", "social-actions");
       ["accept", "decline"].forEach(action => {
         const button = socialElement("button", "", action === "accept" ? "Accept" : "Decline");
@@ -2341,7 +2354,7 @@ async function loadNotifications() {
     }
     data.notifications.forEach(item => {
       const row = socialElement("article", "social-card");
-      row.appendChild(socialElement("strong", "", item.actorUsername || "Waltajjii"));
+      row.appendChild(socialElement("strong", "", item.actorFullName || "Waltajjii"));
       row.appendChild(socialElement("span", "", " " + item.message));
       row.appendChild(socialElement("div", "social-muted", item.createdAt + (item.isRead ? "" : " · New")));
       host.appendChild(row);
