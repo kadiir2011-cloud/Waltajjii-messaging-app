@@ -79,9 +79,6 @@
 
     socket.on("presence:snapshot", () => renderGroupActivity());
     socket.on("presence:update", () => renderGroupActivity());
-    socket.on("group:members:updated", data => {
-      if (data && String(data.groupId) === String(activeGroupId)) loadGroupMembers(activeGroupId);
-    });
   };
 
   function stopGroupTyping() {
