@@ -1444,6 +1444,12 @@ async function loadGroupMembers(groupId) {
       list.appendChild(item);
     });
     groupMembersBox.appendChild(list);
+    if (data.memberListRestricted) {
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = "The administrator has limited the member list to group admins.";
+      groupMembersBox.appendChild(note);
+    }
   } catch (error) {
     groupMembersBox.textContent = error.message;
   }
@@ -2737,7 +2743,7 @@ async function processGroupInvitationLink() {
       const result = await api("/api/groups/invitation/" + encodeURIComponent(inviteToken) + "/join", { method: "POST" });
       overlay.remove();
       await loadGroups();
-      if (result.groupId) {
+      if (result.groupId && !result.pending) {
         groupSelect.value = String(result.groupId);
         await openSelectedGroup();
       }
@@ -2785,10 +2791,10 @@ async function loadGroupDetails(groupId, showPanel = true) {
   const details = data.details;
   document.getElementById("group-description-input").value = details.description || "";
   document.getElementById("group-rules-input").value = details.rules || "";
-  document.getElementById("group-visibility-select").value = details.visibility || "private";
+  document.getElementById("group-member-list-visibility").value = details.memberListVisibility || "members";
   document.getElementById("group-approval-required").checked = Boolean(details.approvalRequired);
   const canEdit = Boolean(activeGroupCanManage);
-  ["group-description-input","group-rules-input","group-visibility-select","group-approval-required"].forEach(id => {
+  ["group-description-input","group-rules-input","group-member-list-visibility","group-approval-required"].forEach(id => {
     document.getElementById(id).disabled = !canEdit;
   });
   document.getElementById("save-group-settings-button").hidden = !canEdit;
@@ -2815,7 +2821,7 @@ document.getElementById("save-group-settings-button").addEventListener("click", 
       body: JSON.stringify({
         description: document.getElementById("group-description-input").value,
         rules: document.getElementById("group-rules-input").value,
-        visibility: document.getElementById("group-visibility-select").value,
+        memberListVisibility: document.getElementById("group-member-list-visibility").value,
         approvalRequired: document.getElementById("group-approval-required").checked
       })
     });
