@@ -113,7 +113,8 @@ function authenticateProfile(req, res, next) {
 // Retrieve the logged-in user's profile.
 router.get("/profile", authenticateProfile, (req, res) => {
   const user = db.prepare(`
-    SELECT id, username, bio,
+    SELECT id, username, full_name AS fullName, bio,
+           profile_background AS profileBackground,
            professional_title AS professionalTitle,
            organization, department, location, website, profile_mode AS profileMode,
            avatar_path AS avatarPath
@@ -127,6 +128,8 @@ router.get("/profile", authenticateProfile, (req, res) => {
 
 // Update the logged-in user's brief bio.
 router.patch("/profile", authenticateProfile, (req, res) => {
+  const fullName = String(req.body.fullName || "").trim();
+  const profileBackground = String(req.body.profileBackground || "mist").trim();
   const bio = String(req.body.bio || "").trim();
   const professionalTitle = String(req.body.professionalTitle || "").trim();
   const organization = String(req.body.organization || "").trim();
@@ -135,10 +138,13 @@ router.patch("/profile", authenticateProfile, (req, res) => {
   const website = String(req.body.website || "").trim();
   const profileMode = String(req.body.profileMode || "both").trim();
 
-  if (bio.length > 160 || professionalTitle.length > 100 ||
+  if (fullName.length > 120 || bio.length > 160 || professionalTitle.length > 100 ||
       organization.length > 120 || department.length > 120 ||
       location.length > 100 || website.length > 200) {
     return res.status(400).json({ error: "One or more profile fields exceed their character limits." });
+  }
+  if (!["mist", "ocean", "lavender", "sunset", "forest", "slate"].includes(profileBackground)) {
+    return res.status(400).json({ error: "Choose one of the available profile backgrounds." });
   }
   if (!["personal", "professional", "both"].includes(profileMode)) {
     return res.status(400).json({ error: "Invalid profile display preference." });
@@ -147,11 +153,11 @@ router.patch("/profile", authenticateProfile, (req, res) => {
     return res.status(400).json({ error: "Website must begin with http:// or https://." });
   }
 
-  db.prepare(`UPDATE users SET bio = ?, professional_title = ?, organization = ?,
+  db.prepare(`UPDATE users SET full_name = ?, profile_background = ?, bio = ?, professional_title = ?, organization = ?,
     department = ?, location = ?, website = ?, profile_mode = ? WHERE id = ?`)
-    .run(bio, professionalTitle, organization, department, location, website, profileMode, req.auth.userId);
+    .run(fullName, profileBackground, bio, professionalTitle, organization, department, location, website, profileMode, req.auth.userId);
 
-  res.json({ message: "Profile updated successfully.", bio, professionalTitle,
+  res.json({ message: "Profile updated successfully.", fullName, profileBackground, bio, professionalTitle,
     organization, department, location, website, profileMode });
 });
 module.exports = router;
