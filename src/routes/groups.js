@@ -779,9 +779,8 @@ router.put("/:id/polls/:pollId/vote", (req, res) => {
     const placeholders = optionIds.map(() => "?").join(",");
     const valid = db.prepare("SELECT id FROM group_poll_options WHERE poll_id = ? AND id IN (" + placeholders + ")").all(pollId, ...optionIds);
     if (valid.length !== optionIds.length) return { error: "One or more selected options do not belong to this poll." };
-    if (!poll.multipleChoice) {
-      db.prepare("DELETE FROM group_poll_votes WHERE poll_id = ? AND user_id = ?").run(pollId, req.auth.userId);
-    }
+    // Replace the member's previous selection so both single- and multiple-choice votes can be edited.
+    db.prepare("DELETE FROM group_poll_votes WHERE poll_id = ? AND user_id = ?").run(pollId, req.auth.userId);
     const insert = db.prepare("INSERT OR IGNORE INTO group_poll_votes (poll_id, option_id, user_id) VALUES (?, ?, ?)");
     optionIds.forEach(optionId => insert.run(pollId, optionId, req.auth.userId));
     return { ok: true };
