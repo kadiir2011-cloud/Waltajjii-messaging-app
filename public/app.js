@@ -2798,7 +2798,7 @@ async function loadGroupDetails(groupId, showPanel = true) {
     document.getElementById(id).disabled = !canEdit;
   });
   document.getElementById("save-group-settings-button").hidden = !canEdit;
-  document.getElementById("group-settings-button").hidden = !canEdit;
+  document.getElementById("group-settings-button").hidden = false;
   document.getElementById("group-requests-button").hidden = !canEdit;
   if (showPanel) showGroupGovernanceView("settings");
 }
