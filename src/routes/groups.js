@@ -523,46 +523,46 @@ router.post("/invitation/:token/join", (req, res) => {
   const token = req.params.token;
   if (!validInvitationToken(token)) return res.status(404).json({ error: "Invitation not found." });
   const join = db.transaction(() => {
-    const invite = db.prepare(`
-      SELECT id, group_id AS groupId, expires_at AS expiresAt, revoked_at AS revokedAt,
-        use_limit AS useLimit, use_count AS useCount
-      FROM group_invitations WHERE token_hash = ?
-    `).get(invitationHash(token));
+    const invite = db.prepare("SELECT i.id, i.group_id AS groupId, i.expires_at AS expiresAt, i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount, g.approval_required AS approvalRequired FROM group_invitations i JOIN groups g ON g.id = i.group_id WHERE i.token_hash = ?").get(invitationHash(token));
     if (!invite || invite.revokedAt || Date.parse(invite.expiresAt) <= Date.now() ||
         (invite.useLimit !== null && invite.useCount >= invite.useLimit)) {
       return { error: "This invitation is expired, revoked, or has reached its use limit." };
     }
-    const alreadyMember = membership(invite.groupId, req.auth.userId);
-    if (alreadyMember) return { alreadyMember: true, groupId: invite.groupId };
+    if (membership(invite.groupId, req.auth.userId)) return { alreadyMember: true, groupId: invite.groupId };
     const count = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?").get(invite.groupId).n;
     if (count >= 100) return { error: "This group has reached 100 members." };
-    const changed = db.prepare(`
-      UPDATE group_invitations SET use_count = use_count + 1
-      WHERE id = ? AND revoked_at IS NULL AND datetime(expires_at) > datetime('now')
-        AND (use_limit IS NULL OR use_count < use_limit)
-    `).run(invite.id);
+    if (invite.approvalRequired) {
+      const pending = db.prepare("SELECT id FROM group_join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'").get(invite.groupId, req.auth.userId);
+      if (pending) return { pending: true, requestId: pending.id, groupId: invite.groupId };
+      const created = db.prepare("INSERT INTO group_join_requests (group_id, user_id, invitation_id) VALUES (?, ?, ?)").run(invite.groupId, req.auth.userId, invite.id);
+      db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'requested')").run(invite.id, req.auth.userId);
+      logGroupActivity(invite.groupId, req.auth.userId, "join_requested", req.auth.userId);
+      return { pending: true, requestId: created.lastInsertRowid, groupId: invite.groupId };
+    }
+    const changed = db.prepare("UPDATE group_invitations SET use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL AND datetime(expires_at) > datetime('now') AND (use_limit IS NULL OR use_count < use_limit)").run(invite.id);
     if (!changed.changes) return { error: "This invitation is no longer available." };
-    db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')")
-      .run(invite.groupId, req.auth.userId);
-    db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'joined')")
-      .run(invite.id, req.auth.userId);
+    db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')").run(invite.groupId, req.auth.userId);
+    db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'joined')").run(invite.id, req.auth.userId);
+    logGroupActivity(invite.groupId, req.auth.userId, "member_joined", req.auth.userId);
     return { groupId: invite.groupId };
   });
   try {
     const result = join();
     if (result.error) return res.status(410).json({ error: result.error });
-    if (!result.alreadyMember) {
-      const io = req.app.get("io");
-      if (io) {
-        io.in(`user:${req.auth.userId}`).socketsJoin(`group:${result.groupId}`);
-        io.to(`user:${req.auth.userId}`).emit("groups:updated", { groupId: result.groupId });
-        io.to(`group:${result.groupId}`).emit("group:members:updated", { groupId: result.groupId });
-      }
+    const io = req.app.get("io");
+    if (result.pending) {
+      if (io) io.to("group:" + result.groupId).emit("group:join-request", { groupId: result.groupId, requestId: result.requestId });
+      return res.status(202).json({ message: "Your request has been sent to the group admins for approval.", pending: true, groupId: result.groupId });
     }
-    res.json({ message: result.alreadyMember ? "You are already a member of this group." : "You joined the group.", groupId: result.groupId });
+    if (!result.alreadyMember && io) {
+      io.in("user:" + req.auth.userId).socketsJoin("group:" + result.groupId);
+      io.to("user:" + req.auth.userId).emit("groups:updated", { groupId: result.groupId });
+      io.to("group:" + result.groupId).emit("group:members:updated", { groupId: result.groupId });
+    }
+    res.json({ message: result.alreadyMember ? "You are already a member of this group." : "You joined the group.", groupId: result.groupId, alreadyMember: Boolean(result.alreadyMember) });
   } catch (error) {
     if (error.code === "SQLITE_CONSTRAINT_PRIMARYKEY" || error.code === "SQLITE_CONSTRAINT_UNIQUE") {
-      return res.status(409).json({ error: "You are already a member of this group." });
+      return res.status(409).json({ error: "You are already a member or have a pending request." });
     }
     throw error;
   }
