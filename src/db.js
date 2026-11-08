@@ -340,7 +340,8 @@ for (const [column, definition] of [
   ["description", "TEXT NOT NULL DEFAULT ''"],
   ["rules", "TEXT NOT NULL DEFAULT ''"],
   ["visibility", "TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','public'))"],
-  ["approval_required", "INTEGER NOT NULL DEFAULT 0 CHECK(approval_required IN (0,1))"]
+  ["approval_required", "INTEGER NOT NULL DEFAULT 0 CHECK(approval_required IN (0,1))"],
+  ["member_list_visibility", "TEXT NOT NULL DEFAULT 'members' CHECK(member_list_visibility IN ('members','admins'))"]
 ]) {
   if (!phase25GroupColumns.includes(column)) db.exec("ALTER TABLE groups ADD COLUMN " + column + " " + definition);
 }
