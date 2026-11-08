@@ -133,8 +133,6 @@ function stopTypingIndicator() {
           loadMyProfile();
       authPanel.style.display = "none";
       chatPanel.style.display = "block";
-      document.getElementById("welcome-user").textContent =
-        "Logged in as " + username;
       statusBox.textContent = "Choose a recipient to begin.";
       loadUsers();
       loadGroups();
