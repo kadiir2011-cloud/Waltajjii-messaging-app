@@ -1428,6 +1428,8 @@ async function loadGroupMembers(groupId) {
   try {
     const data = await api(`/api/groups/${groupId}/members`);
     activeGroupCanManage = Boolean(data.canManage);
+    const announcementOption = document.querySelector(".group-announcement-option");
+    if (announcementOption) announcementOption.hidden = !activeGroupCanManage;
     groupMembersBox.replaceChildren();
     const heading = document.createElement("strong");
     heading.textContent = `Members (${data.members.length})`;
