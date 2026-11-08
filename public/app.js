@@ -2740,7 +2740,7 @@ async function processGroupInvitationLink() {
         groupSelect.value = String(result.groupId);
         await openSelectedGroup();
       }
-      groupStatus.textContent = result.alreadyMember ? "You are already a member of this group." : "You joined the group successfully.";
+      groupStatus.textContent = result.message || "You joined the group successfully.";
       params.delete("groupInvite");
       const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
       window.history.replaceState({}, "", cleanUrl);
