@@ -1559,6 +1559,7 @@ async function openSelectedGroup() {
     const data = await api(`/api/groups/${id}/messages`);
     await loadGroups();
     await loadGroupMembers(id);
+    await loadGroupDetails(id, false);
     renderGroupMessages(data.messages || []);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
@@ -2762,3 +2763,169 @@ async function processGroupInvitationLink() {
     join.hidden = true;
   }
 }
+
+
+// Phase 25B-D: group settings, approval queue, and membership activity UI.
+const groupGovernancePanel = document.getElementById("group-governance-panel");
+const groupSettingsFields = document.getElementById("group-settings-fields");
+const groupRequestsList = document.getElementById("group-join-requests-list");
+const groupActivityList = document.getElementById("group-activity-list");
+const groupGovernanceStatus = document.getElementById("group-governance-status");
+
+function showGroupGovernanceView(view) {
+  if (!groupGovernancePanel) return;
+  groupGovernancePanel.hidden = false;
+  groupSettingsFields.hidden = view !== "settings";
+  groupRequestsList.hidden = view !== "requests";
+  groupActivityList.hidden = view !== "activity";
+}
+
+async function loadGroupDetails(groupId, showPanel = true) {
+  const data = await api("/api/groups/" + groupId + "/details");
+  const details = data.details;
+  document.getElementById("group-description-input").value = details.description || "";
+  document.getElementById("group-rules-input").value = details.rules || "";
+  document.getElementById("group-visibility-select").value = details.visibility || "private";
+  document.getElementById("group-approval-required").checked = Boolean(details.approvalRequired);
+  const canEdit = Boolean(activeGroupCanManage);
+  ["group-description-input","group-rules-input","group-visibility-select","group-approval-required"].forEach(id => {
+    document.getElementById(id).disabled = !canEdit;
+  });
+  document.getElementById("save-group-settings-button").hidden = !canEdit;
+  document.getElementById("group-settings-button").hidden = !canEdit;
+  document.getElementById("group-requests-button").hidden = !canEdit;
+  if (showPanel) showGroupGovernanceView("settings");
+}
+
+document.getElementById("group-settings-button").addEventListener("click", async () => {
+  if (!activeGroupId) { groupStatus.textContent = "Open a group first."; return; }
+  try {
+    await loadGroupDetails(activeGroupId, true);
+    groupGovernanceStatus.textContent = activeGroupCanManage ? "Only group admins can change these settings." : "Group details are read-only.";
+  } catch (error) { groupStatus.textContent = error.message; }
+});
+
+document.getElementById("save-group-settings-button").addEventListener("click", async () => {
+  if (!activeGroupId || !activeGroupCanManage) return;
+  const button = document.getElementById("save-group-settings-button");
+  button.disabled = true;
+  try {
+    const result = await api("/api/groups/" + activeGroupId + "/details", {
+      method: "PATCH",
+      body: JSON.stringify({
+        description: document.getElementById("group-description-input").value,
+        rules: document.getElementById("group-rules-input").value,
+        visibility: document.getElementById("group-visibility-select").value,
+        approvalRequired: document.getElementById("group-approval-required").checked
+      })
+    });
+    groupGovernanceStatus.textContent = result.message || "Group settings saved.";
+  } catch (error) { groupGovernanceStatus.textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+document.getElementById("group-requests-button").addEventListener("click", async () => {
+  if (!activeGroupId || !activeGroupCanManage) return;
+  showGroupGovernanceView("requests");
+  groupRequestsList.replaceChildren();
+  groupGovernanceStatus.textContent = "Loading pending requests…";
+  try {
+    const data = await api("/api/groups/" + activeGroupId + "/join-requests");
+    if (!data.requests.length) {
+      groupRequestsList.textContent = "There are no pending join requests.";
+    } else {
+      data.requests.forEach(request => {
+        const row = document.createElement("div");
+        row.className = "social-card";
+        const name = document.createElement("strong");
+        name.textContent = request.username + " · requested " + new Date(request.createdAt).toLocaleString();
+        const approve = document.createElement("button");
+        approve.type = "button";
+        approve.textContent = "Approve";
+        const reject = document.createElement("button");
+        reject.type = "button";
+        reject.textContent = "Reject";
+        const review = async decision => {
+          approve.disabled = true; reject.disabled = true;
+          try {
+            const result = await api("/api/groups/" + activeGroupId + "/join-requests/" + request.id + "/review", {
+              method: "POST", body: JSON.stringify({ decision })
+            });
+            groupGovernanceStatus.textContent = result.message;
+            await loadGroupMembers(activeGroupId);
+            await renderPendingGroupRequests(activeGroupId);
+          } catch (error) {
+            groupGovernanceStatus.textContent = error.message;
+            approve.disabled = false; reject.disabled = false;
+          }
+        };
+        approve.addEventListener("click", () => review("approve"));
+        reject.addEventListener("click", () => review("reject"));
+        row.append(name, document.createElement("br"), approve, reject);
+        groupRequestsList.appendChild(row);
+      });
+    }
+    groupGovernanceStatus.textContent = "Pending requests: " + data.requests.length;
+  } catch (error) { groupGovernanceStatus.textContent = error.message; }
+});
+
+async function renderPendingGroupRequests(groupId) {
+  const data = await api("/api/groups/" + groupId + "/join-requests");
+  groupRequestsList.replaceChildren();
+  if (!data.requests.length) {
+    groupRequestsList.textContent = "There are no pending join requests.";
+    return;
+  }
+  data.requests.forEach(request => {
+    const row = document.createElement("div");
+    row.className = "social-card";
+    const name = document.createElement("strong");
+    name.textContent = request.username + " · requested " + new Date(request.createdAt).toLocaleString();
+    const approve = document.createElement("button");
+    approve.type = "button"; approve.textContent = "Approve";
+    const reject = document.createElement("button");
+    reject.type = "button"; reject.textContent = "Reject";
+    const review = async decision => {
+      approve.disabled = true; reject.disabled = true;
+      try {
+        const result = await api("/api/groups/" + groupId + "/join-requests/" + request.id + "/review", {
+          method: "POST", body: JSON.stringify({ decision })
+        });
+        groupGovernanceStatus.textContent = result.message;
+        await loadGroupMembers(groupId);
+        await renderPendingGroupRequests(groupId);
+      } catch (error) { groupGovernanceStatus.textContent = error.message; approve.disabled = false; reject.disabled = false; }
+    };
+    approve.addEventListener("click", () => review("approve"));
+    reject.addEventListener("click", () => review("reject"));
+    row.append(name, document.createElement("br"), approve, reject);
+    groupRequestsList.appendChild(row);
+  });
+}
+
+document.getElementById("group-activity-button").addEventListener("click", async () => {
+  if (!activeGroupId) { groupStatus.textContent = "Open a group first."; return; }
+  showGroupGovernanceView("activity");
+  groupActivityList.textContent = "Loading group activity…";
+  try {
+    const data = await api("/api/groups/" + activeGroupId + "/activity?limit=30");
+    groupActivityList.replaceChildren();
+    const labels = {
+      group_created: "created the group", member_added: "added a member", member_joined: "joined the group",
+      member_left: "left the group", member_removed: "removed a member", role_changed: "changed a member role",
+      invitation_created: "created an invitation", invitation_revoked: "revoked an invitation",
+      join_requested: "requested to join", join_approved: "approved a join request",
+      join_rejected: "rejected a join request", group_settings_updated: "updated group settings"
+    };
+    if (!data.events.length) groupActivityList.textContent = "No group activity recorded yet.";
+    data.events.forEach(event => {
+      const row = document.createElement("p");
+      const actor = event.actorUsername || "A former member";
+      const subject = event.subjectUsername && event.subjectUsername !== event.actorUsername ? " · " + event.subjectUsername : "";
+      row.textContent = actor + " " + (labels[event.eventType] || event.eventType.replaceAll("_", " ")) + subject +
+        (event.details ? " (" + event.details + ")" : "") + " · " + new Date(event.createdAt).toLocaleString();
+      groupActivityList.appendChild(row);
+    });
+    groupGovernanceStatus.textContent = "Showing the latest " + data.events.length + " events.";
+  } catch (error) { groupGovernanceStatus.textContent = error.message; }
+});
