@@ -406,4 +406,154 @@ router.delete("/:id/messages/:messageId/pin", (req, res) => {
   res.json({ message: updated });
 });
 
+
+/* Phase 25A: secure, expiring and revocable group invitation links. */
+const crypto = require("crypto");
+
+function invitationHash(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function validInvitationToken(token) {
+  return typeof token === "string" && /^[A-Za-z0-9_-]{40,100}$/.test(token);
+}
+
+function invitationUrl(req, token) {
+  const configuredBase = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+  const base = configuredBase || `${req.protocol}://${req.get("host")}`;
+  return `${base}/?groupInvite=${encodeURIComponent(token)}`;
+}
+
+// Create an invitation. The raw token is returned once and is never stored.
+router.post("/:id/invitations", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can create invitation links." });
+  }
+  const duration = Number(req.body.expiresInHours || 24);
+  const allowedDurations = [1, 24, 168, 720];
+  if (!allowedDurations.includes(duration)) {
+    return res.status(400).json({ error: "Choose an expiry of 1 hour, 1 day, 7 days, or 30 days." });
+  }
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = invitationHash(rawToken);
+  const expiresAt = new Date(Date.now() + duration * 60 * 60 * 1000).toISOString();
+  const useLimit = req.body.useLimit == null || req.body.useLimit === "" ? null : Number(req.body.useLimit);
+  if (useLimit !== null && (!Number.isSafeInteger(useLimit) || useLimit < 1 || useLimit > 1000)) {
+    return res.status(400).json({ error: "Use limit must be between 1 and 1000." });
+  }
+  const result = db.prepare(`
+    INSERT INTO group_invitations (group_id, token_hash, created_by, expires_at, use_limit)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(groupId, tokenHash, req.auth.userId, expiresAt, useLimit);
+  res.status(201).json({
+    invitation: {
+      id: result.lastInsertRowid,
+      url: invitationUrl(req, rawToken),
+      expiresAt,
+      useLimit
+    }
+  });
+});
+
+// List active and historical invitations for admins; never return token hashes.
+router.get("/:id/invitations", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can view invitation links." });
+  }
+  const invitations = db.prepare(`
+    SELECT i.id, i.created_at AS createdAt, i.expires_at AS expiresAt,
+      i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount,
+      u.username AS createdBy
+    FROM group_invitations i JOIN users u ON u.id = i.created_by
+    WHERE i.group_id = ? ORDER BY i.id DESC LIMIT 100
+  `).all(groupId);
+  res.json({ invitations });
+});
+
+// Revoke an invitation immediately.
+router.delete("/:id/invitations/:invitationId", (req, res) => {
+  const groupId = Number(req.params.id);
+  const invitationId = Number(req.params.invitationId);
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(invitationId) ||
+      !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can revoke invitation links." });
+  }
+  const result = db.prepare(`
+    UPDATE group_invitations SET revoked_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND group_id = ? AND revoked_at IS NULL
+  `).run(invitationId, groupId);
+  if (!result.changes) return res.status(404).json({ error: "Active invitation not found." });
+  res.json({ message: "Invitation revoked." });
+});
+
+// Safe preview: reveal only group name and basic invitation validity, never group content.
+router.get("/invitation/:token", (req, res) => {
+  const token = req.params.token;
+  if (!validInvitationToken(token)) return res.status(404).json({ error: "Invitation not found." });
+  const invitation = db.prepare(`
+    SELECT i.id, i.group_id AS groupId, i.expires_at AS expiresAt,
+      i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount,
+      g.name AS groupName
+    FROM group_invitations i JOIN groups g ON g.id = i.group_id
+    WHERE i.token_hash = ?
+  `).get(invitationHash(token));
+  if (!invitation || invitation.revokedAt || Date.parse(invitation.expiresAt) <= Date.now() ||
+      (invitation.useLimit !== null && invitation.useCount >= invitation.useLimit)) {
+    return res.status(410).json({ error: "This invitation is expired, revoked, or has reached its use limit." });
+  }
+  res.json({ invitation: { groupName: invitation.groupName, expiresAt: invitation.expiresAt } });
+});
+
+// Join through a valid invite. Membership and use count are committed atomically.
+router.post("/invitation/:token/join", (req, res) => {
+  const token = req.params.token;
+  if (!validInvitationToken(token)) return res.status(404).json({ error: "Invitation not found." });
+  const join = db.transaction(() => {
+    const invite = db.prepare(`
+      SELECT id, group_id AS groupId, expires_at AS expiresAt, revoked_at AS revokedAt,
+        use_limit AS useLimit, use_count AS useCount
+      FROM group_invitations WHERE token_hash = ?
+    `).get(invitationHash(token));
+    if (!invite || invite.revokedAt || Date.parse(invite.expiresAt) <= Date.now() ||
+        (invite.useLimit !== null && invite.useCount >= invite.useLimit)) {
+      return { error: "This invitation is expired, revoked, or has reached its use limit." };
+    }
+    const alreadyMember = membership(invite.groupId, req.auth.userId);
+    if (alreadyMember) return { alreadyMember: true, groupId: invite.groupId };
+    const count = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?").get(invite.groupId).n;
+    if (count >= 100) return { error: "This group has reached 100 members." };
+    const changed = db.prepare(`
+      UPDATE group_invitations SET use_count = use_count + 1
+      WHERE id = ? AND revoked_at IS NULL AND datetime(expires_at) > datetime('now')
+        AND (use_limit IS NULL OR use_count < use_limit)
+    `).run(invite.id);
+    if (!changed.changes) return { error: "This invitation is no longer available." };
+    db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')")
+      .run(invite.groupId, req.auth.userId);
+    db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'joined')")
+      .run(invite.id, req.auth.userId);
+    return { groupId: invite.groupId };
+  });
+  try {
+    const result = join();
+    if (result.error) return res.status(410).json({ error: result.error });
+    if (!result.alreadyMember) {
+      const io = req.app.get("io");
+      if (io) {
+        io.in(`user:${req.auth.userId}`).socketsJoin(`group:${result.groupId}`);
+        io.to(`user:${req.auth.userId}`).emit("groups:updated", { groupId: result.groupId });
+        io.to(`group:${result.groupId}`).emit("group:members:updated", { groupId: result.groupId });
+      }
+    }
+    res.json({ message: result.alreadyMember ? "You are already a member of this group." : "You joined the group.", groupId: result.groupId });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_PRIMARYKEY" || error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      return res.status(409).json({ error: "You are already a member of this group." });
+    }
+    throw error;
+  }
+});
+
 module.exports = router;
