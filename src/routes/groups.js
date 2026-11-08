@@ -209,6 +209,7 @@ router.get("/:id/messages", (req, res) => {
         AND datetime(gm.created_at) >= datetime(member.joined_at)
         AND member.user_id = ?
     )
+      AND read_at IS NULL
   `).run(req.auth.userId, groupId, req.auth.userId, req.auth.userId);
   if (readUpdate.changes) {
     const io = req.app.get("io");
@@ -272,7 +273,7 @@ router.post("/:id/messages/:messageId/delivered", (req, res) => {
   const updated = db.prepare(`
     UPDATE group_message_receipts
     SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
-    WHERE group_message_id = ? AND user_id = ?
+    WHERE group_message_id = ? AND user_id = ? AND delivered_at IS NULL
   `).run(messageId, req.auth.userId);
   if (updated.changes) {
     const io = req.app.get("io");
