@@ -32,6 +32,11 @@ function isAdmin(groupId, userId) {
   return member && member.role === "admin";
 }
 
+function logGroupActivity(groupId, actorId, eventType, subjectUserId = null, details = "") {
+  db.prepare("INSERT INTO group_activity (group_id, actor_id, subject_user_id, event_type, details) VALUES (?, ?, ?, ?, ?)")
+    .run(groupId, actorId || null, subjectUserId, eventType, String(details).slice(0, 240));
+}
+
 router.use(authenticate);
 
 // List only groups the signed-in user belongs to.
@@ -84,6 +89,7 @@ router.post("/", (req, res) => {
   });
 
   const groupId = create();
+  logGroupActivity(groupId, req.auth.userId, "group_created");
   const io = req.app.get("io");
   if (io) {
     const memberIds = [req.auth.userId, ...users.map(user => user.id)];
@@ -127,6 +133,7 @@ router.post("/:id/members", (req, res) => {
     }
     throw e;
   }
+  logGroupActivity(groupId, req.auth.userId, "member_added", user.id);
   const io = req.app.get("io");
   if (io) {
     io.in(`user:${user.id}`).socketsJoin(`group:${groupId}`);
@@ -153,6 +160,7 @@ router.patch("/:id/members/:userId/role", (req, res) => {
     if (adminCount <= 1) return res.status(400).json({ error: "A group must always have at least one admin." });
   }
   db.prepare("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?").run(role, groupId, userId);
+  logGroupActivity(groupId, req.auth.userId, "role_changed", userId, role);
   const io = req.app.get("io");
   if (io) io.to(`group:${groupId}`).emit("group:members:updated", { groupId, roleChanged: true });
   res.json({ message: role === "admin" ? "Member promoted to admin." : "Admin role removed." });
@@ -168,6 +176,7 @@ router.delete("/:id/leave", (req, res) => {
     if (otherAdmins === 0) return res.status(400).json({ error: "Assign another admin before leaving this group." });
   }
   db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, req.auth.userId);
+  logGroupActivity(groupId, req.auth.userId, "member_left", req.auth.userId);
   const io = req.app.get("io");
   if (io) {
     io.to(`group:${groupId}`).emit("group:members:updated", { groupId, left: req.auth.userId });
@@ -188,6 +197,7 @@ router.delete("/:id/members/:userId", (req, res) => {
   }
   const result = db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, userId);
   if (!result.changes) return res.status(404).json({ error: "Member not found." });
+  logGroupActivity(groupId, req.auth.userId, "member_removed", userId);
   const io = req.app.get("io");
   if (io) {
     io.to(`group:${groupId}`).emit("group:members:updated", { groupId });
@@ -446,6 +456,7 @@ router.post("/:id/invitations", (req, res) => {
     INSERT INTO group_invitations (group_id, token_hash, created_by, expires_at, use_limit)
     VALUES (?, ?, ?, ?, ?)
   `).run(groupId, tokenHash, req.auth.userId, expiresAt, useLimit);
+  logGroupActivity(groupId, req.auth.userId, "invitation_created");
   res.status(201).json({
     invitation: {
       id: result.lastInsertRowid,
@@ -485,6 +496,7 @@ router.delete("/:id/invitations/:invitationId", (req, res) => {
     WHERE id = ? AND group_id = ? AND revoked_at IS NULL
   `).run(invitationId, groupId);
   if (!result.changes) return res.status(404).json({ error: "Active invitation not found." });
+  logGroupActivity(groupId, req.auth.userId, "invitation_revoked");
   res.json({ message: "Invitation revoked." });
 });
 
