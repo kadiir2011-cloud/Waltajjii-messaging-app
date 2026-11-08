@@ -344,7 +344,7 @@ for (const [column, definition] of [
 ]) {
   if (!phase25GroupColumns.includes(column)) db.exec("ALTER TABLE groups ADD COLUMN " + column + " " + definition);
 }
-db.exec("
+db.exec(`
   CREATE TABLE IF NOT EXISTS group_join_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     group_id INTEGER NOT NULL,
@@ -376,4 +376,4 @@ db.exec("
     FOREIGN KEY (subject_user_id) REFERENCES users(id) ON DELETE SET NULL
   );
   CREATE INDEX IF NOT EXISTS idx_group_activity_group ON group_activity(group_id, id DESC);
-");
+`);
