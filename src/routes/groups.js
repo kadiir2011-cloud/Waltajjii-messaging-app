@@ -703,4 +703,111 @@ router.get("/:id/activity", (req, res) => {
   res.json({ events, nextBefore: events.length === limit ? events[events.length - 1].id : null });
 });
 
+
+/* Phase 26: group polls. All poll data is restricted to current group members. */
+function pollPayload(groupId, userId) {
+  const polls = db.prepare(`
+    SELECT p.id, p.group_id AS groupId, p.creator_id AS creatorId,
+      u.username AS creatorUsername, p.question,
+      p.multiple_choice AS multipleChoice, p.status,
+      p.created_at AS createdAt, p.closed_at AS closedAt,
+      (SELECT COUNT(DISTINCT v.user_id) FROM group_poll_votes v WHERE v.poll_id = p.id) AS voterCount
+    FROM group_polls p JOIN users u ON u.id = p.creator_id
+    WHERE p.group_id = ? ORDER BY p.id DESC LIMIT 50
+  `).all(groupId);
+  const optionsQuery = db.prepare(`
+    SELECT o.id, o.option_text AS text,
+      (SELECT COUNT(*) FROM group_poll_votes v WHERE v.option_id = o.id) AS votes,
+      EXISTS(SELECT 1 FROM group_poll_votes v WHERE v.option_id = o.id AND v.user_id = ?) AS selected
+    FROM group_poll_options o WHERE o.poll_id = ? ORDER BY o.id
+  `);
+  return polls.map(p => ({ ...p, multipleChoice: Boolean(p.multipleChoice),
+    options: optionsQuery.all(userId, p.id).map(o => ({ ...o, selected: Boolean(o.selected) }))
+  }));
+}
+
+router.get("/:id/polls", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !membership(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group members can view polls." });
+  }
+  res.json({ polls: pollPayload(groupId, req.auth.userId) });
+});
+
+router.post("/:id/polls", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !membership(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group members can create polls." });
+  }
+  const question = String(req.body.question || "").trim();
+  const rawOptions = Array.isArray(req.body.options) ? req.body.options : [];
+  const options = rawOptions.map(value => String(value || "").trim());
+  const multipleChoice = Boolean(req.body.multipleChoice);
+  if (question.length < 1 || question.length > 300) return res.status(400).json({ error: "Poll question must be 1–300 characters." });
+  if (options.length < 2 || options.length > 10 || options.some(value => value.length < 1 || value.length > 100)) {
+    return res.status(400).json({ error: "Add 2–10 options, each 1–100 characters." });
+  }
+  const normalized = options.map(value => value.toLocaleLowerCase());
+  if (new Set(normalized).size !== normalized.length) return res.status(400).json({ error: "Poll options must be unique." });
+  const create = db.transaction(() => {
+    const result = db.prepare("INSERT INTO group_polls (group_id, creator_id, question, multiple_choice) VALUES (?, ?, ?, ?)")
+      .run(groupId, req.auth.userId, question, multipleChoice ? 1 : 0);
+    const insertOption = db.prepare("INSERT INTO group_poll_options (poll_id, option_text) VALUES (?, ?)");
+    options.forEach(option => insertOption.run(result.lastInsertRowid, option));
+    logGroupActivity(groupId, req.auth.userId, "poll_created", null, question.slice(0, 100));
+    return result.lastInsertRowid;
+  });
+  const pollId = create();
+  const io = req.app.get("io");
+  if (io) io.to("group:" + groupId).emit("group:polls:updated", { groupId, pollId });
+  res.status(201).json({ poll: pollPayload(groupId, req.auth.userId).find(p => p.id === pollId) });
+});
+
+router.put("/:id/polls/:pollId/vote", (req, res) => {
+  const groupId = Number(req.params.id), pollId = Number(req.params.pollId);
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(pollId) ||
+      !membership(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group members can vote." });
+  const optionIds = Array.isArray(req.body.optionIds) ? [...new Set(req.body.optionIds.map(Number))] : [];
+  if (!optionIds.length || optionIds.length > 10 || optionIds.some(id => !Number.isSafeInteger(id) || id < 1)) {
+    return res.status(400).json({ error: "Select at least one valid poll option." });
+  }
+  const vote = db.transaction(() => {
+    const poll = db.prepare("SELECT id, multiple_choice AS multipleChoice, status FROM group_polls WHERE id = ? AND group_id = ?").get(pollId, groupId);
+    if (!poll) return { error: "Poll not found." };
+    if (poll.status !== "open") return { error: "This poll is closed." };
+    if (!poll.multipleChoice && optionIds.length !== 1) return { error: "Choose only one option for this poll." };
+    const placeholders = optionIds.map(() => "?").join(",");
+    const valid = db.prepare("SELECT id FROM group_poll_options WHERE poll_id = ? AND id IN (" + placeholders + ")").all(pollId, ...optionIds);
+    if (valid.length !== optionIds.length) return { error: "One or more selected options do not belong to this poll." };
+    // Replace the member's previous selection so both single- and multiple-choice votes can be edited.
+    db.prepare("DELETE FROM group_poll_votes WHERE poll_id = ? AND user_id = ?").run(pollId, req.auth.userId);
+    const insert = db.prepare("INSERT OR IGNORE INTO group_poll_votes (poll_id, option_id, user_id) VALUES (?, ?, ?)");
+    optionIds.forEach(optionId => insert.run(pollId, optionId, req.auth.userId));
+    return { ok: true };
+  });
+  const result = vote();
+  if (result.error) return res.status(result.error === "Poll not found." ? 404 : 400).json({ error: result.error });
+  const io = req.app.get("io");
+  if (io) io.to("group:" + groupId).emit("group:polls:updated", { groupId, pollId });
+  res.json({ poll: pollPayload(groupId, req.auth.userId).find(p => p.id === pollId) });
+});
+
+router.post("/:id/polls/:pollId/close", (req, res) => {
+  const groupId = Number(req.params.id), pollId = Number(req.params.pollId);
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(pollId) ||
+      !membership(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group members can close polls." });
+  const poll = db.prepare("SELECT creator_id AS creatorId, status FROM group_polls WHERE id = ? AND group_id = ?").get(pollId, groupId);
+  if (!poll) return res.status(404).json({ error: "Poll not found." });
+  if (poll.creatorId !== req.auth.userId && !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only the poll creator or a group admin can close this poll." });
+  }
+  if (poll.status === "closed") return res.json({ poll: pollPayload(groupId, req.auth.userId).find(p => p.id === pollId) });
+  db.prepare("UPDATE group_polls SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ? WHERE id = ? AND group_id = ? AND status = 'open'")
+    .run(req.auth.userId, pollId, groupId);
+  logGroupActivity(groupId, req.auth.userId, "poll_closed");
+  const io = req.app.get("io");
+  if (io) io.to("group:" + groupId).emit("group:polls:updated", { groupId, pollId });
+  res.json({ poll: pollPayload(groupId, req.auth.userId).find(p => p.id === pollId) });
+});
+
 module.exports = router;

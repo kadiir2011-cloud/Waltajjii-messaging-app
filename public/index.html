@@ -913,6 +913,14 @@
           <div id="group-join-requests-list" hidden></div>
           <div id="group-activity-list" hidden></div>
         </section>
+        <section id="group-polls-panel" class="group-members" aria-label="Group polls">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <h3>Polls and voting</h3>
+            <button type="button" id="create-group-poll-button">Create poll</button>
+          </div>
+          <p id="group-polls-status" class="muted" role="status" aria-live="polite">Open a group to view its polls.</p>
+          <div id="group-polls-list"></div>
+        </section>
         <div id="group-messages" aria-live="polite" class="group-messages">Choose a group and select Open group.</div>
         <form id="group-message-form" class="group-message-form">
           <input id="group-message-input" maxlength="2000" placeholder="Write a group message..." autocomplete="off">

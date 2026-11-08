@@ -2944,3 +2944,143 @@ document.getElementById("group-activity-button").addEventListener("click", async
     groupGovernanceStatus.textContent = "Showing the latest " + data.events.length + " events.";
   } catch (error) { groupGovernanceStatus.textContent = error.message; }
 });
+
+
+/* Phase 26: group polls and voting interface. */
+const groupPollsStatus = document.getElementById("group-polls-status");
+const groupPollsList = document.getElementById("group-polls-list");
+
+function renderGroupPolls(polls) {
+  groupPollsList.replaceChildren();
+  if (!polls.length) {
+    groupPollsList.textContent = "No polls yet. Create the first poll for this group.";
+    return;
+  }
+  polls.forEach(poll => {
+    const card = document.createElement("article");
+    card.className = "message";
+    const title = document.createElement("h4");
+    title.textContent = poll.question;
+    card.appendChild(title);
+    const meta = document.createElement("p");
+    meta.className = "muted";
+    meta.textContent = "By " + poll.creatorUsername + " · " +
+      (poll.multipleChoice ? "Select multiple options" : "Select one option") +
+      " · " + poll.voterCount + " voter(s) · " + (poll.status === "open" ? "Open" : "Closed");
+    card.appendChild(meta);
+    const form = document.createElement("form");
+    form.dataset.pollId = String(poll.id);
+    poll.options.forEach(option => {
+      const label = document.createElement("label");
+      label.style.display = "block";
+      label.style.margin = "10px 0";
+      const input = document.createElement("input");
+      input.type = poll.multipleChoice ? "checkbox" : "radio";
+      input.name = "group-poll-" + poll.id;
+      input.value = String(option.id);
+      input.checked = option.selected;
+      input.disabled = poll.status !== "open";
+      input.style.marginRight = "8px";
+      label.appendChild(input);
+      const text = document.createElement("span");
+      text.textContent = option.text + " — " + option.votes + " vote(s)";
+      label.appendChild(text);
+      const bar = document.createElement("div");
+      bar.style.height = "6px";
+      bar.style.background = "#dce7e3";
+      bar.style.borderRadius = "6px";
+      bar.style.marginTop = "5px";
+      const fill = document.createElement("div");
+      fill.style.height = "6px";
+      fill.style.width = (poll.voterCount ? Math.min(100, option.votes / poll.voterCount * 100) : 0) + "%";
+      fill.style.background = "#087f78";
+      fill.style.borderRadius = "6px";
+      bar.appendChild(fill);
+      label.appendChild(bar);
+      form.appendChild(label);
+    });
+    if (poll.status === "open") {
+      const voteButton = document.createElement("button");
+      voteButton.type = "submit";
+      voteButton.textContent = "Submit vote";
+      form.appendChild(voteButton);
+    }
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const selected = [...form.querySelectorAll('input:checked')].map(input => Number(input.value));
+      if (!selected.length) {
+        groupPollsStatus.textContent = "Select at least one option before voting.";
+        return;
+      }
+      try {
+        await api("/api/groups/" + activeGroupId + "/polls/" + poll.id + "/vote", {
+          method: "PUT", body: JSON.stringify({ optionIds: selected })
+        });
+        groupPollsStatus.textContent = "Your vote has been recorded.";
+        await loadGroupPolls();
+      } catch (error) { groupPollsStatus.textContent = error.message; }
+    });
+    card.appendChild(form);
+    if (poll.status === "open" && (poll.creatorUsername === currentUsername || activeGroupCanManage)) {
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "Close poll";
+      close.style.marginTop = "8px";
+      close.addEventListener("click", async () => {
+        if (!confirm("Close this poll? Members will no longer be able to vote.")) return;
+        try {
+          await api("/api/groups/" + activeGroupId + "/polls/" + poll.id + "/close", { method: "POST" });
+          groupPollsStatus.textContent = "Poll closed. Results remain visible.";
+          await loadGroupPolls();
+        } catch (error) { groupPollsStatus.textContent = error.message; }
+      });
+      card.appendChild(close);
+    }
+    groupPollsList.appendChild(card);
+  });
+}
+
+async function loadGroupPolls() {
+  if (!activeGroupId || !groupPollsList) return;
+  groupPollsStatus.textContent = "Loading group polls…";
+  try {
+    const data = await api("/api/groups/" + activeGroupId + "/polls");
+    renderGroupPolls(data.polls || []);
+    groupPollsStatus.textContent = (data.polls || []).length + " poll(s). Results are visible to group members.";
+    if (callSocket && !callSocket.__groupPollsBound) {
+      callSocket.on("group:polls:updated", data => {
+        if (data && String(data.groupId) === String(activeGroupId)) loadGroupPolls();
+      });
+      callSocket.__groupPollsBound = true;
+    }
+  } catch (error) { groupPollsStatus.textContent = error.message; }
+}
+
+document.getElementById("load-group-button").addEventListener("click", () => {
+  if (activeGroupId) loadGroupPolls();
+});
+
+document.getElementById("create-group-poll-button").addEventListener("click", async () => {
+  if (!activeGroupId) {
+    groupPollsStatus.textContent = "Open a group before creating a poll.";
+    return;
+  }
+  const question = prompt("Enter the poll question (maximum 300 characters):");
+  if (question === null) return;
+  const optionsText = prompt("Enter 2–10 answer options, separated by commas:");
+  if (optionsText === null) return;
+  const options = optionsText.split(",").map(value => value.trim()).filter(Boolean);
+  if (options.length < 2 || options.length > 10) {
+    groupPollsStatus.textContent = "Please provide 2–10 options separated by commas.";
+    return;
+  }
+  const multipleChoice = confirm("Allow members to select multiple answers? Choose Cancel for single-choice voting.");
+  try {
+    await api("/api/groups/" + activeGroupId + "/polls", {
+      method: "POST",
+      body: JSON.stringify({ question: question.trim(), options, multipleChoice })
+    });
+    groupPollsStatus.textContent = "Poll created successfully.";
+    await loadGroupPolls();
+  } catch (error) { groupPollsStatus.textContent = error.message; }
+});
