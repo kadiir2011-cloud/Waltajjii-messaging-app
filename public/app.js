@@ -1410,7 +1410,7 @@ async function loadGroups() {
     cachedGroups.forEach(group => {
       const option = document.createElement("option");
       option.value = String(group.id);
-      option.textContent = `${group.name} (${group.memberCount})`;
+      option.textContent = `${group.name} (${group.memberCount})${group.unreadCount ? " · " + group.unreadCount + " unread" : ""}`;
       groupSelect.appendChild(option);
     });
     if (cachedGroups.some(g => String(g.id) === previous)) groupSelect.value = previous;
