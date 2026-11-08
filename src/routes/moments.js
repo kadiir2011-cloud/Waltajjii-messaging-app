@@ -105,7 +105,7 @@ async function cleanupExpiredMoments() {
 
 function visibleMomentQuery() {
   return `
-    SELECT m.id, m.user_id AS userId, u.username, u.avatar_path AS avatarPath,
+    SELECT m.id, m.user_id AS userId, u.username, u.full_name AS fullName, u.avatar_path AS avatarPath,
       m.content, m.media_path AS mediaPath, m.media_type AS mediaType,
       m.audience, m.created_at AS createdAt, m.expires_at AS expiresAt,
       CASE WHEN m.user_id = ? THEN 1 ELSE 0 END AS isMine
@@ -165,7 +165,7 @@ router.post("/", (req, res) => {
         stored?.type || null, audience
       );
       const moment = db.prepare(`
-        SELECT m.id, m.user_id AS userId, u.username, m.content,
+        SELECT m.id, m.user_id AS userId, u.username, u.full_name AS fullName, m.content,
           m.media_path AS mediaPath, m.media_type AS mediaType,
           m.audience, m.created_at AS createdAt, m.expires_at AS expiresAt,
           1 AS isMine

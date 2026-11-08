@@ -23,14 +23,14 @@ function notify(userId, actorId, type, entityId, message) {
     .run(userId, actorId, type, entityId || null, message);
 }
 function profileSelect() {
-  return "SELECT u.id, u.username, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, CASE WHEN u.profile_mode IN ('professional','both') THEN u.department ELSE '' END AS department, CASE WHEN u.profile_mode IN ('professional','both') THEN u.location ELSE '' END AS location, u.avatar_path AS avatarPath FROM users u";
+  return "SELECT u.id, u.username, u.full_name AS fullName, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, CASE WHEN u.profile_mode IN ('professional','both') THEN u.department ELSE '' END AS department, CASE WHEN u.profile_mode IN ('professional','both') THEN u.location ELSE '' END AS location, CASE WHEN u.profile_mode IN ('professional','both') THEN u.website ELSE '' END AS website, u.avatar_path AS avatarPath, u.profile_background AS profileBackground FROM users u";
 }
 
 router.get("/discover", (req, res) => {
   const search = String(req.query.q || "").trim().slice(0, 80);
   const pattern = "%" + search + "%";
-  const sql = "SELECT p.*, EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.following_id = p.id) AS isFollowing, (SELECT COUNT(*) FROM follows f WHERE f.following_id = p.id) AS followersCount, (SELECT COUNT(*) FROM follows f WHERE f.follower_id = p.id) AS followingCount, (SELECT id FROM connection_requests cr WHERE cr.requester_id = p.id AND cr.recipient_id = ? AND cr.status = 'pending' LIMIT 1) AS incomingRequestId, (SELECT status FROM connection_requests cr WHERE (cr.requester_id = ? AND cr.recipient_id = p.id) OR (cr.requester_id = p.id AND cr.recipient_id = ?) ORDER BY cr.id DESC LIMIT 1) AS connectionStatus FROM (" + profileSelect() + ") p WHERE p.id != ? AND (? = '%%' OR p.username LIKE ? OR p.bio LIKE ? OR p.professionalTitle LIKE ? OR p.organization LIKE ? OR p.department LIKE ?) ORDER BY p.username COLLATE NOCASE LIMIT 50";
-  const users = db.prepare(sql).all(req.auth.userId, req.auth.userId, req.auth.userId, req.auth.userId, req.auth.userId, pattern, pattern, pattern, pattern, pattern, pattern);
+  const sql = "SELECT p.*, EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.following_id = p.id) AS isFollowing, (SELECT COUNT(*) FROM follows f WHERE f.following_id = p.id) AS followersCount, (SELECT COUNT(*) FROM follows f WHERE f.follower_id = p.id) AS followingCount, (SELECT id FROM connection_requests cr WHERE cr.requester_id = p.id AND cr.recipient_id = ? AND cr.status = 'pending' LIMIT 1) AS incomingRequestId, (SELECT status FROM connection_requests cr WHERE (cr.requester_id = ? AND cr.recipient_id = p.id) OR (cr.requester_id = p.id AND cr.recipient_id = ?) ORDER BY cr.id DESC LIMIT 1) AS connectionStatus FROM (" + profileSelect() + ") p WHERE p.id != ? AND (? = '%%' OR p.username LIKE ? OR p.fullName LIKE ? OR p.bio LIKE ? OR p.professionalTitle LIKE ? OR p.organization LIKE ? OR p.department LIKE ?) ORDER BY p.username COLLATE NOCASE LIMIT 50";
+  const users = db.prepare(sql).all(req.auth.userId, req.auth.userId, req.auth.userId, req.auth.userId, req.auth.userId, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
   res.json({ users });
 });
 
@@ -66,8 +66,8 @@ router.post("/connect/:userId", (req, res) => {
 });
 
 router.get("/requests", (req, res) => {
-  const incoming = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, u.avatar_path AS avatarPath FROM connection_requests cr JOIN users u ON u.id = cr.requester_id WHERE cr.recipient_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
-  const outgoing = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username FROM connection_requests cr JOIN users u ON u.id = cr.recipient_id WHERE cr.requester_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
+  const incoming = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username, u.full_name AS fullName, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, u.avatar_path AS avatarPath FROM connection_requests cr JOIN users u ON u.id = cr.requester_id WHERE cr.recipient_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
+  const outgoing = db.prepare("SELECT cr.id, cr.created_at AS createdAt, u.id AS userId, u.username, u.full_name AS fullName FROM connection_requests cr JOIN users u ON u.id = cr.recipient_id WHERE cr.requester_id = ? AND cr.status = 'pending' ORDER BY cr.id DESC LIMIT 50").all(req.auth.userId);
   res.json({ incoming, outgoing });
 });
 
@@ -101,14 +101,14 @@ router.get("/following", (req, res) => {
 });
 
 router.get("/feed", (req, res) => {
-  const posts = db.prepare("SELECT p.id, p.user_id AS userId, u.username, u.avatar_path AS avatarPath, p.content, p.created_at AS createdAt, (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likeCount, (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS commentCount, EXISTS(SELECT 1 FROM post_likes l WHERE l.post_id = p.id AND l.user_id = ?) AS likedByMe FROM posts p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?) ORDER BY p.id DESC LIMIT 50").all(req.auth.userId, req.auth.userId, req.auth.userId);
+  const posts = db.prepare("SELECT p.id, p.user_id AS userId, u.username, u.full_name AS fullName, u.avatar_path AS avatarPath, p.content, p.created_at AS createdAt, (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likeCount, (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS commentCount, EXISTS(SELECT 1 FROM post_likes l WHERE l.post_id = p.id AND l.user_id = ?) AS likedByMe FROM posts p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?) ORDER BY p.id DESC LIMIT 50").all(req.auth.userId, req.auth.userId, req.auth.userId);
   res.json({ posts });
 });
 router.post("/posts", (req, res) => {
   const content = String(req.body.content || "").trim();
   if (!content || content.length > 2000) return res.status(400).json({ error: "A post must contain 1–2000 characters." });
   const result = db.prepare("INSERT INTO posts (user_id, content) VALUES (?, ?)").run(req.auth.userId, content);
-  const post = db.prepare("SELECT p.id, p.user_id AS userId, u.username, p.content, p.created_at AS createdAt, 0 AS likeCount, 0 AS commentCount, 0 AS likedByMe FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?").get(result.lastInsertRowid);
+  const post = db.prepare("SELECT p.id, p.user_id AS userId, u.username, u.full_name AS fullName, p.content, p.created_at AS createdAt, 0 AS likeCount, 0 AS commentCount, 0 AS likedByMe FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?").get(result.lastInsertRowid);
   res.status(201).json({ post });
 });
 
@@ -131,7 +131,7 @@ router.get("/posts/:postId/comments", (req, res) => {
   const postId = Number(req.params.postId);
   if (!Number.isSafeInteger(postId) || postId < 1) return res.status(400).json({ error: "Invalid post." });
   if (!db.prepare("SELECT id FROM posts WHERE id = ?").get(postId)) return res.status(404).json({ error: "Post not found." });
-  const comments = db.prepare("SELECT c.id, c.user_id AS userId, u.username, c.content, c.created_at AS createdAt FROM post_comments c JOIN users u ON u.id = c.user_id WHERE c.post_id = ? ORDER BY c.id ASC LIMIT 100").all(postId);
+  const comments = db.prepare("SELECT c.id, c.user_id AS userId, u.username, u.full_name AS fullName, c.content, c.created_at AS createdAt FROM post_comments c JOIN users u ON u.id = c.user_id WHERE c.post_id = ? ORDER BY c.id ASC LIMIT 100").all(postId);
   res.json({ comments });
 });
 router.post("/posts/:postId/comments", (req, res) => {
@@ -143,12 +143,12 @@ router.post("/posts/:postId/comments", (req, res) => {
   if (!post) return res.status(404).json({ error: "Post not found." });
   const result = db.prepare("INSERT INTO post_comments (post_id, user_id, content) VALUES (?, ?, ?)").run(postId, req.auth.userId, content);
   notify(post.userId, req.auth.userId, "comment", postId, "commented on your post");
-  const comment = db.prepare("SELECT c.id, c.user_id AS userId, u.username, c.content, c.created_at AS createdAt FROM post_comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?").get(result.lastInsertRowid);
+  const comment = db.prepare("SELECT c.id, c.user_id AS userId, u.username, u.full_name AS fullName, c.content, c.created_at AS createdAt FROM post_comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?").get(result.lastInsertRowid);
   res.status(201).json({ comment });
 });
 
 router.get("/notifications", (req, res) => {
-  const notifications = db.prepare("SELECT n.id, n.type, n.entity_id AS entityId, n.message, n.is_read AS isRead, n.created_at AS createdAt, u.username AS actorUsername FROM notifications n LEFT JOIN users u ON u.id = n.actor_id WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 100").all(req.auth.userId);
+  const notifications = db.prepare("SELECT n.id, n.type, n.entity_id AS entityId, n.message, n.is_read AS isRead, n.created_at AS createdAt, u.username AS actorUsername, u.full_name AS actorFullName FROM notifications n LEFT JOIN users u ON u.id = n.actor_id WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 100").all(req.auth.userId);
   res.json({ notifications });
 });
 router.post("/notifications/read", (req, res) => {

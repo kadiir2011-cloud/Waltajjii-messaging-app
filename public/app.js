@@ -147,6 +147,9 @@ async function loadMyProfile() {
   const bioInput = document.getElementById("profile-bio-input");
   const bioDisplay = document.getElementById("profile-bio-display");
   const usernameDisplay = document.getElementById("profile-username");
+  const fullNameInput = document.getElementById("profile-full-name-input");
+  const backgroundInput = document.getElementById("profile-background");
+  const fullNameDisplay = document.getElementById("profile-full-name-display");
   const picturePreview = document.getElementById("profile-picture-preview");
   const profileFields = {
     title: document.getElementById("profile-title"),
@@ -162,6 +165,10 @@ async function loadMyProfile() {
     const user = data.user;
 
     usernameDisplay.textContent = user.username;
+    fullNameInput.value = user.fullName || "";
+    fullNameDisplay.textContent = user.fullName || "Waltajjii member";
+    backgroundInput.value = user.profileBackground || "mist";
+    document.getElementById("profile-hero").dataset.profileBackground = backgroundInput.value;
     bioInput.value = user.bio || "";
     bioDisplay.textContent = user.bio || "No bio added yet.";
     profileFields.title.value = user.professionalTitle || "";
@@ -172,13 +179,13 @@ async function loadMyProfile() {
     profileFields.mode.value = user.profileMode || "both";
     document.getElementById("bio-counter").textContent = (user.bio || "").length;
     const professionalLine = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
-    document.getElementById("profile-professional-line").textContent = professionalLine || "Waltajjii member";
+    document.getElementById("profile-professional-line").textContent = professionalLine || "Add your profession and institution";
 
     const sidebarUsername = document.getElementById("wt-sidebar-username");
     const sidebarProfessional = document.getElementById("wt-sidebar-professional");
     const sidebarAvatar = document.getElementById("wt-sidebar-avatar");
     const sidebarFallback = document.getElementById("wt-sidebar-avatar-fallback");
-    if (sidebarUsername) sidebarUsername.textContent = user.username || "Your profile";
+    if (sidebarUsername) sidebarUsername.textContent = user.fullName || "Your profile";
     if (sidebarProfessional) sidebarProfessional.textContent = professionalLine || "Waltajjii member";
 
     if (user.avatarPath) {
@@ -1803,10 +1810,16 @@ document.getElementById("profile-bio-input").addEventListener("input", event => 
   document.getElementById("bio-counter").textContent = event.target.value.length;
 });
 
-// Save the user's profile.
+document.getElementById("profile-background").addEventListener("change", event => {
+  document.getElementById("profile-hero").dataset.profileBackground = event.target.value;
+});
+
+// Save profile.
 document.getElementById("save-profile-button").addEventListener("click", async () => {
   const status = document.getElementById("profile-status");
   const payload = {
+    fullName: document.getElementById("profile-full-name-input").value,
+    profileBackground: document.getElementById("profile-background").value,
     bio: document.getElementById("profile-bio-input").value,
     professionalTitle: document.getElementById("profile-title").value,
     organization: document.getElementById("profile-organization").value,
@@ -1822,6 +1835,9 @@ document.getElementById("save-profile-button").addEventListener("click", async (
       body: JSON.stringify(payload)
     });
 
+    document.getElementById("profile-full-name-display").textContent = data.fullName || "Waltajjii member";
+    document.getElementById("wt-sidebar-username").textContent = data.fullName || "Your profile";
+    document.getElementById("profile-hero").dataset.profileBackground = data.profileBackground || "mist";
     document.getElementById("profile-bio-display").textContent =
       data.bio || "No bio added yet.";
     const professionalLine = [data.professionalTitle, data.organization].filter(Boolean).join(" · ");
@@ -2064,20 +2080,28 @@ function socialElement(tag, className, text) {
 
 function socialUserCard(user, mode) {
   const card = socialElement("article", "social-card");
+  card.dataset.profileBackground = user.profileBackground || "mist";
   const head = socialElement("div", "social-card-head");
   const avatar = socialElement("img", "social-avatar");
-  avatar.alt = user.username + " profile picture";
+  avatar.alt = (user.fullName || "Waltajjii member") + " profile picture";
   if (user.avatarPath) {
     avatar.src = "/api/uploads/profile-picture/" + encodeURIComponent(user.id);
     avatar.onerror = () => avatar.removeAttribute("src");
   }
   const identity = socialElement("div");
-  identity.appendChild(socialElement("strong", "", user.username));
+  identity.appendChild(socialElement("strong", "", user.fullName || "Waltajjii member"));
   const professional = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
   if (professional) identity.appendChild(socialElement("div", "social-muted", professional));
-  if (user.bio) identity.appendChild(socialElement("div", "social-muted", user.bio));
   head.append(avatar, identity);
+  const privateDetails = socialElement("details", "profile-private-details");
+  privateDetails.appendChild(socialElement("summary", "", "View profile details"));
+  privateDetails.appendChild(socialElement("div", "social-muted", "Username: @" + (user.username || "")));
+  if (user.bio) privateDetails.appendChild(socialElement("div", "social-muted", user.bio));
+  if (user.department) privateDetails.appendChild(socialElement("div", "social-muted", "Department: " + user.department));
+  if (user.location) privateDetails.appendChild(socialElement("div", "social-muted", "Location: " + user.location));
+  if (user.website) privateDetails.appendChild(socialElement("div", "social-muted", "Website: " + user.website));
   card.appendChild(head);
+  if (privateDetails.childNodes.length > 1) card.appendChild(privateDetails);
 
   if (mode === "discover") {
     card.appendChild(socialElement("p", "social-muted",
@@ -2159,7 +2183,12 @@ async function loadRequests() {
     if (!data.incoming.length) host.appendChild(socialElement("p", "social-empty", "No incoming requests."));
     data.incoming.forEach(request => {
       const card = socialElement("article", "social-card");
-      card.appendChild(socialElement("strong", "", request.username));
+      card.appendChild(socialElement("strong", "", request.fullName || "Waltajjii member"));
+      const requestDetails = socialElement("details", "profile-private-details");
+      requestDetails.appendChild(socialElement("summary", "", "View profile details"));
+      requestDetails.appendChild(socialElement("div", "social-muted", "Username: @" + (request.username || "")));
+      if (request.bio) requestDetails.appendChild(socialElement("div", "social-muted", request.bio));
+      card.appendChild(requestDetails);
       const actions = socialElement("div", "social-actions");
       ["accept", "decline"].forEach(action => {
         const button = socialElement("button", "", action === "accept" ? "Accept" : "Decline");
@@ -2182,7 +2211,7 @@ async function loadRequests() {
     });
     host.appendChild(socialElement("h4", "", "Sent requests"));
     if (!data.outgoing.length) host.appendChild(socialElement("p", "social-empty", "No pending sent requests."));
-    data.outgoing.forEach(request => host.appendChild(socialElement("p", "social-muted", request.username + " — awaiting response")));
+    data.outgoing.forEach(request => host.appendChild(socialElement("p", "social-muted", (request.fullName || "Waltajjii member") + " — awaiting response")));
   } catch (error) {
     host.replaceChildren(socialElement("p", "social-empty", error.message));
   }
@@ -2212,7 +2241,7 @@ async function loadComments(postId, listHost) {
     if (!data.comments.length) listHost.appendChild(socialElement("p", "social-muted", "No comments yet."));
     data.comments.forEach(comment => {
       const item = socialElement("div", "social-comment");
-      item.appendChild(socialElement("strong", "", comment.username));
+      item.appendChild(socialElement("strong", "", comment.fullName || "Waltajjii member"));
       item.appendChild(socialElement("div", "", comment.content));
       listHost.appendChild(item);
     });
@@ -2234,7 +2263,7 @@ async function loadFeed() {
     data.posts.forEach(post => {
       const card = socialElement("article", "social-card");
       const head = socialElement("div", "social-card-head");
-      head.appendChild(socialElement("strong", "", post.username));
+      head.appendChild(socialElement("strong", "", post.fullName || "Waltajjii member"));
       head.appendChild(socialElement("span", "social-muted", post.createdAt));
       card.appendChild(head);
       card.appendChild(socialElement("div", "social-post", post.content));
@@ -2329,7 +2358,7 @@ async function loadNotifications() {
     }
     data.notifications.forEach(item => {
       const row = socialElement("article", "social-card");
-      row.appendChild(socialElement("strong", "", item.actorUsername || "Waltajjii"));
+      row.appendChild(socialElement("strong", "", item.actorFullName || "Waltajjii"));
       row.appendChild(socialElement("span", "", " " + item.message));
       row.appendChild(socialElement("div", "social-muted", item.createdAt + (item.isRead ? "" : " · New")));
       host.appendChild(row);
@@ -2357,7 +2386,7 @@ async function loadMoments() {
     data.moments.forEach(moment => {
       const card = socialElement("article", "moment-card");
       const head = socialElement("div", "moment-card-head");
-      head.appendChild(socialElement("strong", "", moment.username));
+      head.appendChild(socialElement("strong", "", moment.fullName || "Waltajjii member"));
       const expires = new Date(String(moment.expiresAt).replace(" ", "T") + "Z");
       const remaining = Math.max(0, Math.ceil((expires.getTime() - Date.now()) / 3600000));
       head.appendChild(socialElement("span", "social-muted", remaining + "h left · " + (moment.audience === "everyone" ? "Everyone" : "Followers")));
