@@ -58,3 +58,11 @@ Status: implementation in progress. This branch is based on the tested Phase 24 
 - Expiry choices: 1 hour, 1 day, 7 days, 30 days; optional use limit supported.
 - Added admin invitation panel with create, copy, list and revoke controls.
 - Runtime deployment and two-account tests are still pending. QR presentation and invite landing/join UI remain to be completed.
+
+
+## Phase 25B implementation update
+
+- Added browser-side QR rendering for newly created invitation links. The QR matrix is generated locally in the browser using the Qrious library; the invitation URL is not submitted to a remote QR image-generation service.
+- Added a login-aware invitation landing flow for links using the `?groupInvite=` query parameter. After sign-in, the app fetches the safe invitation preview, displays the group name and expiry, and offers an explicit Join group action.
+- Joining calls the authenticated invitation join endpoint, refreshes the user's groups, opens the joined group, and removes the invitation token from the browser address bar after a successful join.
+- These changes are committed to the Phase 25 development branch. They have not yet been runtime-tested or deployed. The invitation landing requires the user to sign in before joining.
