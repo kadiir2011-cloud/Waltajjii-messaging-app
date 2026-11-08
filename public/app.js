@@ -1610,13 +1610,26 @@ document.getElementById("manage-group-button").addEventListener("click", async (
     await loadGroupMembers(id);
     const memberList = data.members.map(m => `${m.username} (${m.role})`).join("\n");
     alert("Group members:\n" + memberList);
-    if (!data.canManage) {
-      groupStatus.textContent = "Only group admins can add or remove members.";
+    const choices = data.canManage
+      ? "ADD, REMOVE, PROMOTE, DEMOTE, LEAVE, or CANCEL"
+      : "LEAVE or CANCEL";
+    const action = (prompt("Choose an action: " + choices) || "").toUpperCase();
+    if (!action || action === "CANCEL") return;
+    if (action === "LEAVE") {
+      if (!confirm("Leave this group? You will lose access unless an admin adds you again.")) return;
+      await api(`/api/groups/${id}/leave`, { method: "DELETE" });
+      activeGroupId = null;
+      groupMessagesBox.textContent = "You left this group.";
+      groupMembersBox.replaceChildren();
+      await loadGroups();
+      groupStatus.textContent = "You left the group.";
       return;
     }
-    const action = prompt("Type ADD to add a member, REMOVE to remove a member, or CANCEL:");
-    if (!action || action.toUpperCase() === "CANCEL") return;
-    if (action.toUpperCase() === "ADD") {
+    if (!data.canManage) {
+      groupStatus.textContent = "Only group admins can manage members and roles.";
+      return;
+    }
+    if (action === "ADD") {
       const username = prompt("Username to add:");
       if (!username) return;
       await api(`/api/groups/${id}/members`, {
@@ -1624,18 +1637,34 @@ document.getElementById("manage-group-button").addEventListener("click", async (
         body: JSON.stringify({ username: username.trim() })
       });
       groupStatus.textContent = `${username.trim()} added to the group.`;
-    } else if (action.toUpperCase() === "REMOVE") {
-      const username = prompt("Username to remove (you cannot remove yourself):");
+    } else if (["REMOVE", "PROMOTE", "DEMOTE"].includes(action)) {
+      const promptText = action === "REMOVE" ? "Username to remove:" : "Username whose role should change:";
+      const username = prompt(promptText);
       if (!username) return;
       const member = data.members.find(m => m.username.toLowerCase() === username.trim().toLowerCase());
       if (!member) {
         groupStatus.textContent = "That username is not a member of this group.";
         return;
       }
-      await api(`/api/groups/${id}/members/${member.id}`, { method: "DELETE" });
-      groupStatus.textContent = `${member.username} removed from the group.`;
+      if (action === "REMOVE") {
+        if (member.username === currentUsername) {
+          groupStatus.textContent = "Use LEAVE to leave the group.";
+          return;
+        }
+        await api(`/api/groups/${id}/members/${member.id}`, { method: "DELETE" });
+        groupStatus.textContent = `${member.username} removed from the group.`;
+      } else {
+        const role = action === "PROMOTE" ? "admin" : "member";
+        await api(`/api/groups/${id}/members/${member.id}/role`, {
+          method: "PATCH",
+          body: JSON.stringify({ role })
+        });
+        groupStatus.textContent = action === "PROMOTE"
+          ? `${member.username} promoted to admin.`
+          : `${member.username} is now a regular member.`;
+      }
     } else {
-      groupStatus.textContent = "No change made. Type ADD or REMOVE next time.";
+      groupStatus.textContent = "No change made. Choose ADD, REMOVE, PROMOTE, DEMOTE, or LEAVE.";
       return;
     }
     await loadGroups();

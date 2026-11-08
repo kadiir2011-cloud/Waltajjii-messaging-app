@@ -136,6 +136,47 @@ router.post("/:id/members", (req, res) => {
   res.status(201).json({ message: "Member added." });
 });
 
+router.patch("/:id/members/:userId/role", (req, res) => {
+  const groupId = Number(req.params.id);
+  const userId = Number(req.params.userId);
+  const role = String(req.body.role || "");
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(userId) || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can change member roles." });
+  }
+  if (!["admin", "member"].includes(role)) {
+    return res.status(400).json({ error: "Role must be admin or member." });
+  }
+  const target = membership(groupId, userId);
+  if (!target) return res.status(404).json({ error: "Member not found." });
+  if (target.role === "admin" && role === "member") {
+    const adminCount = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ? AND role = 'admin'").get(groupId).n;
+    if (adminCount <= 1) return res.status(400).json({ error: "A group must always have at least one admin." });
+  }
+  db.prepare("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?").run(role, groupId, userId);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:members:updated", { groupId, roleChanged: true });
+  res.json({ message: role === "admin" ? "Member promoted to admin." : "Admin role removed." });
+});
+
+router.delete("/:id/leave", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId)) return res.status(400).json({ error: "Invalid group." });
+  const current = membership(groupId, req.auth.userId);
+  if (!current) return res.status(404).json({ error: "Group membership not found." });
+  if (current.role === "admin") {
+    const otherAdmins = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ? AND role = 'admin' AND user_id != ?").get(groupId, req.auth.userId).n;
+    if (otherAdmins === 0) return res.status(400).json({ error: "Assign another admin before leaving this group." });
+  }
+  db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, req.auth.userId);
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`group:${groupId}`).emit("group:members:updated", { groupId, left: req.auth.userId });
+    io.in(`user:${req.auth.userId}`).socketsLeave(`group:${groupId}`);
+    io.to(`user:${req.auth.userId}`).emit("groups:updated", { groupId, removed: true });
+  }
+  res.json({ message: "You left the group." });
+});
+
 router.delete("/:id/members/:userId", (req, res) => {
   const groupId = Number(req.params.id);
   const userId = Number(req.params.userId);
