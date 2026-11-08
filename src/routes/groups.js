@@ -106,12 +106,18 @@ router.get("/:id/members", (req, res) => {
   if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) {
     return res.status(404).json({ error: "Group not found." });
   }
+  const canManage = Boolean(isAdmin(groupId, req.auth.userId));
+  const settings = db.prepare("SELECT member_list_visibility AS memberListVisibility FROM groups WHERE id = ?").get(groupId);
+  if (settings.memberListVisibility === "admins" && !canManage) {
+    const self = db.prepare("SELECT u.id, u.username, gm.role, gm.joined_at AS joinedAt FROM group_members gm JOIN users u ON u.id = gm.user_id WHERE gm.group_id = ? AND gm.user_id = ?").all(groupId, req.auth.userId);
+    return res.json({ members: self, canManage, memberListRestricted: true });
+  }
   const members = db.prepare(`
     SELECT u.id, u.username, gm.role, gm.joined_at AS joinedAt
     FROM group_members gm JOIN users u ON u.id = gm.user_id
     WHERE gm.group_id = ? ORDER BY CASE gm.role WHEN 'admin' THEN 0 ELSE 1 END, u.username
   `).all(groupId);
-  res.json({ members, canManage: Boolean(isAdmin(groupId, req.auth.userId)) });
+  res.json({ members, canManage, memberListRestricted: false });
 });
 
 router.post("/:id/members", (req, res) => {
@@ -627,7 +633,7 @@ router.post("/:id/join-requests/:requestId/review", (req, res) => {
 router.get("/:id/details", (req, res) => {
   const groupId = Number(req.params.id);
   if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
-  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired FROM groups WHERE id = ?").get(groupId);
+  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired, member_list_visibility AS memberListVisibility FROM groups WHERE id = ?").get(groupId);
   res.json({ details });
 });
 
@@ -638,12 +644,14 @@ router.patch("/:id/details", (req, res) => {
   const rules = String(req.body.rules ?? "").trim();
   const visibility = String(req.body.visibility ?? "private");
   const approvalRequired = req.body.approvalRequired === true;
+  const memberListVisibility = String(req.body.memberListVisibility || "members");
   if (description.length > 500) return res.status(400).json({ error: "Group description must be 500 characters or fewer." });
   if (rules.length > 2000) return res.status(400).json({ error: "Group rules must be 2,000 characters or fewer." });
   if (!["private", "public"].includes(visibility)) return res.status(400).json({ error: "Visibility must be private or public." });
-  db.prepare("UPDATE groups SET description=?, rules=?, visibility=?, approval_required=? WHERE id=?").run(description, rules, visibility, approvalRequired ? 1 : 0, groupId);
-  logGroupActivity(groupId, req.auth.userId, "group_settings_updated", req.auth.userId, visibility + (approvalRequired ? ";approval required" : ";approval off"));
-  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired FROM groups WHERE id=?").get(groupId);
+  if (!["members", "admins"].includes(memberListVisibility)) return res.status(400).json({ error: "Member-list visibility must be members or admins." });
+  db.prepare("UPDATE groups SET description=?, rules=?, visibility=?, approval_required=?, member_list_visibility=? WHERE id=?").run(description, rules, visibility, approvalRequired ? 1 : 0, memberListVisibility, groupId);
+  logGroupActivity(groupId, req.auth.userId, "group_settings_updated", req.auth.userId, visibility + (approvalRequired ? ";approval required" : ";approval off") + ";member list:" + memberListVisibility);
+  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired, member_list_visibility AS memberListVisibility FROM groups WHERE id=?").get(groupId);
   const io = req.app.get("io");
   if (io) io.to("group:" + groupId).emit("group:details:updated", { groupId });
   res.json({ details, message: "Group details saved." });
