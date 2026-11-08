@@ -1028,9 +1028,13 @@ function registerMessagingSocketHandlers(socket) {
   });
 
   socket.on("group:message", data => {
-    if (data && String(data.groupId) === String(activeGroupId)) {
-      openSelectedGroup();
+    if (!data || !data.groupId) return;
+    if (data.sender !== currentUsername) {
+      api(`/api/groups/${data.groupId}/messages/${data.id}/delivered`, { method: "POST" })
+        .catch(error => console.warn("Group delivery receipt failed:", error.message));
     }
+    if (String(data.groupId) === String(activeGroupId)) openSelectedGroup();
+    loadGroups();
   });
 
   socket.on("group:members:updated", data => {
@@ -1042,6 +1046,11 @@ function registerMessagingSocketHandlers(socket) {
 
   socket.on("group:message:updated", data => {
     if (data && String(data.groupId) === String(activeGroupId)) openSelectedGroup();
+  });
+
+  socket.on("group:receipts:updated", data => {
+    if (data && String(data.groupId) === String(activeGroupId)) openSelectedGroup();
+    loadGroups();
   });
 
   socket.on("typing:update", data => {
@@ -1401,7 +1410,7 @@ async function loadGroups() {
     cachedGroups.forEach(group => {
       const option = document.createElement("option");
       option.value = String(group.id);
-      option.textContent = `${group.name} (${group.memberCount})`;
+      option.textContent = `${group.name} (${group.memberCount})${group.unreadCount ? " · " + group.unreadCount + " unread" : ""}`;
       groupSelect.appendChild(option);
     });
     if (cachedGroups.some(g => String(g.id) === previous)) groupSelect.value = previous;
@@ -1446,6 +1455,14 @@ function renderGroupMessages(items) {
     const body = document.createElement("div");
     body.textContent = item.body;
     wrap.append(label, body);
+    if (item.sender === currentUsername) {
+      const deliveredNames = (item.receipts || []).filter(receipt => receipt.deliveredAt).map(receipt => receipt.username);
+      const readNames = (item.receipts || []).filter(receipt => receipt.readAt).map(receipt => receipt.username);
+      const receiptLine = document.createElement("small");
+      receiptLine.className = "group-message-receipts";
+      receiptLine.textContent = `Delivered ${deliveredNames.length}/${(item.receipts || []).length}${readNames.length ? " · Read: " + readNames.join(", ") : ""}`;
+      wrap.appendChild(receiptLine);
+    }
     if (item.replyToMessageId) {
       const reply = document.createElement("small");
       reply.textContent = `↪ Reply to ${item.replyToSender || "message"}: ${item.replyToBody || ""}`;
@@ -1507,9 +1524,10 @@ async function openSelectedGroup() {
     return;
   }
   try {
-    const data = await api(`/api/groups/${id}/messages`);
     activeGroupId = id;
+    const data = await api(`/api/groups/${id}/messages`);
     renderGroupMessages(data.messages || []);
+    await loadGroups();
     await loadGroupMembers(id);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;

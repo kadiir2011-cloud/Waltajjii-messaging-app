@@ -259,4 +259,34 @@ for (const [column, definition] of [
   if (!groupMessageColumns.includes(column)) db.exec(`ALTER TABLE group_messages ADD COLUMN ${column} ${definition}`);
 }
 
+/* Phase 21: per-member group delivery and read receipts. */
+const groupReceiptTableExists = db.prepare(
+  "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'group_message_receipts'"
+).get();
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_message_receipts (
+    group_message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    delivered_at TEXT,
+    read_at TEXT,
+    PRIMARY KEY (group_message_id, user_id),
+    FOREIGN KEY (group_message_id) REFERENCES group_messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_message_receipts_user
+  ON group_message_receipts(user_id, read_at, group_message_id);
+`);
+// Treat pre-Phase-21 history as already seen; receipts are tracked for new messages.
+if (!groupReceiptTableExists) {
+  db.exec(`
+    INSERT OR IGNORE INTO group_message_receipts
+      (group_message_id, user_id, delivered_at, read_at)
+    SELECT gm.id, member.user_id, gm.created_at, gm.created_at
+    FROM group_messages gm
+    JOIN group_members member ON member.group_id = gm.group_id
+    WHERE member.user_id != gm.sender_id
+      AND datetime(gm.created_at) >= datetime(member.joined_at)
+  `);
+}
+
 module.exports = db;
