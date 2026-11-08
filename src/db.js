@@ -378,3 +378,41 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_group_activity_group ON group_activity(group_id, id DESC);
 `);
+
+
+/* Phase 26: group polls and member votes. */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_polls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    creator_id INTEGER NOT NULL,
+    question TEXT NOT NULL CHECK(length(question) BETWEEN 1 AND 300),
+    multiple_choice INTEGER NOT NULL DEFAULT 0 CHECK(multiple_choice IN (0,1)),
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_at TEXT,
+    closed_by INTEGER,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (closed_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_polls_group ON group_polls(group_id, id DESC);
+  CREATE TABLE IF NOT EXISTS group_poll_options (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    option_text TEXT NOT NULL CHECK(length(option_text) BETWEEN 1 AND 100),
+    FOREIGN KEY (poll_id) REFERENCES group_polls(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_poll_options_poll ON group_poll_options(poll_id, id);
+  CREATE TABLE IF NOT EXISTS group_poll_votes (
+    poll_id INTEGER NOT NULL,
+    option_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (poll_id, option_id, user_id),
+    FOREIGN KEY (poll_id) REFERENCES group_polls(id) ON DELETE CASCADE,
+    FOREIGN KEY (option_id) REFERENCES group_poll_options(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_poll_votes_option ON group_poll_votes(option_id);
+`);
