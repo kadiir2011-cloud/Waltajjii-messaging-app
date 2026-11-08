@@ -140,6 +140,7 @@ function stopTypingIndicator() {
       loadGroups();
       loadChannels();
       loadSocialData();
+      processGroupInvitationLink();
     }
 async function loadMyProfile() {
   const profileStatus = document.getElementById("profile-status");
@@ -1443,6 +1444,12 @@ async function loadGroupMembers(groupId) {
       list.appendChild(item);
     });
     groupMembersBox.appendChild(list);
+    if (data.memberListRestricted) {
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = "The administrator has limited the member list to group admins.";
+      groupMembersBox.appendChild(note);
+    }
   } catch (error) {
     groupMembersBox.textContent = error.message;
   }
@@ -1558,6 +1565,7 @@ async function openSelectedGroup() {
     const data = await api(`/api/groups/${id}/messages`);
     await loadGroups();
     await loadGroupMembers(id);
+    await loadGroupDetails(id, false);
     renderGroupMessages(data.messages || []);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
@@ -2552,3 +2560,387 @@ document.getElementById("social-notifications-tab").addEventListener("click", lo
     });
   });
 })();
+
+
+// Phase 25A: admin invitation-link management (QR presentation follows in the next slice).
+const groupInvitationsButton = document.getElementById("group-invitations-button");
+const groupInvitationsPanel = document.getElementById("group-invitations-panel");
+
+if (groupInvitationsButton) {
+  groupInvitationsButton.addEventListener("click", async () => {
+    const id = Number(groupSelect.value);
+    if (!id) {
+      groupStatus.textContent = "Select a group first.";
+      return;
+    }
+    try {
+      const memberData = await api(`/api/groups/${id}/members`);
+      if (!memberData.canManage) {
+        groupStatus.textContent = "Only group admins can manage invitation links.";
+        return;
+      }
+      groupInvitationsPanel.hidden = false;
+      groupInvitationsPanel.replaceChildren();
+      const heading = document.createElement("strong");
+      heading.textContent = "Secure group invitations";
+      groupInvitationsPanel.appendChild(heading);
+
+      const expiryLabel = document.createElement("label");
+      expiryLabel.textContent = "Invitation expiry";
+      const expiry = document.createElement("select");
+      expiry.setAttribute("aria-label", "Invitation expiry");
+      [[1,"1 hour"],[24,"1 day"],[168,"7 days"],[720,"30 days"]].forEach(([value,label]) => {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = label;
+        expiry.appendChild(option);
+      });
+      expiryLabel.appendChild(expiry);
+      groupInvitationsPanel.appendChild(expiryLabel);
+
+      const limitLabel = document.createElement("label");
+      limitLabel.textContent = "Maximum uses (optional)";
+      const limit = document.createElement("input");
+      limit.type = "number";
+      limit.min = "1";
+      limit.max = "1000";
+      limit.placeholder = "Unlimited";
+      limitLabel.appendChild(limit);
+      groupInvitationsPanel.appendChild(limitLabel);
+
+      const createButton = document.createElement("button");
+      createButton.type = "button";
+      createButton.textContent = "Create invitation link";
+      groupInvitationsPanel.appendChild(createButton);
+      const linkArea = document.createElement("p");
+      linkArea.className = "muted";
+      groupInvitationsPanel.appendChild(linkArea);
+      createButton.addEventListener("click", async () => {
+        createButton.disabled = true;
+        try {
+          const payload = { expiresInHours: Number(expiry.value) };
+          if (limit.value.trim()) payload.useLimit = Number(limit.value);
+          const created = await api(`/api/groups/${id}/invitations`, {
+            method: "POST", body: JSON.stringify(payload)
+          });
+          linkArea.replaceChildren();
+          const link = document.createElement("a");
+          link.href = created.invitation.url;
+          link.textContent = created.invitation.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          linkArea.appendChild(link);
+          const copy = document.createElement("button");
+          copy.type = "button";
+          copy.textContent = "Copy link";
+          copy.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(created.invitation.url);
+              groupStatus.textContent = "Invitation link copied. Save it now; it cannot be displayed again.";
+            } catch {
+              groupStatus.textContent = "Copy was blocked by this browser. Select and copy the link above.";
+            }
+          });
+          linkArea.appendChild(copy);
+          const qrWrap = document.createElement("div");
+          qrWrap.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:12px 0;";
+          const qrLabel = document.createElement("strong");
+          qrLabel.textContent = "Scan to join this group";
+          qrWrap.appendChild(qrLabel);
+          const qrStatus = document.createElement("small");
+          qrStatus.textContent = "Generating secure QR code…";
+          qrWrap.appendChild(qrStatus);
+          linkArea.appendChild(qrWrap);
+          try {
+            const qrResult = await api("/api/groups/invitation/qr", {
+              method: "POST",
+              body: JSON.stringify({ url: created.invitation.url })
+            });
+            const qrImage = document.createElement("img");
+            qrImage.src = qrResult.dataUrl;
+            qrImage.alt = "QR code for this secure group invitation";
+            qrImage.width = 240;
+            qrImage.height = 240;
+            qrImage.style.cssText = "width:240px;height:240px;max-width:100%;background:#fff;padding:8px;border-radius:8px;";
+            qrWrap.replaceChildren(qrLabel, qrImage);
+          } catch (qrError) {
+            qrStatus.textContent = "QR code unavailable: " + qrError.message + " Use the invitation link above.";
+          }
+          const expiryInfo = document.createElement("small");
+          expiryInfo.textContent = " Expires: " + new Date(created.invitation.expiresAt).toLocaleString();
+          linkArea.appendChild(expiryInfo);
+          groupStatus.textContent = "Invitation created. The secure link is shown once; only its hash is stored.";
+          await renderInvitationList(id, groupInvitationsPanel);
+        } catch (error) {
+          groupStatus.textContent = error.message;
+        } finally {
+          createButton.disabled = false;
+        }
+      });
+      await renderInvitationList(id, groupInvitationsPanel);
+    } catch (error) {
+      groupStatus.textContent = error.message;
+    }
+  });
+}
+
+async function renderInvitationList(groupId, panel) {
+  const data = await api(`/api/groups/${groupId}/invitations`);
+  const old = panel.querySelector("[data-invitation-list]");
+  if (old) old.remove();
+  const list = document.createElement("div");
+  list.dataset.invitationList = "true";
+  const title = document.createElement("strong");
+  title.textContent = "Invitation history";
+  list.appendChild(title);
+  (data.invitations || []).forEach(invite => {
+    const row = document.createElement("p");
+    const status = invite.revokedAt ? "Revoked" :
+      (Date.parse(invite.expiresAt) <= Date.now() ? "Expired" : "Active");
+    row.textContent = `#${invite.id} · ${status} · ${invite.useCount}${invite.useLimit == null ? "" : "/" + invite.useLimit} uses · expires ${new Date(invite.expiresAt).toLocaleString()}`;
+    if (status === "Active") {
+      const revoke = document.createElement("button");
+      revoke.type = "button";
+      revoke.textContent = "Revoke";
+      revoke.addEventListener("click", async () => {
+        if (!confirm("Revoke this invitation? Anyone holding it will no longer be able to join.")) return;
+        try {
+          await api(`/api/groups/${groupId}/invitations/${invite.id}`, { method: "DELETE" });
+          await renderInvitationList(groupId, panel);
+          groupStatus.textContent = "Invitation revoked.";
+        } catch (error) { groupStatus.textContent = error.message; }
+      });
+      row.appendChild(revoke);
+    }
+    list.appendChild(row);
+  });
+  panel.appendChild(list);
+}
+
+
+// Phase 25B: invitation landing and authenticated join flow.
+async function processGroupInvitationLink() {
+  const params = new URLSearchParams(window.location.search);
+  const inviteToken = params.get("groupInvite");
+  if (!inviteToken || !token) return;
+  const existing = document.getElementById("wt-group-invite-dialog");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "wt-group-invite-dialog";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(8,24,36,.68);display:grid;place-items:center;padding:18px;";
+  const card = document.createElement("section");
+  card.style.cssText = "width:min(100%,440px);background:var(--wt-surface,#fff);color:var(--wt-text,#172b3a);border-radius:18px;padding:24px;box-shadow:0 18px 60px #0004;";
+  const heading = document.createElement("h2");
+  heading.textContent = "Group invitation";
+  const detail = document.createElement("p");
+  detail.textContent = "Checking this secure invitation…";
+  detail.setAttribute("role","status");
+  const join = document.createElement("button");
+  join.type = "button";
+  join.textContent = "Join group";
+  join.disabled = true;
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "secondary";
+  cancel.textContent = "Not now";
+  cancel.style.marginLeft = "8px";
+  cancel.addEventListener("click", () => overlay.remove());
+  join.addEventListener("click", async () => {
+    join.disabled = true;
+    try {
+      const result = await api("/api/groups/invitation/" + encodeURIComponent(inviteToken) + "/join", { method: "POST" });
+      overlay.remove();
+      await loadGroups();
+      if (result.groupId && !result.pending) {
+        groupSelect.value = String(result.groupId);
+        await openSelectedGroup();
+      }
+      groupStatus.textContent = result.message || "You joined the group successfully.";
+      params.delete("groupInvite");
+      const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
+      window.history.replaceState({}, "", cleanUrl);
+    } catch (error) {
+      detail.textContent = error.message;
+      join.disabled = false;
+    }
+  });
+  card.append(heading, detail, join, cancel);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  try {
+    const preview = await api("/api/groups/invitation/" + encodeURIComponent(inviteToken));
+    detail.textContent = "You have been invited to join “" + preview.invitation.groupName + "”. This invitation expires " + new Date(preview.invitation.expiresAt).toLocaleString() + ".";
+    join.disabled = false;
+  } catch (error) {
+    detail.textContent = error.message;
+    join.hidden = true;
+  }
+}
+
+
+// Phase 25B-D: group settings, approval queue, and membership activity UI.
+const groupGovernancePanel = document.getElementById("group-governance-panel");
+const groupSettingsFields = document.getElementById("group-settings-fields");
+const groupRequestsList = document.getElementById("group-join-requests-list");
+const groupActivityList = document.getElementById("group-activity-list");
+const groupGovernanceStatus = document.getElementById("group-governance-status");
+
+function showGroupGovernanceView(view) {
+  if (!groupGovernancePanel) return;
+  groupGovernancePanel.hidden = false;
+  groupSettingsFields.hidden = view !== "settings";
+  groupRequestsList.hidden = view !== "requests";
+  groupActivityList.hidden = view !== "activity";
+}
+
+async function loadGroupDetails(groupId, showPanel = true) {
+  const data = await api("/api/groups/" + groupId + "/details");
+  const details = data.details;
+  document.getElementById("group-description-input").value = details.description || "";
+  document.getElementById("group-rules-input").value = details.rules || "";
+  document.getElementById("group-member-list-visibility").value = details.memberListVisibility || "members";
+  document.getElementById("group-approval-required").checked = Boolean(details.approvalRequired);
+  const canEdit = Boolean(activeGroupCanManage);
+  ["group-description-input","group-rules-input","group-member-list-visibility","group-approval-required"].forEach(id => {
+    document.getElementById(id).disabled = !canEdit;
+  });
+  document.getElementById("save-group-settings-button").hidden = !canEdit;
+  document.getElementById("group-settings-button").hidden = false;
+  document.getElementById("group-requests-button").hidden = !canEdit;
+  if (showPanel) showGroupGovernanceView("settings");
+}
+
+document.getElementById("group-settings-button").addEventListener("click", async () => {
+  if (!activeGroupId) { groupStatus.textContent = "Open a group first."; return; }
+  try {
+    await loadGroupDetails(activeGroupId, true);
+    groupGovernanceStatus.textContent = activeGroupCanManage ? "Only group admins can change these settings." : "Group details are read-only.";
+  } catch (error) { groupStatus.textContent = error.message; }
+});
+
+document.getElementById("save-group-settings-button").addEventListener("click", async () => {
+  if (!activeGroupId || !activeGroupCanManage) return;
+  const button = document.getElementById("save-group-settings-button");
+  button.disabled = true;
+  try {
+    const result = await api("/api/groups/" + activeGroupId + "/details", {
+      method: "PATCH",
+      body: JSON.stringify({
+        description: document.getElementById("group-description-input").value,
+        rules: document.getElementById("group-rules-input").value,
+        memberListVisibility: document.getElementById("group-member-list-visibility").value,
+        approvalRequired: document.getElementById("group-approval-required").checked
+      })
+    });
+    groupGovernanceStatus.textContent = result.message || "Group settings saved.";
+  } catch (error) { groupGovernanceStatus.textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+document.getElementById("group-requests-button").addEventListener("click", async () => {
+  if (!activeGroupId || !activeGroupCanManage) return;
+  showGroupGovernanceView("requests");
+  groupRequestsList.replaceChildren();
+  groupGovernanceStatus.textContent = "Loading pending requests…";
+  try {
+    const data = await api("/api/groups/" + activeGroupId + "/join-requests");
+    if (!data.requests.length) {
+      groupRequestsList.textContent = "There are no pending join requests.";
+    } else {
+      data.requests.forEach(request => {
+        const row = document.createElement("div");
+        row.className = "social-card";
+        const name = document.createElement("strong");
+        name.textContent = request.username + " · requested " + new Date(request.createdAt).toLocaleString();
+        const approve = document.createElement("button");
+        approve.type = "button";
+        approve.textContent = "Approve";
+        const reject = document.createElement("button");
+        reject.type = "button";
+        reject.textContent = "Reject";
+        const review = async decision => {
+          approve.disabled = true; reject.disabled = true;
+          try {
+            const result = await api("/api/groups/" + activeGroupId + "/join-requests/" + request.id + "/review", {
+              method: "POST", body: JSON.stringify({ decision })
+            });
+            groupGovernanceStatus.textContent = result.message;
+            await loadGroupMembers(activeGroupId);
+            await renderPendingGroupRequests(activeGroupId);
+          } catch (error) {
+            groupGovernanceStatus.textContent = error.message;
+            approve.disabled = false; reject.disabled = false;
+          }
+        };
+        approve.addEventListener("click", () => review("approve"));
+        reject.addEventListener("click", () => review("reject"));
+        row.append(name, document.createElement("br"), approve, reject);
+        groupRequestsList.appendChild(row);
+      });
+    }
+    groupGovernanceStatus.textContent = "Pending requests: " + data.requests.length;
+  } catch (error) { groupGovernanceStatus.textContent = error.message; }
+});
+
+async function renderPendingGroupRequests(groupId) {
+  const data = await api("/api/groups/" + groupId + "/join-requests");
+  groupRequestsList.replaceChildren();
+  if (!data.requests.length) {
+    groupRequestsList.textContent = "There are no pending join requests.";
+    return;
+  }
+  data.requests.forEach(request => {
+    const row = document.createElement("div");
+    row.className = "social-card";
+    const name = document.createElement("strong");
+    name.textContent = request.username + " · requested " + new Date(request.createdAt).toLocaleString();
+    const approve = document.createElement("button");
+    approve.type = "button"; approve.textContent = "Approve";
+    const reject = document.createElement("button");
+    reject.type = "button"; reject.textContent = "Reject";
+    const review = async decision => {
+      approve.disabled = true; reject.disabled = true;
+      try {
+        const result = await api("/api/groups/" + groupId + "/join-requests/" + request.id + "/review", {
+          method: "POST", body: JSON.stringify({ decision })
+        });
+        groupGovernanceStatus.textContent = result.message;
+        await loadGroupMembers(groupId);
+        await renderPendingGroupRequests(groupId);
+      } catch (error) { groupGovernanceStatus.textContent = error.message; approve.disabled = false; reject.disabled = false; }
+    };
+    approve.addEventListener("click", () => review("approve"));
+    reject.addEventListener("click", () => review("reject"));
+    row.append(name, document.createElement("br"), approve, reject);
+    groupRequestsList.appendChild(row);
+  });
+}
+
+document.getElementById("group-activity-button").addEventListener("click", async () => {
+  if (!activeGroupId) { groupStatus.textContent = "Open a group first."; return; }
+  showGroupGovernanceView("activity");
+  groupActivityList.textContent = "Loading group activity…";
+  try {
+    const data = await api("/api/groups/" + activeGroupId + "/activity?limit=30");
+    groupActivityList.replaceChildren();
+    const labels = {
+      group_created: "created the group", member_added: "added a member", member_joined: "joined the group",
+      member_left: "left the group", member_removed: "removed a member", role_changed: "changed a member role",
+      invitation_created: "created an invitation", invitation_revoked: "revoked an invitation",
+      join_requested: "requested to join", join_approved: "approved a join request",
+      join_rejected: "rejected a join request", group_settings_updated: "updated group settings"
+    };
+    if (!data.events.length) groupActivityList.textContent = "No group activity recorded yet.";
+    data.events.forEach(event => {
+      const row = document.createElement("p");
+      const actor = event.actorUsername || "A former member";
+      const subject = event.subjectUsername && event.subjectUsername !== event.actorUsername ? " · " + event.subjectUsername : "";
+      row.textContent = actor + " " + (labels[event.eventType] || event.eventType.replaceAll("_", " ")) + subject +
+        (event.details ? " (" + event.details + ")" : "") + " · " + new Date(event.createdAt).toLocaleString();
+      groupActivityList.appendChild(row);
+    });
+    groupGovernanceStatus.textContent = "Showing the latest " + data.events.length + " events.";
+  } catch (error) { groupGovernanceStatus.textContent = error.message; }
+});

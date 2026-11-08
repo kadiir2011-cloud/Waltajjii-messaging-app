@@ -889,9 +889,30 @@
         <div class="row">
           <button type="button" id="load-group-button">Open group</button>
           <button type="button" id="manage-group-button">View / manage members</button>
+          <button type="button" id="group-invitations-button">Group invitations</button>
+          <button type="button" id="group-settings-button">Group settings</button>
+          <button type="button" id="group-requests-button">Join requests</button>
+          <button type="button" id="group-activity-button">Group activity</button>
         </div>
         <p id="group-status" role="status" aria-live="polite" class="muted">Log in to view your groups.</p>
         <div id="group-members" class="group-members" aria-live="polite"></div>
+        <section id="group-invitations-panel" class="group-members" hidden aria-live="polite"></section>
+        <section id="group-governance-panel" class="group-members" hidden aria-live="polite">
+          <div id="group-settings-fields">
+            <h3>Group details and privacy</h3>
+            <label for="group-description-input">Description (maximum 500 characters)</label>
+            <textarea id="group-description-input" maxlength="500" rows="3"></textarea>
+            <label for="group-rules-input">Group rules (maximum 2,000 characters)</label>
+            <textarea id="group-rules-input" maxlength="2000" rows="4"></textarea>
+            <label for="group-member-list-visibility">Who can view the member list?</label>
+            <select id="group-member-list-visibility"><option value="members">All group members</option><option value="admins">Group admins only</option></select>
+            <label><input type="checkbox" id="group-approval-required"> Require admin approval for invitation joins</label>
+            <button type="button" id="save-group-settings-button">Save group settings</button>
+          </div>
+          <p id="group-governance-status" class="muted" role="status" aria-live="polite"></p>
+          <div id="group-join-requests-list" hidden></div>
+          <div id="group-activity-list" hidden></div>
+        </section>
         <div id="group-messages" aria-live="polite" class="group-messages">Choose a group and select Open group.</div>
         <form id="group-message-form" class="group-message-form">
           <input id="group-message-input" maxlength="2000" placeholder="Write a group message..." autocomplete="off">

@@ -1,5 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const QRCode = require("qrcode");
 const db = require("../db");
 
 const router = express.Router();
@@ -32,7 +33,42 @@ function isAdmin(groupId, userId) {
   return member && member.role === "admin";
 }
 
+function logGroupActivity(groupId, actorId, eventType, subjectUserId = null, details = "") {
+  db.prepare("INSERT INTO group_activity (group_id, actor_id, subject_user_id, event_type, details) VALUES (?, ?, ?, ?, ?)")
+    .run(groupId, actorId || null, subjectUserId, eventType, String(details).slice(0, 240));
+}
+
 router.use(authenticate);
+
+// Generate invitation QR images on the server so the browser does not depend on a third-party CDN.
+router.post("/invitation/qr", async (req, res) => {
+  const value = String(req.body.url || "").trim();
+  if (!value || value.length > 2048) return res.status(400).json({ error: "A valid invitation URL is required." });
+  let parsed;
+  try {
+    parsed = new URL(value);
+    const configuredOrigin = process.env.PUBLIC_APP_URL
+      ? new URL(process.env.PUBLIC_APP_URL).origin
+      : `${req.protocol}://${req.get("host")}`;
+    if (!["https:", "http:"].includes(parsed.protocol) || parsed.origin !== configuredOrigin ||
+        !parsed.pathname.includes("/")) {
+      return res.status(400).json({ error: "Only this Waltajjii app's invitation links can be encoded." });
+    }
+  } catch {
+    return res.status(400).json({ error: "The invitation URL is invalid." });
+  }
+  try {
+    const dataUrl = await QRCode.toDataURL(value, {
+      errorCorrectionLevel: "H",
+      width: 240,
+      margin: 2
+    });
+    res.json({ dataUrl });
+  } catch (error) {
+    console.error("Invitation QR generation failed:", error.message);
+    res.status(500).json({ error: "The QR code could not be generated. You can still use the invitation link." });
+  }
+});
 
 // List only groups the signed-in user belongs to.
 router.get("/", (req, res) => {
@@ -84,6 +120,7 @@ router.post("/", (req, res) => {
   });
 
   const groupId = create();
+  logGroupActivity(groupId, req.auth.userId, "group_created");
   const io = req.app.get("io");
   if (io) {
     const memberIds = [req.auth.userId, ...users.map(user => user.id)];
@@ -100,12 +137,18 @@ router.get("/:id/members", (req, res) => {
   if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) {
     return res.status(404).json({ error: "Group not found." });
   }
+  const canManage = Boolean(isAdmin(groupId, req.auth.userId));
+  const settings = db.prepare("SELECT member_list_visibility AS memberListVisibility FROM groups WHERE id = ?").get(groupId);
+  if (settings.memberListVisibility === "admins" && !canManage) {
+    const self = db.prepare("SELECT u.id, u.username, gm.role, gm.joined_at AS joinedAt FROM group_members gm JOIN users u ON u.id = gm.user_id WHERE gm.group_id = ? AND gm.user_id = ?").all(groupId, req.auth.userId);
+    return res.json({ members: self, canManage, memberListRestricted: true });
+  }
   const members = db.prepare(`
     SELECT u.id, u.username, gm.role, gm.joined_at AS joinedAt
     FROM group_members gm JOIN users u ON u.id = gm.user_id
     WHERE gm.group_id = ? ORDER BY CASE gm.role WHEN 'admin' THEN 0 ELSE 1 END, u.username
   `).all(groupId);
-  res.json({ members, canManage: Boolean(isAdmin(groupId, req.auth.userId)) });
+  res.json({ members, canManage, memberListRestricted: false });
 });
 
 router.post("/:id/members", (req, res) => {
@@ -127,6 +170,7 @@ router.post("/:id/members", (req, res) => {
     }
     throw e;
   }
+  logGroupActivity(groupId, req.auth.userId, "member_added", user.id);
   const io = req.app.get("io");
   if (io) {
     io.in(`user:${user.id}`).socketsJoin(`group:${groupId}`);
@@ -153,6 +197,7 @@ router.patch("/:id/members/:userId/role", (req, res) => {
     if (adminCount <= 1) return res.status(400).json({ error: "A group must always have at least one admin." });
   }
   db.prepare("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?").run(role, groupId, userId);
+  logGroupActivity(groupId, req.auth.userId, "role_changed", userId, role);
   const io = req.app.get("io");
   if (io) io.to(`group:${groupId}`).emit("group:members:updated", { groupId, roleChanged: true });
   res.json({ message: role === "admin" ? "Member promoted to admin." : "Admin role removed." });
@@ -168,6 +213,7 @@ router.delete("/:id/leave", (req, res) => {
     if (otherAdmins === 0) return res.status(400).json({ error: "Assign another admin before leaving this group." });
   }
   db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, req.auth.userId);
+  logGroupActivity(groupId, req.auth.userId, "member_left", req.auth.userId);
   const io = req.app.get("io");
   if (io) {
     io.to(`group:${groupId}`).emit("group:members:updated", { groupId, left: req.auth.userId });
@@ -188,6 +234,7 @@ router.delete("/:id/members/:userId", (req, res) => {
   }
   const result = db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, userId);
   if (!result.changes) return res.status(404).json({ error: "Member not found." });
+  logGroupActivity(groupId, req.auth.userId, "member_removed", userId);
   const io = req.app.get("io");
   if (io) {
     io.to(`group:${groupId}`).emit("group:members:updated", { groupId });
@@ -404,6 +451,256 @@ router.delete("/:id/messages/:messageId/pin", (req, res) => {
   const io = req.app.get("io");
   if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
   res.json({ message: updated });
+});
+
+
+/* Phase 25A: secure, expiring and revocable group invitation links. */
+const crypto = require("crypto");
+
+function invitationHash(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function validInvitationToken(token) {
+  return typeof token === "string" && /^[A-Za-z0-9_-]{40,100}$/.test(token);
+}
+
+function invitationUrl(req, token) {
+  const configuredBase = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+  const base = configuredBase || `${req.protocol}://${req.get("host")}`;
+  return `${base}/?groupInvite=${encodeURIComponent(token)}`;
+}
+
+// Create an invitation. The raw token is returned once and is never stored.
+router.post("/:id/invitations", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can create invitation links." });
+  }
+  const duration = Number(req.body.expiresInHours || 24);
+  const allowedDurations = [1, 24, 168, 720];
+  if (!allowedDurations.includes(duration)) {
+    return res.status(400).json({ error: "Choose an expiry of 1 hour, 1 day, 7 days, or 30 days." });
+  }
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = invitationHash(rawToken);
+  const expiresAt = new Date(Date.now() + duration * 60 * 60 * 1000).toISOString();
+  const useLimit = req.body.useLimit == null || req.body.useLimit === "" ? null : Number(req.body.useLimit);
+  if (useLimit !== null && (!Number.isSafeInteger(useLimit) || useLimit < 1 || useLimit > 1000)) {
+    return res.status(400).json({ error: "Use limit must be between 1 and 1000." });
+  }
+  const result = db.prepare(`
+    INSERT INTO group_invitations (group_id, token_hash, created_by, expires_at, use_limit)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(groupId, tokenHash, req.auth.userId, expiresAt, useLimit);
+  logGroupActivity(groupId, req.auth.userId, "invitation_created");
+  res.status(201).json({
+    invitation: {
+      id: result.lastInsertRowid,
+      url: invitationUrl(req, rawToken),
+      expiresAt,
+      useLimit
+    }
+  });
+});
+
+// List active and historical invitations for admins; never return token hashes.
+router.get("/:id/invitations", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can view invitation links." });
+  }
+  const invitations = db.prepare(`
+    SELECT i.id, i.created_at AS createdAt, i.expires_at AS expiresAt,
+      i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount,
+      u.username AS createdBy
+    FROM group_invitations i JOIN users u ON u.id = i.created_by
+    WHERE i.group_id = ? ORDER BY i.id DESC LIMIT 100
+  `).all(groupId);
+  res.json({ invitations });
+});
+
+// Revoke an invitation immediately.
+router.delete("/:id/invitations/:invitationId", (req, res) => {
+  const groupId = Number(req.params.id);
+  const invitationId = Number(req.params.invitationId);
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(invitationId) ||
+      !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can revoke invitation links." });
+  }
+  const result = db.prepare(`
+    UPDATE group_invitations SET revoked_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND group_id = ? AND revoked_at IS NULL
+  `).run(invitationId, groupId);
+  if (!result.changes) return res.status(404).json({ error: "Active invitation not found." });
+  logGroupActivity(groupId, req.auth.userId, "invitation_revoked");
+  res.json({ message: "Invitation revoked." });
+});
+
+// Safe preview: reveal only group name and basic invitation validity, never group content.
+router.get("/invitation/:token", (req, res) => {
+  const token = req.params.token;
+  if (!validInvitationToken(token)) return res.status(404).json({ error: "Invitation not found." });
+  const invitation = db.prepare(`
+    SELECT i.id, i.group_id AS groupId, i.expires_at AS expiresAt,
+      i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount,
+      g.name AS groupName
+    FROM group_invitations i JOIN groups g ON g.id = i.group_id
+    WHERE i.token_hash = ?
+  `).get(invitationHash(token));
+  if (!invitation || invitation.revokedAt || Date.parse(invitation.expiresAt) <= Date.now() ||
+      (invitation.useLimit !== null && invitation.useCount >= invitation.useLimit)) {
+    return res.status(410).json({ error: "This invitation is expired, revoked, or has reached its use limit." });
+  }
+  res.json({ invitation: { groupName: invitation.groupName, expiresAt: invitation.expiresAt } });
+});
+
+// Join through a valid invite. Membership and use count are committed atomically.
+router.post("/invitation/:token/join", (req, res) => {
+  const token = req.params.token;
+  if (!validInvitationToken(token)) return res.status(404).json({ error: "Invitation not found." });
+  const join = db.transaction(() => {
+    const invite = db.prepare("SELECT i.id, i.group_id AS groupId, i.expires_at AS expiresAt, i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount, g.approval_required AS approvalRequired FROM group_invitations i JOIN groups g ON g.id = i.group_id WHERE i.token_hash = ?").get(invitationHash(token));
+    if (!invite || invite.revokedAt || Date.parse(invite.expiresAt) <= Date.now() ||
+        (invite.useLimit !== null && invite.useCount >= invite.useLimit)) {
+      return { error: "This invitation is expired, revoked, or has reached its use limit." };
+    }
+    if (membership(invite.groupId, req.auth.userId)) return { alreadyMember: true, groupId: invite.groupId };
+    const count = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?").get(invite.groupId).n;
+    if (count >= 100) return { error: "This group has reached 100 members." };
+    if (invite.approvalRequired) {
+      const pending = db.prepare("SELECT id FROM group_join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'").get(invite.groupId, req.auth.userId);
+      if (pending) {
+        db.prepare("UPDATE group_join_requests SET invitation_id = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?").run(invite.id, pending.id);
+        return { pending: true, requestId: pending.id, groupId: invite.groupId };
+      }
+      const created = db.prepare("INSERT INTO group_join_requests (group_id, user_id, invitation_id) VALUES (?, ?, ?)").run(invite.groupId, req.auth.userId, invite.id);
+      db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'requested')").run(invite.id, req.auth.userId);
+      logGroupActivity(invite.groupId, req.auth.userId, "join_requested", req.auth.userId);
+      return { pending: true, requestId: created.lastInsertRowid, groupId: invite.groupId };
+    }
+    const changed = db.prepare("UPDATE group_invitations SET use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL AND datetime(expires_at) > datetime('now') AND (use_limit IS NULL OR use_count < use_limit)").run(invite.id);
+    if (!changed.changes) return { error: "This invitation is no longer available." };
+    db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')").run(invite.groupId, req.auth.userId);
+    db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'joined')").run(invite.id, req.auth.userId);
+    logGroupActivity(invite.groupId, req.auth.userId, "member_joined", req.auth.userId);
+    return { groupId: invite.groupId };
+  });
+  try {
+    const result = join();
+    if (result.error) return res.status(410).json({ error: result.error });
+    const io = req.app.get("io");
+    if (result.pending) {
+      if (io) io.to("group:" + result.groupId).emit("group:join-request", { groupId: result.groupId, requestId: result.requestId });
+      return res.status(202).json({ message: "Your request has been sent to the group admins for approval.", pending: true, groupId: result.groupId });
+    }
+    if (!result.alreadyMember && io) {
+      io.in("user:" + req.auth.userId).socketsJoin("group:" + result.groupId);
+      io.to("user:" + req.auth.userId).emit("groups:updated", { groupId: result.groupId });
+      io.to("group:" + result.groupId).emit("group:members:updated", { groupId: result.groupId });
+    }
+    res.json({ message: result.alreadyMember ? "You are already a member of this group." : "You joined the group.", groupId: result.groupId, alreadyMember: Boolean(result.alreadyMember) });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_PRIMARYKEY" || error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      return res.status(409).json({ error: "You are already a member or have a pending request." });
+    }
+    throw error;
+  }
+});
+
+
+/* Phase 25B: admins review invitation-based membership requests. */
+router.get("/:id/join-requests", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can review join requests." });
+  const requests = db.prepare("SELECT r.id, r.user_id AS userId, u.username, r.created_at AS createdAt, r.status FROM group_join_requests r JOIN users u ON u.id = r.user_id WHERE r.group_id = ? AND r.status = 'pending' ORDER BY r.created_at ASC LIMIT 100").all(groupId);
+  res.json({ requests });
+});
+
+router.post("/:id/join-requests/:requestId/review", (req, res) => {
+  const groupId = Number(req.params.id), requestId = Number(req.params.requestId);
+  const decision = String(req.body.decision || "");
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(requestId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can review join requests." });
+  if (!["approve", "reject"].includes(decision)) return res.status(400).json({ error: "Choose approve or reject." });
+  const review = db.transaction(() => {
+    const request = db.prepare("SELECT r.id, r.user_id AS userId, r.invitation_id AS invitationId, r.status, i.expires_at AS expiresAt, i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount FROM group_join_requests r LEFT JOIN group_invitations i ON i.id = r.invitation_id WHERE r.id = ? AND r.group_id = ?").get(requestId, groupId);
+    if (!request || request.status !== "pending") return { error: "This request has already been reviewed or no longer exists." };
+    if (decision === "approve") {
+      if (membership(groupId, request.userId)) {
+        db.prepare("UPDATE group_join_requests SET status='approved', reviewed_at=CURRENT_TIMESTAMP, reviewed_by=? WHERE id=?").run(req.auth.userId, requestId);
+        return { alreadyMember: true, userId: request.userId };
+      }
+      if (!request.invitationId || request.revokedAt || !request.expiresAt || Date.parse(request.expiresAt) <= Date.now() ||
+          (request.useLimit !== null && request.useCount >= request.useLimit)) return { error: "The invitation has expired, been revoked, or reached its use limit. The request cannot be approved." };
+      const count = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?").get(groupId).n;
+      if (count >= 100) return { error: "This group has reached 100 members." };
+      const consumed = db.prepare("UPDATE group_invitations SET use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL AND datetime(expires_at) > datetime('now') AND (use_limit IS NULL OR use_count < use_limit)").run(request.invitationId);
+      if (!consumed.changes) return { error: "The invitation is no longer available." };
+      db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')").run(groupId, request.userId);
+      db.prepare("UPDATE group_join_requests SET status='approved', reviewed_at=CURRENT_TIMESTAMP, reviewed_by=? WHERE id=?").run(req.auth.userId, requestId);
+      db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'joined')").run(request.invitationId, request.userId);
+      logGroupActivity(groupId, req.auth.userId, "join_approved", request.userId);
+      return { userId: request.userId, approved: true };
+    }
+    db.prepare("UPDATE group_join_requests SET status='rejected', reviewed_at=CURRENT_TIMESTAMP, reviewed_by=? WHERE id=?").run(req.auth.userId, requestId);
+    logGroupActivity(groupId, req.auth.userId, "join_rejected", request.userId);
+    return { userId: request.userId, rejected: true };
+  });
+  try {
+    const result = review();
+    if (result.error) return res.status(409).json({ error: result.error });
+    const io = req.app.get("io");
+    if (result.approved && io) {
+      io.in("user:" + result.userId).socketsJoin("group:" + groupId);
+      io.to("user:" + result.userId).emit("groups:updated", { groupId });
+      io.to("group:" + groupId).emit("group:members:updated", { groupId });
+    }
+    if (io) io.to("user:" + result.userId).emit("group:join-request:decision", { groupId, decision, alreadyMember: Boolean(result.alreadyMember) });
+    res.json({ message: result.alreadyMember ? "The requester is already a member." : decision === "approve" ? "Join request approved." : "Join request rejected." });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_PRIMARYKEY" || error.code === "SQLITE_CONSTRAINT_UNIQUE") return res.status(409).json({ error: "This user is already a member." });
+    throw error;
+  }
+});
+
+/* Phase 25C: group description, rules and privacy controls. */
+router.get("/:id/details", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
+  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired, member_list_visibility AS memberListVisibility FROM groups WHERE id = ?").get(groupId);
+  res.json({ details });
+});
+
+router.patch("/:id/details", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can update group details." });
+  const description = String(req.body.description ?? "").trim();
+  const rules = String(req.body.rules ?? "").trim();
+  const currentSettings = db.prepare("SELECT visibility FROM groups WHERE id = ?").get(groupId);
+  const visibility = String(req.body.visibility ?? currentSettings.visibility ?? "private");
+  const approvalRequired = req.body.approvalRequired === true;
+  const memberListVisibility = String(req.body.memberListVisibility || "members");
+  if (description.length > 500) return res.status(400).json({ error: "Group description must be 500 characters or fewer." });
+  if (rules.length > 2000) return res.status(400).json({ error: "Group rules must be 2,000 characters or fewer." });
+  if (!["private", "public"].includes(visibility)) return res.status(400).json({ error: "Visibility must be private or public." });
+  if (!["members", "admins"].includes(memberListVisibility)) return res.status(400).json({ error: "Member-list visibility must be members or admins." });
+  db.prepare("UPDATE groups SET description=?, rules=?, visibility=?, approval_required=?, member_list_visibility=? WHERE id=?").run(description, rules, visibility, approvalRequired ? 1 : 0, memberListVisibility, groupId);
+  logGroupActivity(groupId, req.auth.userId, "group_settings_updated", req.auth.userId, visibility + (approvalRequired ? ";approval required" : ";approval off") + ";member list:" + memberListVisibility);
+  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired, member_list_visibility AS memberListVisibility FROM groups WHERE id=?").get(groupId);
+  const io = req.app.get("io");
+  if (io) io.to("group:" + groupId).emit("group:details:updated", { groupId });
+  res.json({ details, message: "Group details saved." });
+});
+
+/* Phase 25D: member-visible, paginated governance and membership history. */
+router.get("/:id/activity", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
+  const rawLimit = Number(req.query.limit || 30), rawBefore = Number(req.query.before || 0);
+  const limit = Number.isSafeInteger(rawLimit) ? Math.max(1, Math.min(rawLimit, 100)) : 30;
+  const before = Number.isSafeInteger(rawBefore) && rawBefore > 0 ? rawBefore : Number.MAX_SAFE_INTEGER;
+  const events = db.prepare("SELECT a.id, a.event_type AS eventType, a.details, a.created_at AS createdAt, actor.username AS actorUsername, subject.username AS subjectUsername FROM group_activity a LEFT JOIN users actor ON actor.id = a.actor_id LEFT JOIN users subject ON subject.id = a.subject_user_id WHERE a.group_id = ? AND a.id < ? ORDER BY a.id DESC LIMIT ?").all(groupId, before, limit);
+  res.json({ events, nextBefore: events.length === limit ? events[events.length - 1].id : null });
 });
 
 module.exports = router;
