@@ -87,7 +87,9 @@ const profileMigrations = [
   ["department", "TEXT NOT NULL DEFAULT ''"],
   ["location", "TEXT NOT NULL DEFAULT ''"],
   ["website", "TEXT NOT NULL DEFAULT ''"],
-  ["profile_mode", "TEXT NOT NULL DEFAULT 'both'"]
+  ["profile_mode", "TEXT NOT NULL DEFAULT 'both'"],
+  ["full_name", "TEXT NOT NULL DEFAULT ''"],
+  ["profile_background", "TEXT NOT NULL DEFAULT 'mist'"]
 ];
 for (const [column, definition] of profileMigrations) {
   if (!profileColumnNames.includes(column)) {
