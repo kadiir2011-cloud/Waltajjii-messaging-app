@@ -2078,13 +2078,13 @@ function socialUserCard(user, mode) {
   const card = socialElement("article", "social-card");
   const head = socialElement("div", "social-card-head");
   const avatar = socialElement("img", "social-avatar");
-  avatar.alt = user.username + " profile picture";
+  avatar.alt = (user.fullName || "Waltajjii member") + " profile picture";
   if (user.avatarPath) {
     avatar.src = "/api/uploads/profile-picture/" + encodeURIComponent(user.id);
     avatar.onerror = () => avatar.removeAttribute("src");
   }
   const identity = socialElement("div");
-  identity.appendChild(socialElement("strong", "", user.username));
+  identity.appendChild(socialElement("strong", "", user.fullName || "Waltajjii member"));
   const professional = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
   if (professional) identity.appendChild(socialElement("div", "social-muted", professional));
   if (user.bio) identity.appendChild(socialElement("div", "social-muted", user.bio));
@@ -2171,7 +2171,7 @@ async function loadRequests() {
     if (!data.incoming.length) host.appendChild(socialElement("p", "social-empty", "No incoming requests."));
     data.incoming.forEach(request => {
       const card = socialElement("article", "social-card");
-      card.appendChild(socialElement("strong", "", request.username));
+      card.appendChild(socialElement("strong", "", request.fullName || "Waltajjii member"));
       const actions = socialElement("div", "social-actions");
       ["accept", "decline"].forEach(action => {
         const button = socialElement("button", "", action === "accept" ? "Accept" : "Decline");
@@ -2194,7 +2194,7 @@ async function loadRequests() {
     });
     host.appendChild(socialElement("h4", "", "Sent requests"));
     if (!data.outgoing.length) host.appendChild(socialElement("p", "social-empty", "No pending sent requests."));
-    data.outgoing.forEach(request => host.appendChild(socialElement("p", "social-muted", request.username + " — awaiting response")));
+    data.outgoing.forEach(request => host.appendChild(socialElement("p", "social-muted", (request.fullName || "Waltajjii member") + " — awaiting response")));
   } catch (error) {
     host.replaceChildren(socialElement("p", "social-empty", error.message));
   }
@@ -2224,7 +2224,7 @@ async function loadComments(postId, listHost) {
     if (!data.comments.length) listHost.appendChild(socialElement("p", "social-muted", "No comments yet."));
     data.comments.forEach(comment => {
       const item = socialElement("div", "social-comment");
-      item.appendChild(socialElement("strong", "", comment.username));
+      item.appendChild(socialElement("strong", "", comment.fullName || "Waltajjii member"));
       item.appendChild(socialElement("div", "", comment.content));
       listHost.appendChild(item);
     });
@@ -2246,7 +2246,7 @@ async function loadFeed() {
     data.posts.forEach(post => {
       const card = socialElement("article", "social-card");
       const head = socialElement("div", "social-card-head");
-      head.appendChild(socialElement("strong", "", post.username));
+      head.appendChild(socialElement("strong", "", post.fullName || "Waltajjii member"));
       head.appendChild(socialElement("span", "social-muted", post.createdAt));
       card.appendChild(head);
       card.appendChild(socialElement("div", "social-post", post.content));
@@ -2369,7 +2369,7 @@ async function loadMoments() {
     data.moments.forEach(moment => {
       const card = socialElement("article", "moment-card");
       const head = socialElement("div", "moment-card-head");
-      head.appendChild(socialElement("strong", "", moment.username));
+      head.appendChild(socialElement("strong", "", moment.fullName || "Waltajjii member"));
       const expires = new Date(String(moment.expiresAt).replace(" ", "T") + "Z");
       const remaining = Math.max(0, Math.ceil((expires.getTime() - Date.now()) / 3600000));
       head.appendChild(socialElement("span", "social-muted", remaining + "h left · " + (moment.audience === "everyone" ? "Everyone" : "Followers")));
