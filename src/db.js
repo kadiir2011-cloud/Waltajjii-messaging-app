@@ -259,4 +259,19 @@ for (const [column, definition] of [
   if (!groupMessageColumns.includes(column)) db.exec(`ALTER TABLE group_messages ADD COLUMN ${column} ${definition}`);
 }
 
+/* Phase 21: per-member group delivery and read receipts. */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_message_receipts (
+    group_message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    delivered_at TEXT,
+    read_at TEXT,
+    PRIMARY KEY (group_message_id, user_id),
+    FOREIGN KEY (group_message_id) REFERENCES group_messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_message_receipts_user
+  ON group_message_receipts(user_id, read_at, group_message_id);
+`);
+
 module.exports = db;
