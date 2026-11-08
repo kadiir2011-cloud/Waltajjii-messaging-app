@@ -147,6 +147,9 @@ async function loadMyProfile() {
   const bioInput = document.getElementById("profile-bio-input");
   const bioDisplay = document.getElementById("profile-bio-display");
   const usernameDisplay = document.getElementById("profile-username");
+  const fullNameInput = document.getElementById("profile-full-name-input");
+  const backgroundInput = document.getElementById("profile-background");
+  const fullNameDisplay = document.getElementById("profile-full-name-display");
   const picturePreview = document.getElementById("profile-picture-preview");
   const profileFields = {
     title: document.getElementById("profile-title"),
@@ -162,6 +165,10 @@ async function loadMyProfile() {
     const user = data.user;
 
     usernameDisplay.textContent = user.username;
+    fullNameInput.value = user.fullName || "";
+    fullNameDisplay.textContent = user.fullName || "Waltajjii member";
+    backgroundInput.value = user.profileBackground || "mist";
+    document.getElementById("profile-hero").dataset.profileBackground = backgroundInput.value;
     bioInput.value = user.bio || "";
     bioDisplay.textContent = user.bio || "No bio added yet.";
     profileFields.title.value = user.professionalTitle || "";
@@ -178,7 +185,7 @@ async function loadMyProfile() {
     const sidebarProfessional = document.getElementById("wt-sidebar-professional");
     const sidebarAvatar = document.getElementById("wt-sidebar-avatar");
     const sidebarFallback = document.getElementById("wt-sidebar-avatar-fallback");
-    if (sidebarUsername) sidebarUsername.textContent = user.username || "Your profile";
+    if (sidebarUsername) sidebarUsername.textContent = user.fullName || "Your profile";
     if (sidebarProfessional) sidebarProfessional.textContent = professionalLine || "Waltajjii member";
 
     if (user.avatarPath) {
@@ -1807,6 +1814,8 @@ document.getElementById("profile-bio-input").addEventListener("input", event => 
 document.getElementById("save-profile-button").addEventListener("click", async () => {
   const status = document.getElementById("profile-status");
   const payload = {
+    fullName: document.getElementById("profile-full-name-input").value,
+    profileBackground: document.getElementById("profile-background").value,
     bio: document.getElementById("profile-bio-input").value,
     professionalTitle: document.getElementById("profile-title").value,
     organization: document.getElementById("profile-organization").value,
@@ -1822,6 +1831,9 @@ document.getElementById("save-profile-button").addEventListener("click", async (
       body: JSON.stringify(payload)
     });
 
+    document.getElementById("profile-full-name-display").textContent = data.fullName || "Waltajjii member";
+    document.getElementById("wt-sidebar-username").textContent = data.fullName || "Your profile";
+    document.getElementById("profile-hero").dataset.profileBackground = data.profileBackground || "mist";
     document.getElementById("profile-bio-display").textContent =
       data.bio || "No bio added yet.";
     const professionalLine = [data.professionalTitle, data.organization].filter(Boolean).join(" · ");
