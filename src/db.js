@@ -333,3 +333,47 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+/* Phase 25B-D: approval, group details/privacy, and membership activity. */
+const phase25GroupColumns = db.prepare("PRAGMA table_info(groups)").all().map(column => column.name);
+for (const [column, definition] of [
+  ["description", "TEXT NOT NULL DEFAULT ''"],
+  ["rules", "TEXT NOT NULL DEFAULT ''"],
+  ["visibility", "TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','public'))"],
+  ["approval_required", "INTEGER NOT NULL DEFAULT 0 CHECK(approval_required IN (0,1))"]
+]) {
+  if (!phase25GroupColumns.includes(column)) db.exec("ALTER TABLE groups ADD COLUMN " + column + " " + definition);
+}
+db.exec("
+  CREATE TABLE IF NOT EXISTS group_join_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    invitation_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','cancelled')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TEXT,
+    reviewed_by INTEGER,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (invitation_id) REFERENCES group_invitations(id) ON DELETE SET NULL,
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_group_join_requests_pending
+    ON group_join_requests(group_id, user_id) WHERE status = 'pending';
+  CREATE INDEX IF NOT EXISTS idx_group_join_requests_group
+    ON group_join_requests(group_id, status, created_at DESC);
+  CREATE TABLE IF NOT EXISTS group_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    actor_id INTEGER,
+    subject_user_id INTEGER,
+    event_type TEXT NOT NULL,
+    details TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (subject_user_id) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_activity_group ON group_activity(group_id, id DESC);
+");
