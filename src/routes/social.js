@@ -23,7 +23,7 @@ function notify(userId, actorId, type, entityId, message) {
     .run(userId, actorId, type, entityId || null, message);
 }
 function profileSelect() {
-  return "SELECT u.id, u.username, u.full_name AS fullName, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, CASE WHEN u.profile_mode IN ('professional','both') THEN u.department ELSE '' END AS department, CASE WHEN u.profile_mode IN ('professional','both') THEN u.location ELSE '' END AS location, u.avatar_path AS avatarPath FROM users u";
+  return "SELECT u.id, u.username, u.full_name AS fullName, CASE WHEN u.profile_mode IN ('personal','both') THEN u.bio ELSE '' END AS bio, CASE WHEN u.profile_mode IN ('professional','both') THEN u.professional_title ELSE '' END AS professionalTitle, CASE WHEN u.profile_mode IN ('professional','both') THEN u.organization ELSE '' END AS organization, CASE WHEN u.profile_mode IN ('professional','both') THEN u.department ELSE '' END AS department, CASE WHEN u.profile_mode IN ('professional','both') THEN u.location ELSE '' END AS location, u.avatar_path AS avatarPath, u.profile_background AS profileBackground FROM users u";
 }
 
 router.get("/discover", (req, res) => {
