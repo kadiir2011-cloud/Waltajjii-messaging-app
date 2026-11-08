@@ -811,3 +811,86 @@ router.post("/:id/polls/:pollId/close", (req, res) => {
 });
 
 module.exports = router;
+
+
+/* Phase 27: group events, scheduling and member RSVPs. */
+router.get("/:id/events", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
+  const events = db.prepare(`
+    SELECT e.id, e.group_id AS groupId, e.created_by AS createdBy, creator.username AS creatorUsername,
+      e.title, e.description, e.starts_at AS startsAt, e.location, e.reminder_minutes AS reminderMinutes,
+      e.status, e.created_at AS createdAt, e.cancelled_at AS cancelledAt,
+      (SELECT response FROM group_event_rsvps WHERE event_id = e.id AND user_id = ?) AS myResponse,
+      (SELECT COUNT(*) FROM group_event_rsvps WHERE event_id = e.id AND response = 'going') AS goingCount,
+      (SELECT COUNT(*) FROM group_event_rsvps WHERE event_id = e.id AND response = 'maybe') AS maybeCount,
+      (SELECT COUNT(*) FROM group_event_rsvps WHERE event_id = e.id AND response = 'not_going') AS notGoingCount
+    FROM group_events e JOIN users creator ON creator.id = e.created_by
+    WHERE e.group_id = ? ORDER BY CASE e.status WHEN 'scheduled' THEN 0 ELSE 1 END, e.starts_at ASC, e.id DESC
+  `).all(req.auth.userId, groupId);
+  const attendees = db.prepare(`
+    SELECT r.event_id AS eventId, r.response, u.username
+    FROM group_event_rsvps r JOIN users u ON u.id = r.user_id
+    JOIN group_events e ON e.id = r.event_id
+    WHERE e.group_id = ? ORDER BY u.username COLLATE NOCASE
+  `).all(groupId);
+  const byEvent = new Map();
+  for (const item of attendees) {
+    if (!byEvent.has(item.eventId)) byEvent.set(item.eventId, { going: [], maybe: [], notGoing: [] });
+    const key = item.response === 'not_going' ? 'notGoing' : item.response;
+    byEvent.get(item.eventId)[key].push(item.username);
+  }
+  res.json({ events: events.map(event => ({ ...event, attendees: byEvent.get(event.id) || { going: [], maybe: [], notGoing: [] } })) });
+});
+
+router.post("/:id/events", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
+  const title = String(req.body.title || "").trim();
+  const description = String(req.body.description || "").trim();
+  const location = String(req.body.location || "").trim();
+  const startsAt = String(req.body.startsAt || "").trim();
+  const reminderMinutes = Number(req.body.reminderMinutes || 0);
+  const startDate = new Date(startsAt);
+  if (!title || title.length > 120) return res.status(400).json({ error: "Event title must be 1–120 characters." });
+  if (description.length > 2000) return res.status(400).json({ error: "Event description must be at most 2,000 characters." });
+  if (location.length > 200) return res.status(400).json({ error: "Location must be at most 200 characters." });
+  if (!startsAt || Number.isNaN(startDate.getTime()) || !/(Z|[+-]\\d{2}:?\\d{2})$/i.test(startsAt)) return res.status(400).json({ error: "Choose a valid event date and time." });
+  if (startDate.getTime() < Date.now() - 60000 || startDate.getTime() > Date.now() + 366 * 86400000) return res.status(400).json({ error: "Events must be scheduled from now up to one year ahead." });
+  if (![0, 5, 10, 15, 30, 60, 1440].includes(reminderMinutes)) return res.status(400).json({ error: "Choose a supported reminder interval." });
+  const result = db.prepare("INSERT INTO group_events (group_id, created_by, title, description, starts_at, location, reminder_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(groupId, req.auth.userId, title, description, startDate.toISOString(), location, reminderMinutes);
+  logGroupActivity(groupId, req.auth.userId, "event_created", null, title);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:events:updated", { groupId, eventId: Number(result.lastInsertRowid) });
+  res.status(201).json({ message: "Group event created.", eventId: Number(result.lastInsertRowid) });
+});
+
+router.put("/:id/events/:eventId/rsvp", (req, res) => {
+  const groupId = Number(req.params.id), eventId = Number(req.params.eventId);
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(eventId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Event not found." });
+  const response = String(req.body.response || "");
+  if (!["going", "maybe", "not_going"].includes(response)) return res.status(400).json({ error: "Choose Going, Maybe or Not going." });
+  const event = db.prepare("SELECT id, status FROM group_events WHERE id = ? AND group_id = ?").get(eventId, groupId);
+  if (!event) return res.status(404).json({ error: "Event not found." });
+  if (event.status !== "scheduled") return res.status(409).json({ error: "This event is cancelled; RSVPs are closed." });
+  db.prepare(`INSERT INTO group_event_rsvps (event_id, user_id, response) VALUES (?, ?, ?)
+    ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response, updated_at = CURRENT_TIMESTAMP`).run(eventId, req.auth.userId, response);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:events:updated", { groupId, eventId });
+  res.json({ message: "Your RSVP has been saved.", response });
+});
+
+router.post("/:id/events/:eventId/cancel", (req, res) => {
+  const groupId = Number(req.params.id), eventId = Number(req.params.eventId);
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(eventId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Event not found." });
+  const event = db.prepare("SELECT id, created_by AS createdBy, status, title FROM group_events WHERE id = ? AND group_id = ?").get(eventId, groupId);
+  if (!event) return res.status(404).json({ error: "Event not found." });
+  if (event.createdBy !== req.auth.userId && !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only the event creator or a group admin can cancel this event." });
+  if (event.status === "cancelled") return res.json({ message: "This event is already cancelled." });
+  db.prepare("UPDATE group_events SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP, cancelled_by = ? WHERE id = ?").run(req.auth.userId, eventId);
+  logGroupActivity(groupId, req.auth.userId, "event_cancelled", null, event.title);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:events:updated", { groupId, eventId });
+  res.json({ message: "Event cancelled. Its details and RSVP list remain visible." });
+});
