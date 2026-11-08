@@ -568,4 +568,96 @@ router.post("/invitation/:token/join", (req, res) => {
   }
 });
 
+
+/* Phase 25B: admins review invitation-based membership requests. */
+router.get("/:id/join-requests", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can review join requests." });
+  const requests = db.prepare("SELECT r.id, r.user_id AS userId, u.username, r.created_at AS createdAt, r.status FROM group_join_requests r JOIN users u ON u.id = r.user_id WHERE r.group_id = ? AND r.status = 'pending' ORDER BY r.created_at ASC LIMIT 100").all(groupId);
+  res.json({ requests });
+});
+
+router.post("/:id/join-requests/:requestId/review", (req, res) => {
+  const groupId = Number(req.params.id), requestId = Number(req.params.requestId);
+  const decision = String(req.body.decision || "");
+  if (!Number.isSafeInteger(groupId) || !Number.isSafeInteger(requestId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can review join requests." });
+  if (!["approve", "reject"].includes(decision)) return res.status(400).json({ error: "Choose approve or reject." });
+  const review = db.transaction(() => {
+    const request = db.prepare("SELECT r.id, r.user_id AS userId, r.invitation_id AS invitationId, r.status, i.expires_at AS expiresAt, i.revoked_at AS revokedAt, i.use_limit AS useLimit, i.use_count AS useCount FROM group_join_requests r LEFT JOIN group_invitations i ON i.id = r.invitation_id WHERE r.id = ? AND r.group_id = ?").get(requestId, groupId);
+    if (!request || request.status !== "pending") return { error: "This request has already been reviewed or no longer exists." };
+    if (decision === "approve") {
+      if (membership(groupId, request.userId)) {
+        db.prepare("UPDATE group_join_requests SET status='approved', reviewed_at=CURRENT_TIMESTAMP, reviewed_by=? WHERE id=?").run(req.auth.userId, requestId);
+        return { alreadyMember: true, userId: request.userId };
+      }
+      if (!request.invitationId || request.revokedAt || !request.expiresAt || Date.parse(request.expiresAt) <= Date.now() ||
+          (request.useLimit !== null && request.useCount >= request.useLimit)) return { error: "The invitation has expired, been revoked, or reached its use limit. The request cannot be approved." };
+      const count = db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?").get(groupId).n;
+      if (count >= 100) return { error: "This group has reached 100 members." };
+      const consumed = db.prepare("UPDATE group_invitations SET use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL AND datetime(expires_at) > datetime('now') AND (use_limit IS NULL OR use_count < use_limit)").run(request.invitationId);
+      if (!consumed.changes) return { error: "The invitation is no longer available." };
+      db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')").run(groupId, request.userId);
+      db.prepare("UPDATE group_join_requests SET status='approved', reviewed_at=CURRENT_TIMESTAMP, reviewed_by=? WHERE id=?").run(req.auth.userId, requestId);
+      db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'joined')").run(request.invitationId, request.userId);
+      logGroupActivity(groupId, req.auth.userId, "join_approved", request.userId);
+      return { userId: request.userId, approved: true };
+    }
+    db.prepare("UPDATE group_join_requests SET status='rejected', reviewed_at=CURRENT_TIMESTAMP, reviewed_by=? WHERE id=?").run(req.auth.userId, requestId);
+    logGroupActivity(groupId, req.auth.userId, "join_rejected", request.userId);
+    return { userId: request.userId, rejected: true };
+  });
+  try {
+    const result = review();
+    if (result.error) return res.status(409).json({ error: result.error });
+    const io = req.app.get("io");
+    if (result.approved && io) {
+      io.in("user:" + result.userId).socketsJoin("group:" + groupId);
+      io.to("user:" + result.userId).emit("groups:updated", { groupId });
+      io.to("group:" + groupId).emit("group:members:updated", { groupId });
+    }
+    if (io) io.to("user:" + result.userId).emit("group:join-request:decision", { groupId, decision, alreadyMember: Boolean(result.alreadyMember) });
+    res.json({ message: result.alreadyMember ? "The requester is already a member." : decision === "approve" ? "Join request approved." : "Join request rejected." });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_PRIMARYKEY" || error.code === "SQLITE_CONSTRAINT_UNIQUE") return res.status(409).json({ error: "This user is already a member." });
+    throw error;
+  }
+});
+
+/* Phase 25C: group description, rules and privacy controls. */
+router.get("/:id/details", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
+  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired FROM groups WHERE id = ?").get(groupId);
+  res.json({ details });
+});
+
+router.patch("/:id/details", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can update group details." });
+  const description = String(req.body.description ?? "").trim();
+  const rules = String(req.body.rules ?? "").trim();
+  const visibility = String(req.body.visibility ?? "private");
+  const approvalRequired = req.body.approvalRequired === true;
+  if (description.length > 500) return res.status(400).json({ error: "Group description must be 500 characters or fewer." });
+  if (rules.length > 2000) return res.status(400).json({ error: "Group rules must be 2,000 characters or fewer." });
+  if (!["private", "public"].includes(visibility)) return res.status(400).json({ error: "Visibility must be private or public." });
+  db.prepare("UPDATE groups SET description=?, rules=?, visibility=?, approval_required=? WHERE id=?").run(description, rules, visibility, approvalRequired ? 1 : 0, groupId);
+  logGroupActivity(groupId, req.auth.userId, "group_settings_updated", req.auth.userId, visibility + (approvalRequired ? ";approval required" : ";approval off"));
+  const details = db.prepare("SELECT id, name, description, rules, visibility, approval_required AS approvalRequired FROM groups WHERE id=?").get(groupId);
+  const io = req.app.get("io");
+  if (io) io.to("group:" + groupId).emit("group:details:updated", { groupId });
+  res.json({ details, message: "Group details saved." });
+});
+
+/* Phase 25D: member-visible, paginated governance and membership history. */
+router.get("/:id/activity", (req, res) => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) return res.status(404).json({ error: "Group not found." });
+  const rawLimit = Number(req.query.limit || 30), rawBefore = Number(req.query.before || 0);
+  const limit = Number.isSafeInteger(rawLimit) ? Math.max(1, Math.min(rawLimit, 100)) : 30;
+  const before = Number.isSafeInteger(rawBefore) && rawBefore > 0 ? rawBefore : Number.MAX_SAFE_INTEGER;
+  const events = db.prepare("SELECT a.id, a.event_type AS eventType, a.details, a.created_at AS createdAt, actor.username AS actorUsername, subject.username AS subjectUsername FROM group_activity a LEFT JOIN users actor ON actor.id = a.actor_id LEFT JOIN users subject ON subject.id = a.subject_user_id WHERE a.group_id = ? AND a.id < ? ORDER BY a.id DESC LIMIT ?").all(groupId, before, limit);
+  res.json({ events, nextBefore: events.length === limit ? events[events.length - 1].id : null });
+});
+
 module.exports = router;
