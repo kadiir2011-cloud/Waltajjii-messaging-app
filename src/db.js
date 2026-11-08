@@ -290,3 +290,15 @@ if (!groupReceiptTableExists) {
 }
 
 module.exports = db;
+
+
+/* Phase 23: group pinned messages and admin announcements. */
+const phase23GroupColumns = db.prepare("PRAGMA table_info(group_messages)").all().map(column => column.name);
+for (const [column, definition] of [
+  ["is_announcement", "INTEGER NOT NULL DEFAULT 0"],
+  ["pinned_at", "TEXT"],
+  ["pinned_by", "INTEGER REFERENCES users(id)"]
+]) {
+  if (!phase23GroupColumns.includes(column)) db.exec(`ALTER TABLE group_messages ADD COLUMN ${column} ${definition}`);
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_group_messages_pinned ON group_messages(group_id, pinned_at)");
