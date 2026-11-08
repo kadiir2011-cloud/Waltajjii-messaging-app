@@ -1810,7 +1810,11 @@ document.getElementById("profile-bio-input").addEventListener("input", event => 
   document.getElementById("bio-counter").textContent = event.target.value.length;
 });
 
-// Save the user's profile.
+document.getElementById("profile-background").addEventListener("change", event => {
+  document.getElementById("profile-hero").dataset.profileBackground = event.target.value;
+});
+
+// Save profile.
 document.getElementById("save-profile-button").addEventListener("click", async () => {
   const status = document.getElementById("profile-status");
   const payload = {
@@ -2076,6 +2080,7 @@ function socialElement(tag, className, text) {
 
 function socialUserCard(user, mode) {
   const card = socialElement("article", "social-card");
+  card.dataset.profileBackground = user.profileBackground || "mist";
   const head = socialElement("div", "social-card-head");
   const avatar = socialElement("img", "social-avatar");
   avatar.alt = (user.fullName || "Waltajjii member") + " profile picture";
