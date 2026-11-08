@@ -921,6 +921,24 @@
           <p id="group-polls-status" class="muted" role="status" aria-live="polite">Open a group to view its polls.</p>
           <div id="group-polls-list"></div>
         </section>
+        <section id="group-events-panel" class="group-members" aria-label="Group events">
+          <div class="row" style="justify-content:space-between;align-items:center"><h3>Group events and scheduling</h3></div>
+          <form id="group-event-form">
+            <label for="group-event-title">Event title</label>
+            <input id="group-event-title" maxlength="120" required placeholder="e.g. Monthly group meeting">
+            <label for="group-event-description">Description</label>
+            <textarea id="group-event-description" maxlength="2000" rows="2" placeholder="Event details (optional)"></textarea>
+            <label for="group-event-start">Date and time</label>
+            <input id="group-event-start" type="datetime-local" required>
+            <label for="group-event-location">Location or meeting link</label>
+            <input id="group-event-location" maxlength="200" placeholder="Location / online meeting link (optional)">
+            <label for="group-event-reminder">Reminder preference</label>
+            <select id="group-event-reminder"><option value="0">No reminder</option><option value="5">5 minutes before</option><option value="10">10 minutes before</option><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select>
+            <button type="submit" id="create-group-event-button">Create event</button>
+          </form>
+          <p id="group-events-status" class="muted" role="status" aria-live="polite">Open a group to view its events.</p>
+          <div id="group-events-list"></div>
+        </section>
         <div id="group-messages" aria-live="polite" class="group-messages">Choose a group and select Open group.</div>
         <form id="group-message-form" class="group-message-form">
           <input id="group-message-input" maxlength="2000" placeholder="Write a group message..." autocomplete="off">
