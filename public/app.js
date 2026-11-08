@@ -1556,9 +1556,9 @@ async function openSelectedGroup() {
   try {
     activeGroupId = id;
     const data = await api(`/api/groups/${id}/messages`);
-    renderGroupMessages(data.messages || []);
     await loadGroups();
     await loadGroupMembers(id);
+    renderGroupMessages(data.messages || []);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
   } catch (error) {
