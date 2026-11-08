@@ -39,7 +39,13 @@ router.get("/", (req, res) => {
   const groups = db.prepare(`
     SELECT g.id, g.name, g.created_by AS createdBy, g.created_at AS createdAt,
       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS memberCount,
-      (SELECT gm.role FROM group_members gm WHERE gm.group_id = g.id AND gm.user_id = ?) AS myRole
+      (SELECT gm.role FROM group_members gm WHERE gm.group_id = g.id AND gm.user_id = ?) AS myRole,
+      (SELECT COUNT(*) FROM group_messages msg
+        LEFT JOIN group_message_receipts receipt
+          ON receipt.group_message_id = msg.id AND receipt.user_id = mine.user_id
+        WHERE msg.group_id = g.id AND msg.sender_id != mine.user_id
+          AND datetime(msg.created_at) >= datetime(mine.joined_at)
+          AND receipt.read_at IS NULL) AS unreadCount
     FROM groups g
     JOIN group_members mine ON mine.group_id = g.id
     WHERE mine.user_id = ?
@@ -175,6 +181,14 @@ function groupMessageFor(groupId, messageId, viewerId) {
     FROM group_message_reactions WHERE group_message_id = ?
     GROUP BY emoji ORDER BY emoji
   `).all(viewerId, messageId).map(r => ({...r, reactedByMe: Boolean(r.reactedByMe)}));
+  message.receipts = db.prepare(`
+    SELECT u.id AS userId, u.username,
+      receipt.delivered_at AS deliveredAt, receipt.read_at AS readAt
+    FROM group_message_receipts receipt
+    JOIN users u ON u.id = receipt.user_id
+    WHERE receipt.group_message_id = ?
+    ORDER BY u.username
+  `).all(messageId);
   return message;
 }
 
@@ -182,6 +196,23 @@ router.get("/:id/messages", (req, res) => {
   const groupId = Number(req.params.id);
   if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) {
     return res.status(404).json({ error: "Group not found." });
+  }
+  // Opening a group marks only messages sent after this member joined as read.
+  const readUpdate = db.prepare(`
+    UPDATE group_message_receipts
+    SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+        read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE user_id = ? AND group_message_id IN (
+      SELECT gm.id FROM group_messages gm
+      JOIN group_members member ON member.group_id = gm.group_id
+      WHERE gm.group_id = ? AND gm.sender_id != ?
+        AND datetime(gm.created_at) >= datetime(member.joined_at)
+        AND member.user_id = ?
+    )
+  `).run(req.auth.userId, groupId, req.auth.userId, req.auth.userId);
+  if (readUpdate.changes) {
+    const io = req.app.get("io");
+    if (io) io.to(`group:${groupId}`).emit("group:receipts:updated", { groupId });
   }
   const ids = db.prepare("SELECT id FROM group_messages WHERE group_id = ? ORDER BY id ASC LIMIT 300").all(groupId);
   const messages = ids.map(row => groupMessageFor(groupId, row.id, req.auth.userId));
@@ -216,10 +247,38 @@ router.post("/:id/messages", (req, res) => {
     INSERT INTO group_messages (group_id, sender_id, body, media_path, media_type, reply_to_message_id)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(groupId, req.auth.userId, body, mediaPath || null, mediaPath ? mediaType : null, replyToMessageId);
+  // Create one pending receipt for each other member who belongs at send time.
+  db.prepare(`
+    INSERT OR IGNORE INTO group_message_receipts (group_message_id, user_id)
+    SELECT ?, user_id FROM group_members WHERE group_id = ? AND user_id != ?
+  `).run(result.lastInsertRowid, groupId, req.auth.userId);
   const message = groupMessageFor(groupId, result.lastInsertRowid, req.auth.userId);
   const io = req.app.get("io");
   if (io) io.to(`group:${groupId}`).emit("group:message", message);
   res.status(201).json({ message });
+});
+
+router.post("/:id/messages/:messageId/delivered", (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isSafeInteger(groupId) || !membership(groupId, req.auth.userId)) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+  const message = db.prepare(
+    "SELECT id, sender_id AS senderId FROM group_messages WHERE id = ? AND group_id = ?"
+  ).get(messageId, groupId);
+  if (!message || message.senderId === req.auth.userId) {
+    return res.status(404).json({ error: "Message not found for this recipient." });
+  }
+  const updated = db.prepare(`
+    UPDATE group_message_receipts
+    SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
+    WHERE group_message_id = ? AND user_id = ?
+  `).run(messageId, req.auth.userId);
+  if (updated.changes) {
+    const io = req.app.get("io");
+    if (io) io.to(`group:${groupId}`).emit("group:receipts:updated", { groupId, messageId });
+  }
+  res.json({ delivered: true });
 });
 
 router.post("/:id/messages/:messageId/reactions", (req, res) => {
