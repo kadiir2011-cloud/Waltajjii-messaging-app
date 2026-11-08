@@ -2097,7 +2097,6 @@ function socialUserCard(user, mode) {
   if (user.website) privateDetails.appendChild(socialElement("div", "social-muted", "Website: " + user.website));
   card.appendChild(head);
   if (privateDetails.childNodes.length > 1) card.appendChild(privateDetails);
-  card.appendChild(head);
 
   if (mode === "discover") {
     card.appendChild(socialElement("p", "social-muted",
