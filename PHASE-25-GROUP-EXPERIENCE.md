@@ -38,14 +38,23 @@ Status: implementation in progress. This branch is based on the tested Phase 24 
 - No production deployment or merge as part of this phase's testing.
 
 ## Acceptance checklist
-- [ ] Create invite as admin; non-admin creation is rejected by the API.
+- [x] Create expiring invite as admin; non-admin creation is rejected by the API (implementation added; runtime test pending).
 - [ ] Invite URL opens a safe preview without exposing private content.
-- [ ] QR code resolves to the same invite URL.
-- [ ] Valid invite joins immediately when approval is off.
+- [ ] QR code resolves to the same invite URL (not implemented yet).
+- [x] Valid invite joins immediately (approval workflow is not yet implemented; runtime test pending).
 - [ ] Valid invite creates a pending request when approval is on.
 - [ ] Pending user cannot access group content before approval.
 - [ ] Admin can approve/reject; duplicate requests are handled safely.
-- [ ] Expired and revoked invites are rejected.
+- [x] Expired and revoked invites are rejected by API validation (runtime test pending).
 - [ ] Realtime membership/request updates work across two accounts.
 - [ ] Group description, rules, privacy, and history permissions are enforced.
 - [ ] Existing Phase 23/24 regression checklist passes.
+
+
+## 25A implementation status (2026-11-08)
+- Added additive SQLite tables for invitation records and invitation events.
+- Added admin-only create/list/revoke endpoints, authenticated invite preview and join endpoints.
+- Invitation tokens use 256-bit random values; only SHA-256 hashes are stored.
+- Expiry choices: 1 hour, 1 day, 7 days, 30 days; optional use limit supported.
+- Added admin invitation panel with create, copy, list and revoke controls.
+- Runtime deployment and two-account tests are still pending. QR presentation and invite landing/join UI remain to be completed.
