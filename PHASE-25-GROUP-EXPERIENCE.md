@@ -94,5 +94,6 @@ Status: implementation in progress. This branch is based on the tested Phase 24 
 
 ### Validation status
 - JavaScript syntax parsing succeeded for `src/db.js`, `src/routes/groups.js`, and `public/app.js` after these changes.
+- A SQLite migration simulation passed, including the partial unique index that prevents duplicate pending requests for the same user/group.
 - Runtime/API tests, database migration execution against the deployed database, two-account security tests, and Render test deployment are still pending.
 - The Phase 25 PR remains a draft and must not be merged or deployed to production.
