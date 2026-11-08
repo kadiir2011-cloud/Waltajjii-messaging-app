@@ -179,7 +179,7 @@ async function loadMyProfile() {
     profileFields.mode.value = user.profileMode || "both";
     document.getElementById("bio-counter").textContent = (user.bio || "").length;
     const professionalLine = [user.professionalTitle, user.organization].filter(Boolean).join(" · ");
-    document.getElementById("profile-professional-line").textContent = professionalLine || "Waltajjii member";
+    document.getElementById("profile-professional-line").textContent = professionalLine || "Add your profession and institution";
 
     const sidebarUsername = document.getElementById("wt-sidebar-username");
     const sidebarProfessional = document.getElementById("wt-sidebar-professional");
