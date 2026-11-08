@@ -567,6 +567,64 @@
       .wt-sidebar { padding:16px 12px; }
       .wt-nav-group summary { min-height:48px; }
     }
+  
+    /* Phase 29: next-generation profile themes — layered gradients, soft motion and glass surfaces. */
+    #profile-hero {
+      position:relative; isolation:isolate; overflow:hidden; min-height:168px;
+      padding:24px; border:1px solid rgba(255,255,255,.42);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 16px 38px rgba(15,35,55,.10);
+      transition:background .35s ease,box-shadow .35s ease;
+    }
+    #profile-hero::before, #profile-hero::after {
+      content:""; position:absolute; pointer-events:none; border-radius:50%;
+      filter:blur(2px); z-index:-1;
+    }
+    #profile-hero::before { width:260px;height:260px;right:-58px;top:-145px;background:rgba(255,255,255,.28); }
+    #profile-hero::after { width:190px;height:190px;right:115px;bottom:-145px;background:rgba(255,255,255,.19); }
+    #profile-picture-preview {
+      position:relative; z-index:1; width:112px!important;height:112px!important;
+      border:4px solid rgba(255,255,255,.88);box-shadow:0 8px 26px rgba(12,28,45,.22);
+    }
+    #profile-hero .profile-identity {
+      position:relative;z-index:1;padding:13px 18px;border-radius:16px;
+      background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.30);
+      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      box-shadow:0 8px 24px rgba(15,35,55,.07);
+    }
+    #profile-full-name-display { color:inherit;text-shadow:0 1px 10px rgba(255,255,255,.22); }
+    #profile-professional-line { color:inherit;opacity:.82; }
+    #profile-hero[data-profile-background="aurora"] {
+      color:#f5fffd;background:radial-gradient(ellipse at 15% 15%,#6ee7c5 0,transparent 42%),radial-gradient(ellipse at 85% 5%,#8b83ff 0,transparent 40%),linear-gradient(125deg,#102d49,#135b68 55%,#312c69);
+      background-size:140% 140%;animation:wt-aurora-drift 13s ease-in-out infinite alternate;
+    }
+    #profile-hero[data-profile-background="midnight"] { color:#f4f7ff;background:radial-gradient(circle at 80% 10%,#435a86 0,transparent 38%),linear-gradient(130deg,#090f1e,#17253b 55%,#26324c); }
+    #profile-hero[data-profile-background="rose"] { color:#603d55;background:radial-gradient(circle at 85% 15%,#fff 0,transparent 34%),linear-gradient(125deg,#f8dce8,#f5e7f0 52%,#e8dafa); }
+    #profile-hero[data-profile-background="graphite"] { color:#f7f8fa;background:radial-gradient(ellipse at 85% 0%,#687887 0,transparent 42%),linear-gradient(125deg,#171c24,#303943 58%,#414b55); }
+    #profile-hero[data-profile-background="pearl"] { color:#334155;background:radial-gradient(circle at 90% 10%,#fff 0,transparent 36%),linear-gradient(125deg,#fff,#edf2f5 55%,#e5eaf0); }
+    #profile-hero[data-profile-background="neon"] { color:#fff7ff;background:radial-gradient(circle at 12% 90%,#e34a9a 0,transparent 38%),radial-gradient(circle at 88% 8%,#4d7cff 0,transparent 42%),linear-gradient(125deg,#17132f,#29204d 60%,#122c48); }
+    #profile-hero[data-profile-background="ocean-glass"] { color:#f4ffff;background:radial-gradient(circle at 80% 0%,#80e6df 0,transparent 42%),linear-gradient(125deg,#07536b,#087f91 55%,#1b4777); }
+    #profile-hero[data-profile-background="cosmic"] { color:#fff8ff;background:radial-gradient(circle at 15% 85%,#a855f7 0,transparent 42%),radial-gradient(circle at 85% 5%,#ec4899 0,transparent 38%),linear-gradient(125deg,#20133e,#38205f 60%,#171b43); }
+    .social-card[data-profile-background="aurora"] { background:linear-gradient(125deg,#d8fff1,#d9e5ff 55%,#e9dcff); }
+    .social-card[data-profile-background="midnight"] { background:linear-gradient(125deg,#182338,#34445f);color:#f5f7ff; }
+    .social-card[data-profile-background="rose"] { background:linear-gradient(125deg,#f8dce8,#f5e7f0,#e8dafa); }
+    .social-card[data-profile-background="graphite"] { background:linear-gradient(125deg,#202832,#59636d);color:#fff; }
+    .social-card[data-profile-background="pearl"] { background:linear-gradient(125deg,#fff,#edf2f5,#e5eaf0); }
+    .social-card[data-profile-background="neon"] { background:linear-gradient(125deg,#24183e,#51336c,#24436a);color:#fff; }
+    .social-card[data-profile-background="ocean-glass"] { background:linear-gradient(125deg,#07536b,#087f91,#1b4777);color:#fff; }
+    .social-card[data-profile-background="cosmic"] { background:linear-gradient(125deg,#20133e,#6b3a8f,#35265f);color:#fff; }
+    .social-card[data-profile-background="midnight"] .social-muted,
+    .social-card[data-profile-background="graphite"] .social-muted,
+    .social-card[data-profile-background="neon"] .social-muted,
+    .social-card[data-profile-background="ocean-glass"] .social-muted,
+    .social-card[data-profile-background="cosmic"] .social-muted { color:rgba(255,255,255,.78); }
+    @keyframes wt-aurora-drift { from {background-position:0% 40%;} to {background-position:100% 60%;} }
+    @media (prefers-reduced-motion:reduce) { #profile-hero[data-profile-background="aurora"] { animation:none; } }
+    @media(max-width:640px) {
+      #profile-hero { min-height:145px;padding:16px;gap:13px; }
+      #profile-picture-preview { width:88px!important;height:88px!important; }
+      #profile-hero .profile-identity { padding:10px 12px; }
+    }
+
   </style>
 </head>
 <body>
@@ -676,7 +734,6 @@
         <h2 style="margin-right:auto">Messages</h2>
         <button type="button" id="logout-button">Log out</button>
       </div>
-      <p id="welcome-user" class="muted"></p>
       <section class="wt-content-section" id="wt-account-section" aria-label="Account and personalization">
       <section class="personalization-panel" id="personalization-panel" aria-labelledby="personalization-heading">
         <div class="profile-heading"><div><h3 id="personalization-heading">Personalize your Waltajjii</h3><p class="profile-help">These appearance choices apply only to this browser.</p></div></div>
@@ -719,9 +776,17 @@
     <div class="profile-field">
       <label for="profile-background">Profile background</label>
       <select id="profile-background">
-        <option value="mist">Soft mist</option><option value="ocean">Ocean blue</option>
-        <option value="lavender">Lavender</option><option value="sunset">Warm sunset</option>
-        <option value="forest">Forest green</option><option value="slate">Modern slate</option>
+        <optgroup label="Classic">
+          <option value="mist">Soft mist</option><option value="ocean">Ocean blue</option>
+          <option value="lavender">Lavender</option><option value="sunset">Warm sunset</option>
+          <option value="forest">Forest green</option><option value="slate">Modern slate</option>
+        </optgroup>
+        <optgroup label="Next-generation">
+          <option value="aurora">Aurora glow</option><option value="midnight">Midnight glass</option>
+          <option value="rose">Rose quartz</option><option value="graphite">Graphite luxe</option>
+          <option value="pearl">Pearl minimal</option><option value="neon">Neon dusk</option>
+          <option value="ocean-glass">Ocean glass</option><option value="cosmic">Cosmic violet</option>
+        </optgroup>
       </select>
     </div>
   </div>
@@ -953,6 +1018,24 @@
           </div>
           <p id="group-polls-status" class="muted" role="status" aria-live="polite">Open a group to view its polls.</p>
           <div id="group-polls-list"></div>
+        </section>
+        <section id="group-events-panel" class="group-members" aria-label="Group events">
+          <div class="row" style="justify-content:space-between;align-items:center"><h3>Group events and scheduling</h3></div>
+          <form id="group-event-form">
+            <label for="group-event-title">Event title</label>
+            <input id="group-event-title" maxlength="120" required placeholder="e.g. Monthly group meeting">
+            <label for="group-event-description">Description</label>
+            <textarea id="group-event-description" maxlength="2000" rows="2" placeholder="Event details (optional)"></textarea>
+            <label for="group-event-start">Date and time</label>
+            <input id="group-event-start" type="datetime-local" required>
+            <label for="group-event-location">Location or meeting link</label>
+            <input id="group-event-location" maxlength="200" placeholder="Location / online meeting link (optional)">
+            <label for="group-event-reminder">Reminder preference (saved; automatic notifications are not yet enabled)</label>
+            <select id="group-event-reminder"><option value="0">No reminder</option><option value="5">5 minutes before</option><option value="10">10 minutes before</option><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select>
+            <button type="submit" id="create-group-event-button">Create event</button>
+          </form>
+          <p id="group-events-status" class="muted" role="status" aria-live="polite">Open a group to view its events.</p>
+          <div id="group-events-list"></div>
         </section>
         <div id="group-messages" aria-live="polite" class="group-messages">Choose a group and select Open group.</div>
         <form id="group-message-form" class="group-message-form">

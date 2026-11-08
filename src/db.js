@@ -418,3 +418,36 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_group_poll_votes_option ON group_poll_votes(option_id);
 `);
+
+
+/* Phase 27: group events and member RSVPs. */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    created_by INTEGER NOT NULL,
+    title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+    description TEXT NOT NULL DEFAULT '' CHECK(length(description) <= 2000),
+    starts_at TEXT NOT NULL,
+    location TEXT NOT NULL DEFAULT '' CHECK(length(location) <= 200),
+    reminder_minutes INTEGER NOT NULL DEFAULT 0 CHECK(reminder_minutes IN (0,5,10,15,30,60,1440)),
+    status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','cancelled')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cancelled_at TEXT,
+    cancelled_by INTEGER,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (cancelled_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_events_group_start ON group_events(group_id, starts_at);
+  CREATE TABLE IF NOT EXISTS group_event_rsvps (
+    event_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    response TEXT NOT NULL CHECK(response IN ('going','maybe','not_going')),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (event_id, user_id),
+    FOREIGN KEY (event_id) REFERENCES group_events(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_event_rsvps_event ON group_event_rsvps(event_id, response);
+`);

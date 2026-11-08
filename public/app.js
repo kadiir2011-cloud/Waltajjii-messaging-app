@@ -133,8 +133,6 @@ function stopTypingIndicator() {
           loadMyProfile();
       authPanel.style.display = "none";
       chatPanel.style.display = "block";
-      document.getElementById("welcome-user").textContent =
-        "Logged in as " + username;
       statusBox.textContent = "Choose a recipient to begin.";
       loadUsers();
       loadGroups();
@@ -3112,4 +3110,88 @@ document.getElementById("create-group-poll-button").addEventListener("click", as
     groupPollsStatus.textContent = "Poll created successfully.";
     await loadGroupPolls();
   } catch (error) { groupPollsStatus.textContent = error.message; }
+});
+
+
+/* Phase 27: group event creation, RSVP and cancellation UI. */
+const groupEventsStatus = document.getElementById("group-events-status");
+const groupEventsList = document.getElementById("group-events-list");
+function renderGroupEvents(events) {
+  groupEventsList.replaceChildren();
+  if (!events.length) { groupEventsList.textContent = "No events scheduled yet. Create the first group event above."; return; }
+  events.forEach(event => {
+    const card = document.createElement("article");
+    card.className = "social-card";
+    const title = document.createElement("h4"); title.textContent = event.title; card.appendChild(title);
+    const meta = document.createElement("p"); meta.className = "muted";
+    meta.textContent = "Organized by " + event.creatorUsername + " · " + new Date(event.startsAt).toLocaleString() + " · " + (event.status === "cancelled" ? "Cancelled" : "Scheduled");
+    card.appendChild(meta);
+    if (event.description) { const desc = document.createElement("p"); desc.textContent = event.description; card.appendChild(desc); }
+    if (event.location) { const place = document.createElement("p"); place.textContent = "Location: " + event.location; card.appendChild(place); }
+    const counts = document.createElement("p"); counts.className = "muted";
+    counts.textContent = "Going: " + event.goingCount + " · Maybe: " + event.maybeCount + " · Not going: " + event.notGoingCount;
+    card.appendChild(counts);
+    const actions = document.createElement("div"); actions.className = "social-actions";
+    [["going","Going"],["maybe","Maybe"],["not_going","Not going"]].forEach(([value,label]) => {
+      const button = document.createElement("button"); button.type = "button"; button.textContent = label + (event.myResponse === value ? " ✓" : "");
+      button.disabled = event.status !== "scheduled";
+      button.addEventListener("click", async () => {
+        try { await api("/api/groups/" + activeGroupId + "/events/" + event.id + "/rsvp", { method: "PUT", body: JSON.stringify({ response: value }) }); groupEventsStatus.textContent = "Your RSVP has been saved."; await loadGroupEvents(); }
+        catch (error) { groupEventsStatus.textContent = error.message; }
+      });
+      actions.appendChild(button);
+    });
+    card.appendChild(actions);
+    const attendees = event.attendees || { going: [], maybe: [], notGoing: [] };
+    const people = document.createElement("p"); people.className = "muted";
+    people.textContent = "Going: " + (attendees.going || []).join(", ") + " · Maybe: " + (attendees.maybe || []).join(", ") + " · Not going: " + (attendees.notGoing || []).join(", ");
+    card.appendChild(people);
+    if (event.status === "scheduled" && (event.creatorUsername === currentUsername || activeGroupCanManage)) {
+      const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel event"; cancel.style.marginTop = "8px";
+      cancel.addEventListener("click", async () => {
+        if (!confirm("Cancel this group event? Members will still be able to see its details.")) return;
+        try { await api("/api/groups/" + activeGroupId + "/events/" + event.id + "/cancel", { method: "POST" }); groupEventsStatus.textContent = "Event cancelled."; await loadGroupEvents(); }
+        catch (error) { groupEventsStatus.textContent = error.message; }
+      });
+      card.appendChild(cancel);
+    }
+    groupEventsList.appendChild(card);
+  });
+}
+async function loadGroupEvents() {
+  if (!activeGroupId || !groupEventsList) return;
+  groupEventsStatus.textContent = "Loading group events…";
+  try {
+    const data = await api("/api/groups/" + activeGroupId + "/events");
+    renderGroupEvents(data.events || []);
+    groupEventsStatus.textContent = (data.events || []).length + " event(s). Members can update their RSVP while an event is scheduled.";
+    if (callSocket && !callSocket.__groupEventsBound) {
+      callSocket.on("group:events:updated", payload => {
+        if (payload && String(payload.groupId) === String(activeGroupId)) loadGroupEvents();
+      });
+      callSocket.__groupEventsBound = true;
+    }
+  } catch (error) { groupEventsStatus.textContent = error.message; }
+}
+document.getElementById("load-group-button").addEventListener("click", () => { if (activeGroupId) loadGroupEvents(); });
+document.getElementById("group-event-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!activeGroupId) { groupEventsStatus.textContent = "Open a group before creating an event."; return; }
+  const button = document.getElementById("create-group-event-button"); button.disabled = true;
+  try {
+    const localStart = document.getElementById("group-event-start").value;
+    if (!localStart) throw new Error("Choose the event date and time.");
+    const startsAt = new Date(localStart).toISOString();
+    const result = await api("/api/groups/" + activeGroupId + "/events", { method: "POST", body: JSON.stringify({
+      title: document.getElementById("group-event-title").value.trim(),
+      description: document.getElementById("group-event-description").value.trim(),
+      startsAt,
+      location: document.getElementById("group-event-location").value.trim(),
+      reminderMinutes: Number(document.getElementById("group-event-reminder").value)
+    }) });
+    groupEventsStatus.textContent = result.message || "Event created.";
+    document.getElementById("group-event-form").reset();
+    await loadGroupEvents();
+  } catch (error) { groupEventsStatus.textContent = error.message || "The event could not be created."; }
+  finally { button.disabled = false; }
 });
