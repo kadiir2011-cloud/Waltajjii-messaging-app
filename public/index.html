@@ -362,6 +362,9 @@
     .group-members { margin: 10px 0; color: var(--wt-muted); font-size: .9rem; }
     .group-member-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
     .group-member-chip { display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid var(--wt-border); border-radius: 999px; background: var(--wt-surface-soft); color: var(--wt-text); }
+    .group-member-state { margin-left: 6px; font-size: .78rem; color: var(--wt-muted); }
+    .group-member-state.online { color: #15803d; }
+    .group-typing-line { display: block; min-height: 1.2em; margin-top: 7px; color: var(--wt-teal); font-size: .86rem; }
     footer { color: var(--wt-muted); }
     @media (min-width: 900px) {
       #profile-panel .profile-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -935,6 +938,7 @@
   <script src="/language.js?v=footer-translation-1" defer></script>
   <script src="/dynamic-language.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/group-presence.js" defer></script>
 </body>
 </html>
 
