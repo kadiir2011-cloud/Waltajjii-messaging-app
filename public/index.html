@@ -889,9 +889,11 @@
         <div class="row">
           <button type="button" id="load-group-button">Open group</button>
           <button type="button" id="manage-group-button">View / manage members</button>
+          <button type="button" id="group-invitations-button">Group invitations</button>
         </div>
         <p id="group-status" role="status" aria-live="polite" class="muted">Log in to view your groups.</p>
         <div id="group-members" class="group-members" aria-live="polite"></div>
+        <section id="group-invitations-panel" class="group-members" hidden aria-live="polite"></section>
         <div id="group-messages" aria-live="polite" class="group-messages">Choose a group and select Open group.</div>
         <form id="group-message-form" class="group-message-form">
           <input id="group-message-input" maxlength="2000" placeholder="Write a group message..." autocomplete="off">
