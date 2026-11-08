@@ -2552,3 +2552,135 @@ document.getElementById("social-notifications-tab").addEventListener("click", lo
     });
   });
 })();
+
+
+// Phase 25A: admin invitation-link management (QR presentation follows in the next slice).
+const groupInvitationsButton = document.getElementById("group-invitations-button");
+const groupInvitationsPanel = document.getElementById("group-invitations-panel");
+
+if (groupInvitationsButton) {
+  groupInvitationsButton.addEventListener("click", async () => {
+    const id = Number(groupSelect.value);
+    if (!id) {
+      groupStatus.textContent = "Select a group first.";
+      return;
+    }
+    try {
+      const memberData = await api(`/api/groups/${id}/members`);
+      if (!memberData.canManage) {
+        groupStatus.textContent = "Only group admins can manage invitation links.";
+        return;
+      }
+      groupInvitationsPanel.hidden = false;
+      groupInvitationsPanel.replaceChildren();
+      const heading = document.createElement("strong");
+      heading.textContent = "Secure group invitations";
+      groupInvitationsPanel.appendChild(heading);
+
+      const expiryLabel = document.createElement("label");
+      expiryLabel.textContent = "Invitation expiry";
+      const expiry = document.createElement("select");
+      expiry.setAttribute("aria-label", "Invitation expiry");
+      [[1,"1 hour"],[24,"1 day"],[168,"7 days"],[720,"30 days"]].forEach(([value,label]) => {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = label;
+        expiry.appendChild(option);
+      });
+      expiryLabel.appendChild(expiry);
+      groupInvitationsPanel.appendChild(expiryLabel);
+
+      const limitLabel = document.createElement("label");
+      limitLabel.textContent = "Maximum uses (optional)";
+      const limit = document.createElement("input");
+      limit.type = "number";
+      limit.min = "1";
+      limit.max = "1000";
+      limit.placeholder = "Unlimited";
+      limitLabel.appendChild(limit);
+      groupInvitationsPanel.appendChild(limitLabel);
+
+      const createButton = document.createElement("button");
+      createButton.type = "button";
+      createButton.textContent = "Create invitation link";
+      groupInvitationsPanel.appendChild(createButton);
+      const linkArea = document.createElement("p");
+      linkArea.className = "muted";
+      groupInvitationsPanel.appendChild(linkArea);
+      createButton.addEventListener("click", async () => {
+        createButton.disabled = true;
+        try {
+          const payload = { expiresInHours: Number(expiry.value) };
+          if (limit.value.trim()) payload.useLimit = Number(limit.value);
+          const created = await api(`/api/groups/${id}/invitations`, {
+            method: "POST", body: JSON.stringify(payload)
+          });
+          linkArea.replaceChildren();
+          const link = document.createElement("a");
+          link.href = created.invitation.url;
+          link.textContent = created.invitation.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          linkArea.appendChild(link);
+          const copy = document.createElement("button");
+          copy.type = "button";
+          copy.textContent = "Copy link";
+          copy.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(created.invitation.url);
+              groupStatus.textContent = "Invitation link copied. Save it now; it cannot be displayed again.";
+            } catch {
+              groupStatus.textContent = "Copy was blocked by this browser. Select and copy the link above.";
+            }
+          });
+          linkArea.appendChild(copy);
+          const expiryInfo = document.createElement("small");
+          expiryInfo.textContent = " Expires: " + new Date(created.invitation.expiresAt).toLocaleString();
+          linkArea.appendChild(expiryInfo);
+          groupStatus.textContent = "Invitation created. The secure link is shown once; only its hash is stored.";
+          await renderInvitationList(id, groupInvitationsPanel);
+        } catch (error) {
+          groupStatus.textContent = error.message;
+        } finally {
+          createButton.disabled = false;
+        }
+      });
+      await renderInvitationList(id, groupInvitationsPanel);
+    } catch (error) {
+      groupStatus.textContent = error.message;
+    }
+  });
+}
+
+async function renderInvitationList(groupId, panel) {
+  const data = await api(`/api/groups/${groupId}/invitations`);
+  const old = panel.querySelector("[data-invitation-list]");
+  if (old) old.remove();
+  const list = document.createElement("div");
+  list.dataset.invitationList = "true";
+  const title = document.createElement("strong");
+  title.textContent = "Invitation history";
+  list.appendChild(title);
+  (data.invitations || []).forEach(invite => {
+    const row = document.createElement("p");
+    const status = invite.revokedAt ? "Revoked" :
+      (Date.parse(invite.expiresAt) <= Date.now() ? "Expired" : "Active");
+    row.textContent = `#${invite.id} · ${status} · ${invite.useCount}${invite.useLimit == null ? "" : "/" + invite.useLimit} uses · expires ${new Date(invite.expiresAt).toLocaleString()}`;
+    if (status === "Active") {
+      const revoke = document.createElement("button");
+      revoke.type = "button";
+      revoke.textContent = "Revoke";
+      revoke.addEventListener("click", async () => {
+        if (!confirm("Revoke this invitation? Anyone holding it will no longer be able to join.")) return;
+        try {
+          await api(`/api/groups/${groupId}/invitations/${invite.id}`, { method: "DELETE" });
+          await renderInvitationList(groupId, panel);
+          groupStatus.textContent = "Invitation revoked.";
+        } catch (error) { groupStatus.textContent = error.message; }
+      });
+      row.appendChild(revoke);
+    }
+    list.appendChild(row);
+  });
+  panel.appendChild(list);
+}
