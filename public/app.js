@@ -140,6 +140,7 @@ function stopTypingIndicator() {
       loadGroups();
       loadChannels();
       loadSocialData();
+      processGroupInvitationLink();
     }
 async function loadMyProfile() {
   const profileStatus = document.getElementById("profile-status");
@@ -2698,4 +2699,66 @@ async function renderInvitationList(groupId, panel) {
     list.appendChild(row);
   });
   panel.appendChild(list);
+}
+
+
+// Phase 25B: invitation landing and authenticated join flow.
+async function processGroupInvitationLink() {
+  const params = new URLSearchParams(window.location.search);
+  const inviteToken = params.get("groupInvite");
+  if (!inviteToken || !token) return;
+  const existing = document.getElementById("wt-group-invite-dialog");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "wt-group-invite-dialog";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(8,24,36,.68);display:grid;place-items:center;padding:18px;";
+  const card = document.createElement("section");
+  card.style.cssText = "width:min(100%,440px);background:var(--wt-surface,#fff);color:var(--wt-text,#172b3a);border-radius:18px;padding:24px;box-shadow:0 18px 60px #0004;";
+  const heading = document.createElement("h2");
+  heading.textContent = "Group invitation";
+  const detail = document.createElement("p");
+  detail.textContent = "Checking this secure invitation…";
+  detail.setAttribute("role","status");
+  const join = document.createElement("button");
+  join.type = "button";
+  join.textContent = "Join group";
+  join.disabled = true;
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "secondary";
+  cancel.textContent = "Not now";
+  cancel.style.marginLeft = "8px";
+  cancel.addEventListener("click", () => overlay.remove());
+  join.addEventListener("click", async () => {
+    join.disabled = true;
+    try {
+      const result = await api("/api/groups/invitation/" + encodeURIComponent(inviteToken) + "/join", { method: "POST" });
+      overlay.remove();
+      await loadGroups();
+      if (result.groupId) {
+        groupSelect.value = String(result.groupId);
+        await openSelectedGroup();
+      }
+      groupStatus.textContent = result.alreadyMember ? "You are already a member of this group." : "You joined the group successfully.";
+      params.delete("groupInvite");
+      const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
+      window.history.replaceState({}, "", cleanUrl);
+    } catch (error) {
+      detail.textContent = error.message;
+      join.disabled = false;
+    }
+  });
+  card.append(heading, detail, join, cancel);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  try {
+    const preview = await api("/api/groups/invitation/" + encodeURIComponent(inviteToken));
+    detail.textContent = "You have been invited to join “" + preview.invitation.groupName + "”. This invitation expires " + new Date(preview.invitation.expiresAt).toLocaleString() + ".";
+    join.disabled = false;
+  } catch (error) {
+    detail.textContent = error.message;
+    join.hidden = true;
+  }
 }
