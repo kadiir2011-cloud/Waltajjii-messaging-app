@@ -166,9 +166,12 @@ function groupMessageFor(groupId, messageId, viewerId) {
       gm.reply_to_message_id AS replyToMessageId,
       reply.body AS replyToBody, replyUser.username AS replyToSender,
       gm.edited_at AS editedAt, gm.deleted_at AS deletedAt,
+      gm.is_announcement AS isAnnouncement, gm.pinned_at AS pinnedAt,
+      gm.pinned_by AS pinnedBy, pinUser.username AS pinnedByUsername,
       gm.created_at AS createdAt
     FROM group_messages gm
     JOIN users u ON u.id = gm.sender_id
+    LEFT JOIN users pinUser ON pinUser.id = gm.pinned_by
     LEFT JOIN group_messages reply ON reply.id = gm.reply_to_message_id
     LEFT JOIN users replyUser ON replyUser.id = reply.sender_id
     WHERE gm.group_id = ? AND gm.id = ?
@@ -244,10 +247,14 @@ router.post("/:id/messages", (req, res) => {
     }
   }
   if (!body) body = mediaType === "video" ? "[Video]" : mediaType === "audio" ? "[Voice message]" : mediaType === "document" ? "[Document]" : "[Image]";
+  const isAnnouncement = req.body.isAnnouncement === true;
+  if (isAnnouncement && !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can publish announcements." });
+  }
   const result = db.prepare(`
-    INSERT INTO group_messages (group_id, sender_id, body, media_path, media_type, reply_to_message_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(groupId, req.auth.userId, body, mediaPath || null, mediaPath ? mediaType : null, replyToMessageId);
+    INSERT INTO group_messages (group_id, sender_id, body, media_path, media_type, reply_to_message_id, is_announcement)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(groupId, req.auth.userId, body, mediaPath || null, mediaPath ? mediaType : null, replyToMessageId, isAnnouncement ? 1 : 0);
   // Create one pending receipt for each other member who belongs at send time.
   db.prepare(`
     INSERT OR IGNORE INTO group_message_receipts (group_message_id, user_id)
@@ -327,6 +334,35 @@ router.delete("/:id/messages/:messageId", (req, res) => {
   const io = req.app.get("io");
   if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
   res.json({message: updated});
+});
+
+
+/* Phase 23: only group admins can pin or unpin messages. */
+router.post("/:id/messages/:messageId/pin", (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can pin messages." });
+  }
+  const message = db.prepare("SELECT id, deleted_at AS deletedAt FROM group_messages WHERE id = ? AND group_id = ?").get(messageId, groupId);
+  if (!message || message.deletedAt) return res.status(404).json({ error: "Active group message not found." });
+  db.prepare("UPDATE group_messages SET pinned_at = CURRENT_TIMESTAMP, pinned_by = ? WHERE id = ?").run(req.auth.userId, messageId);
+  const updated = groupMessageFor(groupId, messageId, req.auth.userId);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
+  res.json({ message: updated });
+});
+
+router.delete("/:id/messages/:messageId/pin", (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) {
+    return res.status(403).json({ error: "Only group admins can unpin messages." });
+  }
+  const result = db.prepare("UPDATE group_messages SET pinned_at = NULL, pinned_by = NULL WHERE id = ? AND group_id = ? AND pinned_at IS NOT NULL").run(messageId, groupId);
+  if (!result.changes) return res.status(404).json({ error: "Pinned message not found." });
+  const updated = groupMessageFor(groupId, messageId, req.auth.userId);
+  const io = req.app.get("io");
+  if (io) io.to(`group:${groupId}`).emit("group:message:updated", updated);
+  res.json({ message: updated });
 });
 
 module.exports = router;

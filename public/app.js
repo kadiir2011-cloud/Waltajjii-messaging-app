@@ -1394,6 +1394,7 @@ let groupVoiceStream = null;
 let groupVoiceChunks = [];
 let groupVoicePreviewUrl = null;
 let activeGroupId = null;
+let activeGroupCanManage = false;
 let cachedGroups = [];
 
 async function loadGroups() {
@@ -1426,6 +1427,9 @@ async function loadGroupMembers(groupId) {
   if (!groupId || !groupMembersBox) return;
   try {
     const data = await api(`/api/groups/${groupId}/members`);
+    activeGroupCanManage = Boolean(data.canManage);
+    const announcementOption = document.querySelector(".group-announcement-option");
+    if (announcementOption) announcementOption.hidden = !activeGroupCanManage;
     groupMembersBox.replaceChildren();
     const heading = document.createElement("strong");
     heading.textContent = `Members (${data.members.length})`;
@@ -1446,12 +1450,27 @@ async function loadGroupMembers(groupId) {
 
 function renderGroupMessages(items) {
   groupMessagesBox.replaceChildren();
-  if (!items.length) { groupMessagesBox.textContent = "No messages in this group yet."; return; }
+  const pinnedItems = items.filter(item => item.pinnedAt && !item.deletedAt);
+  if (pinnedItems.length) {
+    const pinnedPanel = document.createElement("section");
+    pinnedPanel.className = "group-pinned-panel";
+    const heading = document.createElement("strong");
+    heading.textContent = "📌 Pinned messages";
+    pinnedPanel.appendChild(heading);
+    pinnedItems.forEach(item => {
+      const entry = document.createElement("div");
+      entry.className = "group-pinned-entry";
+      entry.textContent = item.sender + ": " + item.body + (item.pinnedByUsername ? " · pinned by " + item.pinnedByUsername : "");
+      pinnedPanel.appendChild(entry);
+    });
+    groupMessagesBox.appendChild(pinnedPanel);
+  }
+  if (!items.length) { groupMessagesBox.appendChild(document.createTextNode("No messages in this group yet.")); return; }
   items.forEach(item => {
     const wrap = document.createElement("div");
     wrap.className = "message" + (item.sender === currentUsername ? " mine" : "");
     const label = document.createElement("strong");
-    label.textContent = `${item.sender} · ${item.createdAt}${item.editedAt ? " · Edited" : ""}`;
+    label.textContent = `${item.isAnnouncement ? "📢 ANNOUNCEMENT · " : ""}${item.sender} · ${item.createdAt}${item.editedAt ? " · Edited" : ""}${item.pinnedAt ? " · 📌 Pinned" : ""}`;
     const body = document.createElement("div");
     body.textContent = item.body;
     wrap.append(label, body);
@@ -1498,6 +1517,17 @@ function renderGroupMessages(items) {
         actions.appendChild(button);
       });
       (item.reactions||[]).forEach(r=>{const count=document.createElement("small");count.textContent=`${r.emoji} ${r.count}`;actions.appendChild(count);});
+      if (activeGroupCanManage) {
+        const pinButton = document.createElement("button");
+        pinButton.type = "button";
+        pinButton.textContent = item.pinnedAt ? "Unpin" : "Pin";
+        pinButton.addEventListener("click", async () => {
+          try {
+            await api(`/api/groups/${activeGroupId}/messages/${item.id}/pin`, { method: item.pinnedAt ? "DELETE" : "POST" });
+          } catch (error) { groupStatus.textContent = error.message; }
+        });
+        actions.appendChild(pinButton);
+      }
       const replyButton=document.createElement("button");replyButton.type="button";replyButton.textContent="Reply";
       replyButton.addEventListener("click",()=>{groupMessageInput.dataset.replyTo=String(item.id);groupMessageInput.placeholder=`Replying to ${item.sender}…`;groupMessageInput.focus();});
       actions.appendChild(replyButton);
@@ -1526,9 +1556,9 @@ async function openSelectedGroup() {
   try {
     activeGroupId = id;
     const data = await api(`/api/groups/${id}/messages`);
-    renderGroupMessages(data.messages || []);
     await loadGroups();
     await loadGroupMembers(id);
+    renderGroupMessages(data.messages || []);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
   } catch (error) {
@@ -1719,10 +1749,12 @@ groupMessageForm.addEventListener("submit", async event => {
     }
     await api(`/api/groups/${activeGroupId}/messages`,{
       method:"POST",
-      body:JSON.stringify({body,mediaPath,mediaType,replyToMessageId:groupMessageInput.dataset.replyTo||null})
+      body:JSON.stringify({body,mediaPath,mediaType,replyToMessageId:groupMessageInput.dataset.replyTo||null,isAnnouncement:Boolean(document.getElementById("group-announcement-checkbox")?.checked)})
     });
     groupMessageInput.value="";delete groupMessageInput.dataset.replyTo;groupMessageInput.placeholder="Write a group message...";
     groupMediaInput.value="";
+    const announcementCheckbox = document.getElementById("group-announcement-checkbox");
+    if (announcementCheckbox) announcementCheckbox.checked = false;
     clearGroupVoiceRecording();
     await openSelectedGroup();groupStatus.textContent="Group message sent.";
   } catch(error){groupStatus.textContent=error.message;}
