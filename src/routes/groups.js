@@ -539,7 +539,10 @@ router.post("/invitation/:token/join", (req, res) => {
     if (count >= 100) return { error: "This group has reached 100 members." };
     if (invite.approvalRequired) {
       const pending = db.prepare("SELECT id FROM group_join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'").get(invite.groupId, req.auth.userId);
-      if (pending) return { pending: true, requestId: pending.id, groupId: invite.groupId };
+      if (pending) {
+        db.prepare("UPDATE group_join_requests SET invitation_id = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?").run(invite.id, pending.id);
+        return { pending: true, requestId: pending.id, groupId: invite.groupId };
+      }
       const created = db.prepare("INSERT INTO group_join_requests (group_id, user_id, invitation_id) VALUES (?, ?, ?)").run(invite.groupId, req.auth.userId, invite.id);
       db.prepare("INSERT INTO group_invitation_events (invitation_id, user_id, event_type) VALUES (?, ?, 'requested')").run(invite.id, req.auth.userId);
       logGroupActivity(invite.groupId, req.auth.userId, "join_requested", req.auth.userId);
