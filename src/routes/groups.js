@@ -642,7 +642,8 @@ router.patch("/:id/details", (req, res) => {
   if (!Number.isSafeInteger(groupId) || !isAdmin(groupId, req.auth.userId)) return res.status(403).json({ error: "Only group admins can update group details." });
   const description = String(req.body.description ?? "").trim();
   const rules = String(req.body.rules ?? "").trim();
-  const visibility = String(req.body.visibility ?? "private");
+  const currentSettings = db.prepare("SELECT visibility FROM groups WHERE id = ?").get(groupId);
+  const visibility = String(req.body.visibility ?? currentSettings.visibility ?? "private");
   const approvalRequired = req.body.approvalRequired === true;
   const memberListVisibility = String(req.body.memberListVisibility || "members");
   if (description.length > 500) return res.status(400).json({ error: "Group description must be 500 characters or fewer." });
