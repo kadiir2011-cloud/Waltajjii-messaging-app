@@ -105,6 +105,14 @@
     .profile-field label { display:block; font-size:.86rem; font-weight:600; color:#42596a; margin:0 0 5px; }
     .profile-field input, .profile-field textarea, .profile-field select { margin:0; width:100%; }
     .profile-field.full { grid-column:1/-1; }
+    .profile-private-details, .profile-edit-details { margin-top:12px; border:1px solid var(--wt-line); border-radius:12px; padding:12px 14px; background:var(--wt-surface); }
+    .profile-private-details summary, .profile-edit-details summary { cursor:pointer; font-weight:700; color:var(--wt-navy); }
+    .profile-hero[data-profile-background="mist"] { background:linear-gradient(120deg,#e8f1f2,#f7f9fc); }
+    .profile-hero[data-profile-background="ocean"] { background:linear-gradient(120deg,#d8edff,#eaf5ff); }
+    .profile-hero[data-profile-background="lavender"] { background:linear-gradient(120deg,#eee5ff,#faf5ff); }
+    .profile-hero[data-profile-background="sunset"] { background:linear-gradient(120deg,#ffe6d5,#fff5e9); }
+    .profile-hero[data-profile-background="forest"] { background:linear-gradient(120deg,#dcefe2,#f1f8f2); }
+    .profile-hero[data-profile-background="slate"] { background:linear-gradient(120deg,#dce3e9,#f3f5f7); }
     .profile-help { color:var(--wt-muted); font-size:.82rem; margin:7px 0 0; }
     .profile-actions { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-top:16px; }
     .profile-actions button { margin:0; }
@@ -683,16 +691,35 @@
     <span class="muted">WALTAJJII ID</span>
   </div>
 
-  <div class="profile-hero">
+  <div class="profile-hero" id="profile-hero" data-profile-background="mist">
     <img id="profile-picture-preview" src="" alt="Profile picture">
     <div class="profile-identity">
-      <strong id="profile-username"></strong>
-      <div class="profile-handle" id="profile-professional-line">Waltajjii member</div>
-      <p id="profile-bio-display" class="muted">No bio added yet.</p>
+      <strong id="profile-full-name-display">Waltajjii member</strong>
+      <div class="profile-handle" id="profile-professional-line">Add your profession and institution</div>
     </div>
   </div>
-
+  <details class="profile-private-details">
+    <summary>View account details</summary>
+    <p><strong>Username:</strong> <span id="profile-username"></span></p>
+    <p id="profile-bio-display" class="muted">No bio added yet.</p>
+  </details>
+  <details class="profile-edit-details">
+    <summary>Edit your profile and appearance</summary>
   <h4 class="profile-section-title">Basic identity</h4>
+  <div class="profile-grid">
+    <div class="profile-field full">
+      <label for="profile-full-name-input">Full name</label>
+      <input id="profile-full-name-input" maxlength="120" placeholder="Enter your full name">
+    </div>
+    <div class="profile-field">
+      <label for="profile-background">Profile background</label>
+      <select id="profile-background">
+        <option value="mist">Soft mist</option><option value="ocean">Ocean blue</option>
+        <option value="lavender">Lavender</option><option value="sunset">Warm sunset</option>
+        <option value="forest">Forest green</option><option value="slate">Modern slate</option>
+      </select>
+    </div>
+  </div>
   <div class="profile-grid">
     <div class="profile-field full">
       <label for="profile-bio-input">About you / brief bio</label>
@@ -746,6 +773,7 @@
     <button type="button" class="danger" id="remove-profile-picture-button">Remove picture</button>
   </div>
   <p id="profile-status" class="muted" role="status" aria-live="polite"></p>
+  </details>
 </section>
 
       </section>
