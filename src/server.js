@@ -197,6 +197,31 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("group:typing:start", (data = {}, acknowledge = () => {}) => {
+    const groupId = Number(data.groupId);
+    if (!Number.isSafeInteger(groupId) || groupId < 1 ||
+        !db.prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, socket.data.userId)) {
+      return acknowledge({ ok: false, error: "You are not a member of this group." });
+    }
+    if (!socket.data.typingGroups) socket.data.typingGroups = new Set();
+    if (!socket.data.typingGroups.has(groupId)) {
+      socket.data.typingGroups.add(groupId);
+      socket.to(`group:${groupId}`).emit("group:typing:update", {
+        groupId, userId: socket.data.userId, username: socket.data.username, isTyping: true
+      });
+    }
+    acknowledge({ ok: true });
+  });
+
+  socket.on("group:typing:stop", (data = {}) => {
+    const groupId = Number(data.groupId);
+    if (!Number.isSafeInteger(groupId) || !socket.data.typingGroups?.has(groupId)) return;
+    socket.data.typingGroups.delete(groupId);
+    socket.to(`group:${groupId}`).emit("group:typing:update", {
+      groupId, userId: socket.data.userId, username: socket.data.username, isTyping: false
+    });
+  });
+
   // A recipient confirms delivery only after the authenticated client receives the message.
   socket.on("message:delivered", (data = {}, acknowledge = () => {}) => {
     const messageId = Number(data.messageId);
@@ -338,6 +363,14 @@ io.on("connection", (socket) => {
     const targetUserId = activeCalls.get(disconnectedUserId);
 
     stopSocketTyping(socket);
+
+    // Clear any group typing indicators left by this disconnected session.
+    for (const groupId of socket.data.typingGroups || []) {
+      socket.to(`group:${groupId}`).emit("group:typing:update", {
+        groupId, userId: socket.data.userId, username: socket.data.username, isTyping: false
+      });
+    }
+    socket.data.typingGroups?.clear();
 
     if (targetUserId) {
       endTrackedCall(disconnectedUserId, targetUserId, true);
