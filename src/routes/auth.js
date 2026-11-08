@@ -143,7 +143,7 @@ router.patch("/profile", authenticateProfile, (req, res) => {
       location.length > 100 || website.length > 200) {
     return res.status(400).json({ error: "One or more profile fields exceed their character limits." });
   }
-  if (!["mist", "ocean", "lavender", "sunset", "forest", "slate"].includes(profileBackground)) {
+  if (!["mist", "ocean", "lavender", "sunset", "forest", "slate", "aurora", "midnight", "rose", "graphite", "pearl", "neon", "ocean-glass", "cosmic"].includes(profileBackground)) {
     return res.status(400).json({ error: "Choose one of the available profile backgrounds." });
   }
   if (!["personal", "professional", "both"].includes(profileMode)) {
