@@ -2634,6 +2634,21 @@ if (groupInvitationsButton) {
             }
           });
           linkArea.appendChild(copy);
+          const qrWrap = document.createElement("div");
+          qrWrap.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:12px 0;";
+          const qrLabel = document.createElement("strong");
+          qrLabel.textContent = "Scan to join this group";
+          const qrCanvas = document.createElement("canvas");
+          qrCanvas.width = 220;
+          qrCanvas.height = 220;
+          qrCanvas.setAttribute("aria-label", "QR code for this secure group invitation");
+          qrWrap.append(qrLabel, qrCanvas);
+          if (window.QRious) {
+            new QRious({ element: qrCanvas, value: created.invitation.url, size: 220, level: "H" });
+          } else {
+            qrWrap.appendChild(document.createTextNode("QR generator is unavailable. Use the invitation link above."));
+          }
+          linkArea.appendChild(qrWrap);
           const expiryInfo = document.createElement("small");
           expiryInfo.textContent = " Expires: " + new Date(created.invitation.expiresAt).toLocaleString();
           linkArea.appendChild(expiryInfo);
