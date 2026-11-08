@@ -2646,17 +2646,26 @@ if (groupInvitationsButton) {
           qrWrap.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:12px 0;";
           const qrLabel = document.createElement("strong");
           qrLabel.textContent = "Scan to join this group";
-          const qrCanvas = document.createElement("canvas");
-          qrCanvas.width = 220;
-          qrCanvas.height = 220;
-          qrCanvas.setAttribute("aria-label", "QR code for this secure group invitation");
-          qrWrap.append(qrLabel, qrCanvas);
-          if (window.QRious) {
-            new QRious({ element: qrCanvas, value: created.invitation.url, size: 220, level: "H" });
-          } else {
-            qrWrap.appendChild(document.createTextNode("QR generator is unavailable. Use the invitation link above."));
-          }
+          qrWrap.appendChild(qrLabel);
+          const qrStatus = document.createElement("small");
+          qrStatus.textContent = "Generating secure QR code…";
+          qrWrap.appendChild(qrStatus);
           linkArea.appendChild(qrWrap);
+          try {
+            const qrResult = await api("/api/groups/invitation/qr", {
+              method: "POST",
+              body: JSON.stringify({ url: created.invitation.url })
+            });
+            const qrImage = document.createElement("img");
+            qrImage.src = qrResult.dataUrl;
+            qrImage.alt = "QR code for this secure group invitation";
+            qrImage.width = 240;
+            qrImage.height = 240;
+            qrImage.style.cssText = "width:240px;height:240px;max-width:100%;background:#fff;padding:8px;border-radius:8px;";
+            qrWrap.replaceChildren(qrLabel, qrImage);
+          } catch (qrError) {
+            qrStatus.textContent = "QR code unavailable: " + qrError.message + " Use the invitation link above.";
+          }
           const expiryInfo = document.createElement("small");
           expiryInfo.textContent = " Expires: " + new Date(created.invitation.expiresAt).toLocaleString();
           linkArea.appendChild(expiryInfo);
