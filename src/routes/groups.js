@@ -855,7 +855,7 @@ router.post("/:id/events", (req, res) => {
   if (!title || title.length > 120) return res.status(400).json({ error: "Event title must be 1–120 characters." });
   if (description.length > 2000) return res.status(400).json({ error: "Event description must be at most 2,000 characters." });
   if (location.length > 200) return res.status(400).json({ error: "Location must be at most 200 characters." });
-  if (!startsAt || Number.isNaN(startDate.getTime()) || !/(Z|[+-]\\d{2}:?\\d{2})$/i.test(startsAt)) return res.status(400).json({ error: "Choose a valid event date and time." });
+  if (!startsAt || Number.isNaN(startDate.getTime()) || !/(Z|[+-]\d{2}:?\d{2})$/i.test(startsAt)) return res.status(400).json({ error: "Choose a valid event date and time." });
   if (startDate.getTime() < Date.now() - 60000 || startDate.getTime() > Date.now() + 366 * 86400000) return res.status(400).json({ error: "Events must be scheduled from now up to one year ahead." });
   if (![0, 5, 10, 15, 30, 60, 1440].includes(reminderMinutes)) return res.status(400).json({ error: "Choose a supported reminder interval." });
   const result = db.prepare("INSERT INTO group_events (group_id, created_by, title, description, starts_at, location, reminder_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)")
