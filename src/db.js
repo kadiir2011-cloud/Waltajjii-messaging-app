@@ -302,3 +302,34 @@ for (const [column, definition] of [
   if (!phase23GroupColumns.includes(column)) db.exec(`ALTER TABLE group_messages ADD COLUMN ${column} ${definition}`);
 }
 db.exec("CREATE INDEX IF NOT EXISTS idx_group_messages_pinned ON group_messages(group_id, pinned_at)");
+
+
+/* Phase 25A: secure group invitations. Only SHA-256 token hashes are stored. */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_invitations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT,
+    use_limit INTEGER,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    CHECK (use_limit IS NULL OR use_limit BETWEEN 1 AND 1000),
+    CHECK (use_count >= 0)
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_invitations_group
+    ON group_invitations(group_id, created_at DESC);
+  CREATE TABLE IF NOT EXISTS group_invitation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invitation_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL CHECK(event_type IN ('joined','requested','revoked')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (invitation_id) REFERENCES group_invitations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
