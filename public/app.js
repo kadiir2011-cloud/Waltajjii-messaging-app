@@ -3312,3 +3312,68 @@ document.getElementById("group-event-form").addEventListener("submit", async eve
   } catch (error) { groupEventsStatus.textContent = error.message || "The event could not be created."; }
   finally { button.disabled = false; }
 });
+
+
+// Phase 32: Waltajjii Language Bridge — translation preview before sending.
+(function initWaltajjiiLanguageBridge() {
+  const toggle = document.getElementById("wt-language-bridge-toggle");
+  const tools = document.getElementById("wt-language-bridge-tools");
+  const source = document.getElementById("wt-translation-source");
+  const from = document.getElementById("wt-translation-from");
+  const to = document.getElementById("wt-translation-to");
+  const translateButton = document.getElementById("wt-translate-button");
+  const status = document.getElementById("wt-translation-status");
+  const resultWrap = document.getElementById("wt-translation-result-wrap");
+  const result = document.getElementById("wt-translation-result");
+  const useButton = document.getElementById("wt-use-translation");
+  const copyButton = document.getElementById("wt-copy-translation");
+  if (!toggle || !tools || !source || !translateButton) return;
+
+  toggle.addEventListener("click", () => {
+    const opening = tools.hidden;
+    tools.hidden = !opening;
+    toggle.setAttribute("aria-expanded", String(opening));
+    toggle.textContent = opening ? "Close translator" : "Open translator";
+    if (opening && !source.value.trim() && messageInput?.value.trim()) source.value = messageInput.value.trim();
+  });
+
+  translateButton.addEventListener("click", async () => {
+    const textToTranslate = source.value.trim();
+    if (!textToTranslate) { status.textContent = "Enter a message to translate."; return; }
+    translateButton.disabled = true;
+    resultWrap.hidden = true;
+    status.textContent = "Translating securely…";
+    try {
+      const data = await api("/api/translation/translate", {
+        method: "POST",
+        body: JSON.stringify({ text: textToTranslate, sourceLanguage: from.value, targetLanguage: to.value })
+      });
+      result.value = data.translation || "";
+      if (!result.value) throw new Error("The translation service returned an empty result.");
+      resultWrap.hidden = false;
+      status.textContent = "Translation ready. Review it before using or sending.";
+    } catch (error) {
+      status.textContent = error.message || "Translation is temporarily unavailable.";
+    } finally {
+      translateButton.disabled = false;
+    }
+  });
+
+  useButton?.addEventListener("click", () => {
+    if (!result.value.trim()) return;
+    messageInput.value = result.value.trim();
+    messageInput.focus();
+    status.textContent = "Translation copied into the message composer. Press Send when ready.";
+  });
+
+  copyButton?.addEventListener("click", async () => {
+    if (!result.value.trim()) return;
+    try {
+      await navigator.clipboard.writeText(result.value);
+      status.textContent = "Translation copied.";
+    } catch {
+      result.focus(); result.select();
+      status.textContent = "Select the translation and copy it.";
+    }
+  });
+})();
