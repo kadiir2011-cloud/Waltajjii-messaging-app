@@ -450,4 +450,13 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_group_event_rsvps_event ON group_event_rsvps(event_id, response);
+  CREATE TABLE IF NOT EXISTS group_event_reminder_deliveries (
+    event_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    delivered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (event_id, user_id),
+    FOREIGN KEY (event_id) REFERENCES group_events(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_event_reminder_deliveries_user ON group_event_reminder_deliveries(user_id, delivered_at);
 `);

@@ -1135,6 +1135,11 @@ function registerMessagingSocketHandlers(socket) {
     loadOnlinePeople();
   });
 
+  // Refresh the in-app notification list immediately when a reminder is delivered.
+  socket.on("notifications:update", () => {
+    loadNotifications();
+  });
+
   // Group activity is delivered only to authenticated members of each group room.
   socket.on("groups:updated", data => {
     loadGroups();

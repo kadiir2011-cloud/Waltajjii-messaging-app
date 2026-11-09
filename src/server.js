@@ -429,6 +429,65 @@ io.on("connection", (socket) => {
     );
   });
 });
+// Phase 31: durable, deduplicated group-event reminders.
+function deliverDueGroupEventReminders() {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const due = db.prepare(`
+    SELECT e.id AS eventId, e.group_id AS groupId, e.created_by AS creatorId,
+      e.title, e.starts_at AS startsAt, e.reminder_minutes AS reminderMinutes,
+      gm.user_id AS userId
+    FROM group_events e
+    JOIN group_members gm ON gm.group_id = e.group_id
+    WHERE e.status = 'scheduled'
+      AND e.reminder_minutes > 0
+      AND julianday(e.starts_at) > julianday(?)
+      AND julianday(e.starts_at) <= julianday(?, '+' || e.reminder_minutes || ' minutes')
+    ORDER BY e.starts_at ASC, e.id ASC, gm.user_id ASC
+  `).all(nowIso, nowIso);
+
+  const deliver = db.transaction((event) => {
+    const claimed = db.prepare(
+      "INSERT OR IGNORE INTO group_event_reminder_deliveries (event_id, user_id) VALUES (?, ?)"
+    ).run(event.eventId, event.userId);
+    if (!claimed.changes) return null;
+
+    const minutesLeft = Math.max(1, Math.ceil((Date.parse(event.startsAt) - now.getTime()) / 60000));
+    const unit = minutesLeft === 1 ? "minute" : "minutes";
+    const message = "Reminder: " + event.title + " starts in about " + minutesLeft + " " + unit + ".";
+    const result = db.prepare(
+      "INSERT INTO notifications (user_id, actor_id, type, entity_id, message) VALUES (?, ?, 'group_event_reminder', ?, ?)"
+    ).run(event.userId, event.creatorId, event.eventId, message);
+    return { notificationId: Number(result.lastInsertRowid), userId: event.userId, eventId: event.eventId, groupId: event.groupId };
+  });
+
+  let delivered = 0;
+  for (const event of due) {
+    try {
+      const notice = deliver(event);
+      if (!notice) continue;
+      delivered += 1;
+      io.to("user:" + notice.userId).emit("notifications:update", {
+        type: "group_event_reminder", entityId: notice.eventId, notificationId: notice.notificationId
+      });
+    } catch (error) {
+      console.error("Group event reminder delivery failed:", error.message);
+    }
+  }
+  if (delivered) console.log("Delivered " + delivered + " group event reminder(s).");
+}
+
+function runGroupEventReminderWorker() {
+  try {
+    deliverDueGroupEventReminders();
+  } catch (error) {
+    console.error("Group event reminder worker failed:", error.message);
+  }
+}
+runGroupEventReminderWorker();
+const groupEventReminderTimer = setInterval(runGroupEventReminderWorker, 30000);
+groupEventReminderTimer.unref();
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Waltajjii server listening on port ${PORT}`);
 });
