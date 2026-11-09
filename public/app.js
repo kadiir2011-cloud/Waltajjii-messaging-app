@@ -154,16 +154,25 @@ async function loadOnlinePeople() {
         message.type = "button";
         message.className = "wt-online-message";
         message.textContent = "Message";
-        message.addEventListener("click", () => {
-          const entry = [...userIdsByUsername.entries()].find(([, id]) => String(id) === String(user.userId));
+        message.addEventListener("click", async () => {
+          let entry = [...userIdsByUsername.entries()].find(([, id]) => String(id) === String(user.userId));
           if (!entry) {
-            statusBox.textContent = "This member is online. Their conversation entry is still loading; please try again in a moment.";
-            loadUsers();
+            statusBox.textContent = "Opening this member's conversation…";
+            await loadUsers();
+            entry = [...userIdsByUsername.entries()].find(([, id]) => String(id) === String(user.userId));
+          }
+          if (!entry) {
+            statusBox.textContent = "This member is online, but their conversation could not be found. Please try again.";
             return;
           }
+
+          // Open the Direct messages workspace automatically; the user should not
+          // have to open the menu and navigate there manually.
+          document.querySelector('#wt-sidebar a[href="#wt-communication-section"]')?.click();
           recipient.value = entry[0];
           recipient.dispatchEvent(new Event("change"));
-          document.getElementById("messages")?.scrollIntoView({ behavior: "smooth", block: "center" });
+          document.getElementById("message-input")?.focus();
+          document.getElementById("wt-communication-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
         card.append(avatar, copy, message);
         liveOnlineList.appendChild(card);
