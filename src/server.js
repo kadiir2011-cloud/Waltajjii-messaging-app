@@ -96,6 +96,42 @@ io.use((socket, next) => {
 const activeCalls = new Map();
 const onlineUsers = new Map();
 
+// Authenticated, privacy-limited snapshot of currently connected members.
+app.get("/api/presence/online", (req, res) => {
+  const header = req.headers.authorization || "";
+  const [scheme, token] = header.split(" ");
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Login required." });
+  }
+  let viewer;
+  try {
+    viewer = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: "waltajjii",
+      audience: "waltajjii-users"
+    });
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired login token." });
+  }
+
+  res.set("Cache-Control", "no-store");
+  const onlineIds = Array.from(onlineUsers.keys())
+    .filter(id => id !== String(viewer.userId));
+  if (!onlineIds.length) return res.json({ users: [] });
+
+  const placeholders = onlineIds.map(() => "?").join(",");
+  const users = db.prepare(`
+    SELECT id AS userId,
+           COALESCE(NULLIF(full_name, ''), 'Waltajjii member') AS fullName,
+           avatar_path AS avatarPath,
+           CASE WHEN profile_mode IN ('professional','both') THEN professional_title ELSE '' END AS professionalTitle,
+           CASE WHEN profile_mode IN ('professional','both') THEN organization ELSE '' END AS organization
+    FROM users
+    WHERE id IN (${placeholders})
+    ORDER BY full_name COLLATE NOCASE, username COLLATE NOCASE
+  `).all(...onlineIds);
+  res.json({ users });
+});
+
 function stopSocketTyping(socket) {
   const targetUserId = socket.data.typingTo;
   if (!targetUserId) return;
