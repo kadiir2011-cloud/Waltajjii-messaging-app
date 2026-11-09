@@ -417,6 +417,7 @@ callSocket.on("connect_error", (error) => {
   recipient.appendChild(option);
 });
         refreshPresenceUI();
+        loadOnlinePeople();
         statusBox.textContent = data.users.length
           ? "Choose a recipient, then load the conversation."
           : "No other users yet. Create a second account to test messaging.";
