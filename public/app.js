@@ -150,31 +150,50 @@ async function loadOnlinePeople() {
         role.className = "wt-online-role";
         role.textContent = [user.professionalTitle, user.organization].filter(Boolean).join(" · ") || "Waltajjii member";
         copy.append(name, role);
-        const message = document.createElement("button");
-        message.type = "button";
-        message.className = "wt-online-message";
-        message.textContent = "Message";
-        message.addEventListener("click", async () => {
+        const actions = document.createElement("div");
+        actions.className = "wt-online-actions";
+
+        async function activateOnlineMember(action) {
           let entry = [...userIdsByUsername.entries()].find(([, id]) => String(id) === String(user.userId));
           if (!entry) {
-            statusBox.textContent = "Opening this member's conversation…";
+            statusBox.textContent = "Connecting to this member…";
             await loadUsers();
             entry = [...userIdsByUsername.entries()].find(([, id]) => String(id) === String(user.userId));
           }
           if (!entry) {
-            statusBox.textContent = "This member is online, but their conversation could not be found. Please try again.";
+            statusBox.textContent = "This member is online, but their account could not be selected. Please try again.";
             return;
           }
 
-          // Open the Direct messages workspace automatically; the user should not
-          // have to open the menu and navigate there manually.
+          // Open Direct messages and select the member before messaging or calling.
           document.querySelector('#wt-sidebar a[href="#wt-communication-section"]')?.click();
           recipient.value = entry[0];
           recipient.dispatchEvent(new Event("change"));
-          document.getElementById("message-input")?.focus();
-          document.getElementById("wt-communication-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+          if (action === "video") {
+            startVideoCall();
+          } else if (action === "voice") {
+            startVoiceCall();
+          } else {
+            document.getElementById("message-input")?.focus();
+            document.getElementById("wt-communication-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
+
+        [
+          { label: "Message", action: "message", icon: "✉" },
+          { label: "Video call", action: "video", icon: "▣" },
+          { label: "Voice call", action: "voice", icon: "☎" }
+        ].forEach(item => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "wt-online-action wt-online-action-" + item.action;
+          button.textContent = item.icon + " " + item.label;
+          button.setAttribute("aria-label", item.label + " " + (user.fullName || "online member"));
+          button.addEventListener("click", () => activateOnlineMember(item.action));
+          actions.appendChild(button);
         });
-        card.append(avatar, copy, message);
+        card.append(avatar, copy, actions);
         liveOnlineList.appendChild(card);
       });
     } catch (error) {
