@@ -512,6 +512,27 @@
     .wt-profile-nav-copy small { color:#c3d7df; font-size:.72rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .wt-profile-chevron { color:#b9d3dc; font-size:1.4rem; }
     .wt-nav-note { margin:0; padding:10px 12px; color:#c3d7df; font-size:.78rem; line-height:1.45; }
+    .wt-online-people { margin:0 0 24px; padding:20px; border:1px solid rgba(125,160,170,.24); border-radius:22px; background:linear-gradient(135deg,rgba(237,249,247,.96),rgba(246,248,255,.96)); box-shadow:0 12px 32px rgba(22,52,72,.06); }
+    .wt-online-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:15px; }
+    .wt-online-eyebrow { margin:0 0 4px; color:#0b8b80; font-size:.68rem; font-weight:800; letter-spacing:.14em; }
+    .wt-online-heading h2 { margin:0; font-size:1.25rem; }
+    .wt-online-subtitle { margin:4px 0 0; color:#718096; font-size:.86rem; }
+    .wt-online-count { flex:none; border-radius:999px; padding:7px 11px; background:#e1f5ef; color:#087f66; font-size:.78rem; font-weight:750; }
+    .wt-online-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:11px; }
+    .wt-online-card { display:flex; align-items:center; gap:11px; min-width:0; padding:12px; border:1px solid rgba(125,160,170,.2); border-radius:16px; background:rgba(255,255,255,.82); }
+    .wt-online-avatar { position:relative; flex:none; width:46px; height:46px; display:grid; place-items:center; overflow:hidden; border-radius:15px; background:linear-gradient(135deg,#c9f2e9,#dbe6ff); color:#176b68; font-weight:800; }
+    .wt-online-avatar img { width:100%; height:100%; object-fit:cover; }
+    .wt-online-dot { position:absolute; right:0; bottom:0; width:12px; height:12px; border:2px solid white; border-radius:50%; background:#16b879; }
+    .wt-online-copy { min-width:0; flex:1; }
+    .wt-online-name { display:block; overflow:hidden; color:#18364b; font-size:.9rem; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+    .wt-online-role { display:block; margin-top:3px; overflow:hidden; color:#718096; font-size:.75rem; text-overflow:ellipsis; white-space:nowrap; }
+    .wt-online-message { flex:none; padding:7px 10px; border:0; border-radius:10px; background:#e7f5f2; color:#087f78; font-size:.76rem; font-weight:750; cursor:pointer; }
+    .wt-online-empty { grid-column:1/-1; margin:0; padding:18px; border:1px dashed rgba(125,160,170,.35); border-radius:14px; color:#718096; text-align:center; font-size:.88rem; }
+    body[data-wt-theme="dark"] .wt-online-people { background:linear-gradient(135deg,#142e3a,#1c2940); border-color:#ffffff1c; }
+    body[data-wt-theme="dark"] .wt-online-card { background:#ffffff0b; border-color:#ffffff18; }
+    body[data-wt-theme="dark"] .wt-online-name { color:#eef8fb; }
+    body[data-wt-theme="dark"] .wt-online-empty { color:#b8c9d2; }
+    @media(max-width:520px) { .wt-online-people { padding:15px; } .wt-online-grid { grid-template-columns:1fr; } .wt-online-heading { align-items:flex-start; } }
     .wt-home-placeholder { border:1px solid var(--wt-border); border-radius:16px; padding:26px; background:var(--wt-surface); color:var(--wt-muted); }
     #wt-account-section > #personalization-panel, #wt-account-section > #profile-panel,
     .wt-content-section:not(#wt-account-section) { display:none; }
@@ -726,6 +747,13 @@
         </aside>
         <div class="wt-main-content">
           <button type="button" class="wt-nav-toggle" id="wt-nav-toggle" aria-expanded="false" aria-controls="wt-sidebar">☰ Menu</button>
+          <section class="wt-online-people" id="wt-online-people" aria-labelledby="wt-online-title">
+            <div class="wt-online-heading">
+              <div><p class="wt-online-eyebrow">HERE RIGHT NOW</p><h2 id="wt-online-title">People online</h2><p class="wt-online-subtitle">See who is available on Waltajjii.</p></div>
+              <span class="wt-online-count" id="wt-online-count" aria-live="polite">0 online</span>
+            </div>
+            <div class="wt-online-grid" id="wt-online-list" aria-live="polite"><p class="wt-online-empty">Connecting to live presence…</p></div>
+          </section>
           <div class="wt-home-placeholder" id="wt-home-placeholder">
             <h2>Welcome to Waltajjii</h2>
             <p>Choose an item from the menu to open messages, calls, social spaces, communities or your profile.</p>
