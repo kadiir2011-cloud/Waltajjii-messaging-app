@@ -24,3 +24,12 @@ The reminder interval is saved with the event as a preference. Automatic schedul
 - JavaScript syntax checks passed for `src/db.js`, `src/routes/groups.js`, and `public/app.js`.
 - Runtime migration, authenticated API, multi-account RSVP, cancellation, and realtime tests remain required on the isolated Render test service.
 - Do not merge this draft PR or deploy to production without explicit approval.
+
+
+## Phase 31 — Automatic group-event reminders
+- Added a persistent per-member delivery ledger so each event reminder is delivered at most once per group member, including across server restarts.
+- A server-side worker checks every 30 seconds and sends a reminder to each current group member according to the event's saved reminder interval.
+- Reminders are stored in the existing in-app notifications feed and delivered live to connected sessions through authenticated Socket.IO user rooms.
+- Cancelled events and events that have already started are not sent reminders for.
+- This is in-app delivery; browser push notifications are not included.
+- The isolated test deployment must verify reminder timing, duplicate prevention, multi-member delivery, cancelled events, and restart recovery.
