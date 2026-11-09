@@ -654,7 +654,18 @@
       #profile-hero .profile-identity { padding:10px 12px; }
     }
 
-  </style>
+
+    .wt-language-bridge{margin:14px 0 4px;padding:15px;border:1px solid #dbe7e9;border-radius:14px;background:linear-gradient(135deg,#f4fbfa,#f7f8ff)}
+    .wt-language-bridge-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .wt-language-bridge-heading p{margin:4px 0 0}
+    .wt-language-bridge textarea{width:100%;padding:11px;margin:7px 0 12px;resize:vertical}
+    .wt-language-bridge-languages{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .wt-language-bridge-languages select{margin:6px 0 12px}
+    .wt-language-bridge .row{align-items:center}
+    .wt-language-bridge .secondary{background:#e8eef2;color:#263e4d}
+    .wt-language-bridge-note{font-size:12px;color:#64748b;margin:10px 0 0}
+    @media(max-width:520px){.wt-language-bridge-heading{align-items:flex-start;flex-direction:column}.wt-language-bridge-languages{grid-template-columns:1fr}}
+\n  </style>
 </head>
 <body>
   <header>
@@ -1007,6 +1018,31 @@
   <button type="submit">Send</button>
 </form>
 
+<div class="wt-language-bridge" id="wt-language-bridge">
+  <div class="wt-language-bridge-heading">
+    <div><strong>🌐 Waltajjii Language Bridge</strong><p class="muted">Translate a message before sending it. Your original text stays unchanged.</p></div>
+    <button type="button" class="secondary" id="wt-language-bridge-toggle" aria-expanded="false">Open translator</button>
+  </div>
+  <div id="wt-language-bridge-tools" hidden>
+    <label for="wt-translation-source">Text to translate</label>
+    <textarea id="wt-translation-source" maxlength="4000" rows="3" placeholder="Write or paste a message here..."></textarea>
+    <div class="wt-language-bridge-languages">
+      <div><label for="wt-translation-from">From</label><select id="wt-translation-from">
+        <option value="Auto-detect">Auto-detect</option><option>Afaan Oromo</option><option>Amharic</option><option>English</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Arabic</option>
+      </select></div>
+      <div><label for="wt-translation-to">Translate into</label><select id="wt-translation-to">
+        <option>Afaan Oromo</option><option>Amharic</option><option selected>English</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Arabic</option>
+      </select></div>
+    </div>
+    <div class="row"><button type="button" id="wt-translate-button">Translate text</button><span id="wt-translation-status" class="muted" role="status" aria-live="polite">Translation service setup is required before live translation can run.</span></div>
+    <div id="wt-translation-result-wrap" hidden>
+      <label for="wt-translation-result">Translation</label>
+      <textarea id="wt-translation-result" rows="3" readonly></textarea>
+      <div class="row"><button type="button" id="wt-use-translation">Use in message composer</button><button type="button" class="secondary" id="wt-copy-translation">Copy translation</button></div>
+    </div>
+    <p class="wt-language-bridge-note">Your message is sent only when you press Send. Do not enter passwords or other highly sensitive information into translation.</p>
+  </div>
+</div>
       </section>
       <section class="wt-content-section" id="wt-groups-section" aria-label="Groups">
       <section class="group-panel" aria-labelledby="groups-heading">
