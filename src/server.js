@@ -113,6 +113,7 @@ app.get("/api/presence/online", (req, res) => {
     return res.status(401).json({ error: "Invalid or expired login token." });
   }
 
+  res.set("Cache-Control", "no-store");
   const onlineIds = Array.from(onlineUsers.keys())
     .filter(id => id !== String(viewer.userId));
   if (!onlineIds.length) return res.json({ users: [] });
@@ -128,7 +129,6 @@ app.get("/api/presence/online", (req, res) => {
     WHERE id IN (${placeholders})
     ORDER BY full_name COLLATE NOCASE, username COLLATE NOCASE
   `).all(...onlineIds);
-  res.set("Cache-Control", "no-store");
   res.json({ users });
 });
 
