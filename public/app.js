@@ -101,6 +101,86 @@ function refreshPresenceUI() {
   presenceLine.style.color = online ? "#15803d" : "#64748b";
 }
 
+const liveOnlineList = document.getElementById("wt-online-list");
+const liveOnlineCount = document.getElementById("wt-online-count");
+let liveOnlineRequest = null;
+
+async function loadOnlinePeople() {
+  if (!liveOnlineList || !token) return;
+  if (liveOnlineRequest) return liveOnlineRequest;
+  liveOnlineRequest = (async () => {
+    try {
+      const data = await api("/api/presence/online");
+      const users = Array.isArray(data.users) ? data.users : [];
+      liveOnlineList.replaceChildren();
+      if (liveOnlineCount) liveOnlineCount.textContent = users.length + (users.length === 1 ? " online" : " online");
+      if (!users.length) {
+        const empty = document.createElement("p");
+        empty.className = "wt-online-empty";
+        empty.textContent = "No other members are online right now. This list updates automatically as people join.";
+        liveOnlineList.appendChild(empty);
+        return;
+      }
+      users.forEach(user => {
+        const card = document.createElement("article");
+        card.className = "wt-online-card";
+        const avatar = document.createElement("div");
+        avatar.className = "wt-online-avatar";
+        const fallback = document.createElement("span");
+        fallback.textContent = (user.fullName || "W").trim().charAt(0).toUpperCase();
+        avatar.appendChild(fallback);
+        if (user.avatarPath) {
+          const image = document.createElement("img");
+          image.src = user.avatarPath;
+          image.alt = "";
+          image.loading = "lazy";
+          image.onerror = () => image.remove();
+          avatar.appendChild(image);
+        }
+        const dot = document.createElement("span");
+        dot.className = "wt-online-dot";
+        dot.setAttribute("aria-label", "Online");
+        avatar.appendChild(dot);
+        const copy = document.createElement("div");
+        copy.className = "wt-online-copy";
+        const name = document.createElement("strong");
+        name.className = "wt-online-name";
+        name.textContent = user.fullName || "Waltajjii member";
+        const role = document.createElement("span");
+        role.className = "wt-online-role";
+        role.textContent = [user.professionalTitle, user.organization].filter(Boolean).join(" · ") || "Waltajjii member";
+        copy.append(name, role);
+        const message = document.createElement("button");
+        message.type = "button";
+        message.className = "wt-online-message";
+        message.textContent = "Message";
+        message.addEventListener("click", () => {
+          const entry = [...userIdsByUsername.entries()].find(([, id]) => String(id) === String(user.userId));
+          if (!entry) {
+            statusBox.textContent = "This member is online. Their conversation entry is still loading; please try again in a moment.";
+            loadUsers();
+            return;
+          }
+          recipient.value = entry[0];
+          recipient.dispatchEvent(new Event("change"));
+          document.getElementById("messages")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        card.append(avatar, copy, message);
+        liveOnlineList.appendChild(card);
+      });
+    } catch (error) {
+      liveOnlineList.replaceChildren();
+      const empty = document.createElement("p");
+      empty.className = "wt-online-empty";
+      empty.textContent = "Live presence is temporarily unavailable. " + error.message;
+      liveOnlineList.appendChild(empty);
+    } finally {
+      liveOnlineRequest = null;
+    }
+  })();
+  return liveOnlineRequest;
+}
+
 function stopTypingIndicator() {
   if (typingStopTimer) {
     clearTimeout(typingStopTimer);
@@ -135,6 +215,7 @@ function stopTypingIndicator() {
       chatPanel.style.display = "block";
       statusBox.textContent = "Choose a recipient to begin.";
       loadUsers();
+      loadOnlinePeople();
       loadGroups();
       loadChannels();
       loadSocialData();
@@ -1014,6 +1095,7 @@ function registerMessagingSocketHandlers(socket) {
     onlineUserIds.clear();
     (data?.users || []).forEach(user => onlineUserIds.add(String(user.userId)));
     refreshPresenceUI();
+    loadOnlinePeople();
   });
 
   socket.on("presence:update", data => {
@@ -1021,6 +1103,7 @@ function registerMessagingSocketHandlers(socket) {
     if (data.online) onlineUserIds.add(String(data.userId));
     else onlineUserIds.delete(String(data.userId));
     refreshPresenceUI();
+    loadOnlinePeople();
   });
 
   // Group activity is delivered only to authenticated members of each group room.
