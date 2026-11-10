@@ -1,0 +1,30 @@
+name: Phase 33C PostgreSQL adapter tests
+
+on:
+  pull_request:
+    branches:
+      - waltajjii-production-readiness-phase33
+    paths:
+      - "src/db/postgres-adapter.js"
+      - "test/postgres-adapter.test.js"
+      - ".github/workflows/phase33c-adapter-tests.yml"
+  push:
+    branches:
+      - waltajjii-postgres-adapter-phase33c
+    paths:
+      - "src/db/postgres-adapter.js"
+      - "test/postgres-adapter.test.js"
+      - ".github/workflows/phase33c-adapter-tests.yml"
+
+jobs:
+  adapter-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run adapter unit tests
+        run: node --test test/postgres-adapter.test.js
