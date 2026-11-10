@@ -9,7 +9,8 @@ function createPostgresGroupGovernanceService({db,clock=()=>new Date()}={}) {
  const activity=async(tx,g,a,type,subject=null,details="")=>tx.execute("INSERT INTO group_activity(group_id,actor_id,subject_user_id,event_type,details) VALUES($1,$2,$3,$4,$5)",[g,a||null,subject,String(type),String(details||"").slice(0,240)]);
  async function member(tx,g,u){return tx.one("SELECT role,joined_at AS \"joinedAt\" FROM group_members WHERE group_id=$1 AND user_id=$2",[g,u]);}
  async function requireMember(tx,g,u){const m=await member(tx,g,u);if(!m)throw fail(404,"Group not found.");return m;}
- async function requireAdmin(tx,g,u){const m=await requireMember(tx,g,u);if(m.role!=="admin")throw fail(403,"Only group admins can perform this action.");return m;}
+ async function requireAdmin(tx,g,u){const m=await member(tx,g,u);if(!m||m.role!=="admin")throw fail(403,"Only group admins can perform this action.");return m;}
+ async function requirePollMember(tx,g,u){if(!await member(tx,g,u))throw fail(403,"Only group members can view or manage polls.");}
  async function changeRole(g,actor,target,role){
   if(!validId(g)||!validId(target)||!["admin","member"].includes(role))throw fail(400,"Invalid group member or role.");
   return db.withTransaction(async tx=>{await requireAdmin(tx,g,actor);const current=await member(tx,g,target);if(!current)throw fail(404,"Member not found.");
@@ -105,7 +106,7 @@ function createPostgresGroupGovernanceService({db,clock=()=>new Date()}={}) {
   });
  }
  async function listPolls(g,user){
-  await requireMember(db,g,user);
+  await requirePollMember(db,g,user);
   const polls=await db.many("SELECT p.id,p.group_id AS \"groupId\",p.creator_id AS \"creatorId\",u.username AS \"creatorUsername\",p.question,p.multiple_choice AS \"multipleChoice\",p.status,p.created_at AS \"createdAt\",p.closed_at AS \"closedAt\",(SELECT COUNT(DISTINCT v.user_id)::int FROM group_poll_votes v WHERE v.poll_id=p.id) AS \"voterCount\" FROM group_polls p JOIN users u ON u.id=p.creator_id WHERE p.group_id=$1 ORDER BY p.id DESC LIMIT 50",[g]);
   for(const p of polls){p.multipleChoice=Boolean(p.multipleChoice);p.options=await db.many("SELECT o.id,o.option_text AS text,(SELECT COUNT(*)::int FROM group_poll_votes v WHERE v.option_id=o.id) AS votes,EXISTS(SELECT 1 FROM group_poll_votes v WHERE v.option_id=o.id AND v.user_id=$1) AS selected FROM group_poll_options o WHERE o.poll_id=$2 ORDER BY o.id",[user,p.id]);p.options=p.options.map(o=>({...o,selected:Boolean(o.selected)}));}
   return {polls};
@@ -115,19 +116,20 @@ function createPostgresGroupGovernanceService({db,clock=()=>new Date()}={}) {
   if(question.length<1||question.length>300)throw fail(400,"Poll question must be 1–300 characters.");
   if(options.length<2||options.length>10||options.some(x=>!x||x.length>100))throw fail(400,"Add 2–10 options, each 1–100 characters.");
   if(new Set(options.map(x=>x.toLocaleLowerCase())).size!==options.length)throw fail(400,"Poll options must be unique.");
-  const id=await db.withTransaction(async tx=>{await requireMember(tx,g,user);const p=await tx.one("INSERT INTO group_polls(group_id,creator_id,question,multiple_choice) VALUES($1,$2,$3,$4) RETURNING id",[g,user,question,multiple?1:0]);for(const option of options)await tx.execute("INSERT INTO group_poll_options(poll_id,option_text) VALUES($1,$2)",[p.id,option]);await activity(tx,g,user,"poll_created",null,question.slice(0,100));return String(p.id);});
+  const id=await db.withTransaction(async tx=>{await requirePollMember(tx,g,user);const p=await tx.one("INSERT INTO group_polls(group_id,creator_id,question,multiple_choice) VALUES($1,$2,$3,$4) RETURNING id",[g,user,question,multiple?1:0]);for(const option of options)await tx.execute("INSERT INTO group_poll_options(poll_id,option_text) VALUES($1,$2)",[p.id,option]);await activity(tx,g,user,"poll_created",null,question.slice(0,100));return String(p.id);});
   return {poll:(await listPolls(g,user)).polls.find(p=>String(p.id)===id)};
  }
  async function votePoll(g,pollId,user,rawIds){
   const ids=Array.isArray(rawIds)?[...new Set(rawIds.map(String))]:[];if(!ids.length||ids.length>10||ids.some(x=>!validId(x)))throw fail(400,"Select at least one valid poll option.");
-  await db.withTransaction(async tx=>{await requireMember(tx,g,user);const p=await tx.one("SELECT id,multiple_choice AS \"multipleChoice\",status FROM group_polls WHERE id=$1 AND group_id=$2 FOR UPDATE",[pollId,g]);if(!p)throw fail(404,"Poll not found.");if(p.status!=="open")throw fail(400,"This poll is closed.");if(!p.multipleChoice&&ids.length!==1)throw fail(400,"Choose only one option for this poll.");
+  await db.withTransaction(async tx=>{await requirePollMember(tx,g,user);const p=await tx.one("SELECT id,multiple_choice AS \"multipleChoice\",status FROM group_polls WHERE id=$1 AND group_id=$2 FOR UPDATE",[pollId,g]);if(!p)throw fail(404,"Poll not found.");if(p.status!=="open")throw fail(400,"This poll is closed.");if(!p.multipleChoice&&ids.length!==1)throw fail(400,"Choose only one option for this poll.");
    const valid=await tx.many("SELECT id FROM group_poll_options WHERE poll_id=$1 AND id=ANY($2::bigint[])",[pollId,ids]);if(valid.length!==ids.length)throw fail(400,"One or more selected options do not belong to this poll.");
    await tx.execute("DELETE FROM group_poll_votes WHERE poll_id=$1 AND user_id=$2",[pollId,user]);for(const optionId of ids)await tx.execute("INSERT INTO group_poll_votes(poll_id,option_id,user_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[pollId,optionId,user]);
   });
   return {poll:(await listPolls(g,user)).polls.find(p=>String(p.id)===String(pollId))};
  }
  async function closePoll(g,pollId,user){
-  return db.withTransaction(async tx=>{const me=await requireMember(tx,g,user);const p=await tx.one("SELECT creator_id AS \"creatorId\",status FROM group_polls WHERE id=$1 AND group_id=$2 FOR UPDATE",[pollId,g]);if(!p)throw fail(404,"Poll not found.");if(String(p.creatorId)!==String(user)&&me.role!=="admin")throw fail(403,"Only the poll creator or a group admin can close this poll.");if(p.status==="open"){await tx.execute("UPDATE group_polls SET status='closed',closed_at=CURRENT_TIMESTAMP,closed_by=$1 WHERE id=$2",[user,pollId]);await activity(tx,g,user,"poll_closed");}return {poll:(await listPolls(g,user)).polls.find(x=>String(x.id)===String(pollId))};});
+  await db.withTransaction(async tx=>{const me=await member(tx,g,user);if(!me)throw fail(403,"Only group members can close polls.");const p=await tx.one("SELECT creator_id AS \"creatorId\",status FROM group_polls WHERE id=$1 AND group_id=$2 FOR UPDATE",[pollId,g]);if(!p)throw fail(404,"Poll not found.");if(String(p.creatorId)!==String(user)&&me.role!=="admin")throw fail(403,"Only the poll creator or a group admin can close this poll.");if(p.status==="open"){await tx.execute("UPDATE group_polls SET status='closed',closed_at=CURRENT_TIMESTAMP,closed_by=$1 WHERE id=$2",[user,pollId]);await activity(tx,g,user,"poll_closed");}});
+  return {poll:(await listPolls(g,user)).polls.find(x=>String(x.id)===String(pollId))};
  }
  async function listEvents(g,user){
   await requireMember(db,g,user);
