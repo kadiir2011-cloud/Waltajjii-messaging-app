@@ -26,3 +26,7 @@ node --test test/postgres-adapter.test.js test/postgres-pool-config.test.js
 - The adapter and pool configuration are not wired into the application runtime.
 - The app continues to use synchronous `better-sqlite3` until all database call sites, authentication, and Socket.IO access are migrated and tested together.
 - Do not set `DATABASE_URL`, run the saved SQL migration, or switch the Render service until the migration is fully reviewed and an explicit test plan is approved.
+
+
+## Verification note
+The pool configuration tests are part of the CI workflow and must pass before any connection or runtime integration is attempted.
