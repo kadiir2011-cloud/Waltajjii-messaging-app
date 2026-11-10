@@ -1,7 +1,7 @@
 name: Phase 35 PostgreSQL realtime persistence tests
 on:
   pull_request:
-    branches: [waltajjii-postgres-adapter-phase33c]
+    branches: [waltajjii-postgres-auth-phase34]
     paths:
       - "src/services/postgres-realtime-service.js"
       - "test/postgres-realtime-service.test.js"
