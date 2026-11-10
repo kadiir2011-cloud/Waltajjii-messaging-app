@@ -56,7 +56,7 @@ function createPostgresChannelsService({db}={}) {
  async function publishMessage(cid,uid,input={}) {
   let body=String(input.body||"").trim();const mediaPath=String(input.mediaPath||"").trim(),mediaType=String(input.mediaType||"").trim();
   if(body.length>4000||(!body&&!mediaPath))throw fail(400,"Write an announcement or attach media (maximum 4000 characters).");
-  if(mediaPath&&!/^[0-9a-f-]+\\.(jpg|jpeg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath))throw fail(400,"Invalid media file.");
+  if(mediaPath&&!/^[0-9a-f-]+\.(jpg|jpeg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath))throw fail(400,"Invalid media file.");
   if(mediaPath&&!["image","video","audio","document"].includes(mediaType))throw fail(400,"Invalid media type.");
   if(!body)body=mediaType==="video"?"[Video]":mediaType==="audio"?"[Audio]":mediaType==="document"?"[Document]":"[Image]";
   return db.withTransaction(async tx=>{
@@ -92,7 +92,7 @@ function createPostgresChannelsService({db}={}) {
   return db.withTransaction(async tx=>{await requireMember(cid,uid,tx);const m=await tx.one("SELECT sender_id AS sender,media_path AS media,\"deletedAt\" FROM (SELECT sender_id,media_path,deleted_at AS \"deletedAt\" FROM channel_messages WHERE channel_id=$1 AND id=$2) x",[cid,mid]);if(!m)throw fail(404,"Message not found.");if(String(m.sender)!==String(uid))throw fail(403,"Only the sender can edit this message.");if(m.media||m.deletedAt)throw fail(400,"Only active text messages can be edited.");await tx.execute("UPDATE channel_messages SET body=$1,edited_at=CURRENT_TIMESTAMP WHERE channel_id=$2 AND id=$3",[body,cid,mid]);return{message:await messageById(tx,cid,mid,uid)};});
  }
  async function deleteMessage(cid,mid,uid) {
-  return db.withTransaction(async tx=>{const me=await requireMember(cid,uid,tx);const m=await tx.one("SELECT sender_id AS sender FROM channel_messages WHERE channel_id=$1 AND id=$2",[cid,mid]);if(!m)throw fail(404,"Message not found.");if(String(m.sender)!==String(uid)&&!["owner","admin"].includes(me.role))throw fail(403,"Only the sender or a channel admin can delete this message.");await tx.execute("UPDATE channel_messages SET body='This message was deleted',media_path=NULL,media_type=NULL,deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP),deleted_by=$1 WHERE id=$2",[uid,mid]);await tx.execute("DELETE FROM channel_message_reactions WHERE channel_message_id=$1",[mid]);return{message:await messageById(tx,cid,mid,uid)};});
+  return db.withTransaction(async tx=>{const me=await requireMember(cid,uid,tx);const m=await tx.one("SELECT sender_id AS sender FROM channel_messages WHERE channel_id=$1 AND id=$2",[cid,mid]);if(!m)throw fail(404,"Message not found.");if(String(m.sender)!==String(uid)&&!["owner","admin"].includes(me.role))throw fail(403,"Only the sender or a channel admin can delete this message.");await tx.execute("UPDATE channel_messages SET body='This message was deleted',media_path=NULL,media_type=NULL,pinned_at=NULL,pinned_by=NULL,deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP),deleted_by=$1 WHERE id=$2",[uid,mid]);await tx.execute("DELETE FROM channel_message_reactions WHERE channel_message_id=$1",[mid]);return{message:await messageById(tx,cid,mid,uid)};});
  }
  async function pinMessage(cid,mid,uid,pin=true) {
   await requireAdmin(cid,uid);
