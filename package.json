@@ -2,7 +2,7 @@
   "name": "waltajjii-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Waltajjii real-time messaging backend (Phase 33C dependency verification)",
+  "description": "Waltajjii real-time messaging backend; Phase 33D clean-install verification",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
