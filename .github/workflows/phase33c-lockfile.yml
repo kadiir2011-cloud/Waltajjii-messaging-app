@@ -1,6 +1,7 @@
 name: Phase 33C regenerate dependency lockfile
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - waltajjii-postgres-adapter-phase33c
