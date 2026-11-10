@@ -8,8 +8,8 @@ const token=u=>jwt.sign({userId:String(u.id),username:u.username},secret,{expire
 async function request(url,user,options={}){const headers={...(options.body?{"content-type":"application/json"}:{}),...(user?{authorization:"Bearer "+token(user)}:{})};const response=await fetch(base+url,{...options,headers});let data={};try{data=await response.json();}catch{}return{status:response.status,data};}
 test("Phase 53: PostgreSQL group governance, invitations, polls, events and reminders",async()=>{
  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/001_initial_schema.sql"),"utf8"));
- const suffix=Date.now();for(const username of ["p53_admin_"+suffix,"p53_member_"+suffix,"p53_guest_"+suffix,"p53_guest2_"+suffix])users.push(await db.one("INSERT INTO users(username,password_hash) VALUES($1,'hash') RETURNING id,username",[username]));
- const [admin,member,guest,guest2]=users;
+ const suffix=Date.now();for(const username of ["p53_admin_"+suffix,"p53_member_"+suffix,"p53_guest_"+suffix,"p53_guest2_"+suffix,"p53_outsider_"+suffix])users.push(await db.one("INSERT INTO users(username,password_hash) VALUES($1,'hash') RETURNING id,username",[username]));
+ const [admin,member,guest,guest2,outsider]=users;
  const group=await db.one("INSERT INTO groups(name,created_by,visibility) VALUES('Phase 53 open governance',$1,'public') RETURNING id",[admin.id]);groups.push(group.id);
  const approvalGroup=await db.one("INSERT INTO groups(name,created_by,visibility,approval_required) VALUES('Phase 53 approval group',$1,'private',1) RETURNING id",[admin.id]);groups.push(approvalGroup.id);
  await db.execute("INSERT INTO group_members(group_id,user_id,role) VALUES($1,$2,'admin'),($1,$3,'member')",[group.id,admin.id,member.id]);await db.execute("INSERT INTO group_members(group_id,user_id,role) VALUES($1,$2,'admin')",[approvalGroup.id,admin.id]);
@@ -46,18 +46,18 @@ test("Phase 53: PostgreSQL group governance, invitations, polls, events and remi
   assert.equal((await request("/api/groups/"+approvalGroup.id+"/join-requests/"+rejectId+"/review",admin,{method:"POST",body:JSON.stringify({decision:"reject"})})).status,200);
   assert.equal((await request("/api/groups/"+approvalGroup.id+"/join-requests/"+rejectId+"/review",admin,{method:"POST",body:JSON.stringify({decision:"approve"})})).status,409);
   let poll=await request("/api/groups/"+group.id+"/polls",member);assert.equal(poll.status,200);assert.equal(poll.data.polls.length,0);
-  assert.equal((await request("/api/groups/"+group.id+"/polls",guest,{method:"POST",body:JSON.stringify({question:"Preferred meeting day?",options:["Monday","Wednesday"]})})).status,403);
+  assert.equal((await request("/api/groups/"+group.id+"/polls",outsider,{method:"POST",body:JSON.stringify({question:"Preferred meeting day?",options:["Monday","Wednesday"]})})).status,403);
   poll=await request("/api/groups/"+group.id+"/polls",admin,{method:"POST",body:JSON.stringify({question:"Preferred meeting day?",options:["Monday","Wednesday","Friday"],multipleChoice:false})});assert.equal(poll.status,201);const pollId=String(poll.data.poll.id),optionIds=poll.data.poll.options.map(o=>String(o.id));
   assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/vote",member,{method:"PUT",body:JSON.stringify({optionIds:[optionIds[0],optionIds[1]]})})).status,400);
   poll=await request("/api/groups/"+group.id+"/polls/"+pollId+"/vote",member,{method:"PUT",body:JSON.stringify({optionIds:[optionIds[1]]})});assert.equal(poll.status,200);assert.equal(poll.data.poll.options.find(o=>String(o.id)===optionIds[1]).votes,1);
-  assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/close",guest,{method:"POST"})).status,403);
+  assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/close",outsider,{method:"POST"})).status,403);
   poll=await request("/api/groups/"+group.id+"/polls/"+pollId+"/close",admin,{method:"POST"});assert.equal(poll.status,200);assert.equal(poll.data.poll.status,"closed");
   assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/vote",member,{method:"PUT",body:JSON.stringify({optionIds:[optionIds[0]]})})).status,400);
   const start=new Date(Date.now()+2*60*60*1000).toISOString();
   let event=await request("/api/groups/"+group.id+"/events",admin,{method:"POST",body:JSON.stringify({title:"Clinical teaching meeting",description:"Phase 53 test",startsAt:start,location:"Jimma",reminderMinutes:60})});assert.equal(event.status,201);const eventId=String(event.data.eventId);
   assert.equal((await request("/api/groups/"+group.id+"/events/"+eventId+"/rsvp",member,{method:"PUT",body:JSON.stringify({response:"going"})})).status,200);
   let events=await request("/api/groups/"+group.id+"/events",member);assert.equal(events.data.events.length,1);assert.equal(events.data.events[0].goingCount,1);assert.ok(events.data.events[0].attendees.going.includes(member.username));
-  assert.equal((await request("/api/groups/"+group.id+"/events/"+eventId+"/cancel",guest,{method:"POST"})).status,404);
+  assert.equal((await request("/api/groups/"+group.id+"/events/"+eventId+"/cancel",outsider,{method:"POST"})).status,404);
   assert.equal((await request("/api/groups/"+group.id+"/events/"+eventId+"/cancel",admin,{method:"POST"})).status,200);
   assert.equal((await request("/api/groups/"+group.id+"/events/"+eventId+"/rsvp",member,{method:"PUT",body:JSON.stringify({response:"maybe"})})).status,409);
   const dueStart=new Date(Date.now()+2*60*1000).toISOString();
