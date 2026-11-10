@@ -23,7 +23,7 @@ test("Phase 53: PostgreSQL group governance, invitations, polls, events and remi
   assert.equal((await request("/api/groups/"+group.id+"/details",member)).data.details.memberListVisibility,"admins");
   let activity=await request("/api/groups/"+group.id+"/activity",member);assert.ok(activity.data.events.some(e=>e.eventType==="group_settings_updated"));assert.equal((await request("/api/groups/"+group.id+"/activity",guest)).status,404);
   assert.equal((await request("/api/groups/"+group.id+"/members/"+member.id+"/role",admin,{method:"PATCH",body:JSON.stringify({role:"admin"})})).status,200);
-  assert.equal((await request("/api/groups/"+group.id+"/members/"+admin.id+"/role",member,{method:"PATCH",body:JSON.stringify({role:"member"})})).status,400);
+  assert.equal((await request("/api/groups/"+group.id+"/members/"+member.id+"/role",member,{method:"PATCH",body:JSON.stringify({role:"member"})})).status,400);
   assert.equal((await request("/api/groups/"+group.id+"/members/"+admin.id+"/role",member,{method:"PATCH",body:JSON.stringify({role:"admin"})})).status,200);
   assert.equal((await request("/api/groups/"+group.id+"/members/"+member.id+"/role",admin,{method:"PATCH",body:JSON.stringify({role:"member"})})).status,200);
   let invite=await request("/api/groups/"+group.id+"/invitations",admin,{method:"POST",body:JSON.stringify({expiresInHours:1,useLimit:2})});assert.equal(invite.status,201);const inviteUrl=new URL(invite.data.invitation.url),rawToken=inviteUrl.searchParams.get("groupInvite");assert.ok(rawToken&&rawToken.length>=40);assert.equal(invite.data.invitation.url.startsWith("https://waltajjii.example/"),true);
