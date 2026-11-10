@@ -29,7 +29,7 @@ test("SQLite-generated creation and expiry timestamps are UTC-based", () => {
 
 test("group event input requires an explicit offset and stores normalized UTC ISO", () => {
   const groups = read("src/routes/groups.js");
-  assert.ok(groups.includes(String.raw\`!/(Z|[+-]\d{2}:?\d{2})$/i.test(startsAt)\`));
+  assert.ok(groups.includes("!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(startsAt)"));
   assert.match(groups, /startDate\.toISOString\(\)/);
 });
 
