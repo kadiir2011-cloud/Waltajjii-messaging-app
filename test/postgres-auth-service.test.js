@@ -35,7 +35,7 @@ test("registration validates input and inserts with PostgreSQL RETURNING id", as
   const insert = calls.find(x => x.sql && x.sql.includes("INSERT INTO users"));
   assert.match(insert.sql, /VALUES \(\$1, \$2\) RETURNING id, username/);
   assert.deepEqual(insert.params, ["kedir_1", "hash"]);
-  assert.throws(() => service.register({ username: "x", password: "short" }), AuthServiceError);
+  await assert.rejects(service.register({ username: "x", password: "short" }), AuthServiceError);
 });
 
 test("registration maps PostgreSQL unique violation to conflict", async () => {
