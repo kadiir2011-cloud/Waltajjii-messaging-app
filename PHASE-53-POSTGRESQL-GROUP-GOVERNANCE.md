@@ -20,5 +20,7 @@
 ## Verification
 A disposable PostgreSQL 16 integration test exercises HTTP routes and database effects for group settings, role management, invitation creation/preview/join/use limits/revocation, approval and rejection, poll creation/voting/closing, event creation/RSVP/cancellation, membership leave/removal, last-admin protection and idempotent event reminders.
 
+**CI result:** The Phase 53 disposable PostgreSQL 16 integration workflow completed successfully: https://github.com/kadiir2011-cloud/Waltajjii-messaging-app/actions/runs/42879942545
+
 ## Safety boundary
 The production SQLite group router and reminder worker remain unchanged. This new router/service are isolated and are not mounted in \`src/server.js\`. The workflow uses disposable CI PostgreSQL only. No real Supabase SQL, Render configuration, merge or deployment is performed.
