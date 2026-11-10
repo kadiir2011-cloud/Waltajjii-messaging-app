@@ -1,0 +1,40 @@
+name: Phase 45 PostgreSQL direct messaging integration
+on:
+  pull_request:
+    paths:
+      - "src/services/postgres-messages-service.js"
+      - "src/routes/postgres-messages.js"
+      - "src/db/postgres-adapter.js"
+      - "migrations/postgres/001_initial_schema.sql"
+      - "test/phase45-postgres-messaging-integration.test.js"
+      - ".github/workflows/phase45-postgres-messaging.yml"
+permissions:
+  contents: read
+jobs:
+  postgres-messaging:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase45_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase45_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase45_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Test PostgreSQL direct messaging HTTP flow
+        run: node --test test/phase45-postgres-messaging-integration.test.js
