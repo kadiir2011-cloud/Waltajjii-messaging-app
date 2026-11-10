@@ -114,6 +114,7 @@ test("Phase 45: direct messaging HTTP and PostgreSQL integration",async()=>{
     assert.ok(aliceConversation.data.messages.some(m=>String(m.id)===String(first.id)&&m.body==="This message was deleted"&&m.mediaPath===null));
   }finally{
     if(server)await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
+    await pool.query("DELETE FROM messages WHERE sender_id=ANY($1::bigint[]) OR receiver_id=ANY($1::bigint[])",[users.map(u=>String(u.id))]);
     await pool.query("DELETE FROM users WHERE id=ANY($1::bigint[])",[users.map(u=>String(u.id))]);
   }
 });
