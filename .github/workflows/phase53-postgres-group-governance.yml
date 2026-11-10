@@ -1,0 +1,40 @@
+name: Phase 53 PostgreSQL group governance integration
+on:
+  pull_request:
+    paths:
+      - "src/services/postgres-group-governance-service.js"
+      - "src/routes/postgres-group-governance.js"
+      - "src/db/postgres-adapter.js"
+      - "migrations/postgres/001_initial_schema.sql"
+      - "test/phase53-postgres-group-governance.test.js"
+      - ".github/workflows/phase53-postgres-group-governance.yml"
+permissions:
+  contents: read
+jobs:
+  group-governance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase53_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase53_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase53_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Test group governance HTTP flows
+        run: node --test test/phase53-postgres-group-governance.test.js
