@@ -7,6 +7,7 @@ let server,base,users=[],channelIds=[];const token=u=>jwt.sign({userId:String(u.
 async function request(url,user,options={}){const headers={...(options.body?{"content-type":"application/json"}:{}),...(user?{authorization:"Bearer "+token(user)}:{})};const response=await fetch(base+url,{...options,headers});let data={};try{data=await response.json();}catch{}return{status:response.status,data};}
 test("Phase 47: channel creation, discovery, membership and publishing over PostgreSQL",async()=>{
  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/001_initial_schema.sql"),"utf8"));
+ await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/002_channel_message_interactions.sql"),"utf8"));
  const suffix=Date.now();for(const username of ["p47_owner_"+suffix,"p47_member_"+suffix,"p47_guest_"+suffix])users.push(await db.one("INSERT INTO users(username,password_hash) VALUES($1,'test-hash') RETURNING id,username",[username]));
  const [owner,member,guest]=users,app=express();app.use(express.json({limit:"30kb"}));app.use("/api/channels",createPostgresChannelsRouter({channelsService:service,jwtSecret:secret}));
  const emitted=[];app.set("io",{in(room){return{socketsJoin(target){emitted.push({room,target});}};},to(room){return{emit(event,payload){emitted.push({room,event,payload});}};}});server=http.createServer(app);await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));base="http://127.0.0.1:"+server.address().port;
