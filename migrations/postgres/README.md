@@ -2,17 +2,25 @@
 
 This migration defines the 29 application tables identified in Phase 33's SQLite inventory.
 
-## Safety status
+## Safety and isolation
 
-- Draft schema committed for review only.
-- It has **not** been run against Supabase.
-- No Render environment variables have been changed.
-- No application routes use PostgreSQL yet.
-- The existing SQLite database and test deployment remain untouched.
+- **All 29 tables and their indexes are created inside a dedicated schema named `waltajjii`.**
+- It does not create, alter, or delete application tables in Supabase's default `public` schema.
+- It does not touch the existing `waltajjii-media` Storage bucket or its objects.
+- It does not copy, alter, or delete the existing SQLite database.
+- The migration uses `CREATE SCHEMA IF NOT EXISTS`; it does not drop or replace an existing schema.
+- It is still a draft migration and has **not** been executed against Supabase.
+- No Render environment variables or application routes have been changed.
 
-## How to review
+The migration sets a transaction-local search path to `waltajjii`, so unqualified table and foreign-key names resolve within that schema rather than `public`.
 
-Open `migrations/postgres/001_initial_schema.sql` and review the table definitions, constraints, foreign keys and indexes. The schema intentionally retains existing table and column names to reduce application changes.
+## Before execution
+
+1. Confirm the Supabase project is the intended Waltajjii project.
+2. Review the complete SQL file.
+3. Take a verified backup before execution, even though the script is designed to create objects only in the separate `waltajjii` schema.
+4. Run the script once in the Supabase SQL Editor. Then verify the 29 tables appear under the `waltajjii` schema.
+5. Do not connect the application to this schema until the Postgres access role, schema privileges, connection string, and integration tests are deliberately configured.
 
 ## Important compatibility work still required
 
@@ -24,15 +32,15 @@ This schema is a structural foundation, not a drop-in replacement for SQLite:
 4. SQLite `INSERT OR IGNORE` statements need explicit PostgreSQL `ON CONFLICT ... DO NOTHING` handling.
 5. SQLite `COLLATE NOCASE` username uniqueness is represented by a unique index on `LOWER(username)`; authentication queries must use case-insensitive matching too.
 6. Additional integrity constraints (for example ensuring a poll option belongs to the poll being voted on) should be reviewed before launch.
-7. Supabase RLS and grants must be designed deliberately. The backend should connect using a server-side secret and never expose that secret to the browser. Do not enable broad anonymous access to these tables.
+7. Schema usage and table privileges must be configured deliberately for the server-side database role. Do not grant broad anonymous access or expose database credentials in the browser.
 
 ## Next work
 
-- Validate this DDL against a disposable Supabase PostgreSQL database.
+- Validate this DDL in the isolated `waltajjii` schema.
 - Add schema assertions and integration tests.
 - Implement a dedicated asynchronous Postgres repository/data-access layer.
 - Convert route modules in small groups and test each feature before proceeding.
 - Add a controlled SQLite-to-Postgres import utility only if test data needs to be retained.
 - Prove backup and restore before any public launch.
 
-Do not execute this migration on a project containing data without explicit review and a verified backup.
+Do not connect the application to this schema until validation, permissions, backup/restore, and route migration are complete.
