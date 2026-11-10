@@ -157,6 +157,10 @@ test.after(async () => {
   for (const client of clients) { try { client.disconnect(); } catch {} }
   if (ioServer) await new Promise(resolve => ioServer.close(resolve));
   if (server?.listening) await new Promise(resolve => server.close(resolve));
-  if (seededUserIds.length) await pool.query("DELETE FROM users WHERE id = ANY($1::bigint[])", [seededUserIds]);
+  if (seededUserIds.length) {
+    await pool.query("DELETE FROM messages WHERE sender_id = ANY($1::bigint[]) OR receiver_id = ANY($1::bigint[])", [seededUserIds]);
+    await pool.query("DELETE FROM groups WHERE created_by = ANY($1::bigint[])", [seededUserIds]);
+    await pool.query("DELETE FROM users WHERE id = ANY($1::bigint[])", [seededUserIds]);
+  }
   await pool.end();
 });
