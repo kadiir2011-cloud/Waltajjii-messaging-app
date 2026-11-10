@@ -30,7 +30,7 @@ test("blueprint explicitly blocks public launch until critical migration and sec
     "Socket.IO",
     "Background work",
     "dry-run mode",
-    "backup and restore",
+    "restoring them to a separate disposable environment",
     "Public launch is blocked",
     "Explicit approval obtained"
   ]) assert.ok(blueprint.includes(phrase), "blueprint missing release requirement: " + phrase);
