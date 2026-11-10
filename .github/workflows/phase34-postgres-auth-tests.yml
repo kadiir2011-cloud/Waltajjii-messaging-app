@@ -3,7 +3,7 @@ name: Phase 34 PostgreSQL auth route tests
 on:
   pull_request:
     branches:
-      - waltajjii-postgres-compatibility-audit-phase33e
+      - waltajjii-postgres-adapter-phase33c
     paths:
       - "src/routes/postgres-auth.js"
       - "src/services/postgres-auth-service.js"
@@ -11,7 +11,7 @@ on:
       - ".github/workflows/phase34-postgres-auth-tests.yml"
   push:
     branches:
-      - waltajjii-postgres-compatibility-audit-phase33e
+      - waltajjii-postgres-auth-phase34
     paths:
       - "src/routes/postgres-auth.js"
       - "src/services/postgres-auth-service.js"
