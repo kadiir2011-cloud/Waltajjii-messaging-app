@@ -8,11 +8,10 @@ const http = require("node:http");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
-const { Server } = require("socket.io");
 const { io: createClient } = require("socket.io-client");
 const { createPostgresAdapter } = require("../src/db/postgres-adapter");
 const { createPostgresRealtimeService } = require("../src/services/postgres-realtime-service");
-const { attachPostgresRealtime } = require("../src/postgres/postgres-realtime-socket");
+const { createPostgresRealtimeServer } = require("../src/postgres/postgres-realtime-server");
 
 const connectionString = process.env.TEST_DATABASE_URL;
 if (!connectionString) throw new Error("TEST_DATABASE_URL must point only to disposable CI PostgreSQL.");
@@ -81,9 +80,12 @@ test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, re
   const app = express();
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
   server = http.createServer(app);
-  ioServer = new Server(server, { cors: { origin: false } });
   const realtimeService = createPostgresRealtimeService({ db });
-  const realtimeState = attachPostgresRealtime(ioServer, { jwt, jwtSecret: secret, realtimeService });
+  const realtimeServer = createPostgresRealtimeServer(server, {
+    jwt, jwtSecret: secret, realtimeService, socketOptions: { cors: { origin: false } }
+  });
+  ioServer = realtimeServer.io;
+  const realtimeState = realtimeServer;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const url = "http://127.0.0.1:" + server.address().port;
 
@@ -131,7 +133,7 @@ test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, re
   const [answerPayload] = await acceptedCall;
   assert.equal(answerPayload.recipientId, String(bob.id));
 
-  const offlineEvent = waitFor(aliceSocket, "presence:update", 7000);
+  const offlineEvent = waitFor(bobSocket, "presence:update", 7000);
   const aliceSecondSession = await connectClient(url, tokenFor(alice));
   assert.equal(realtimeState.getOnlineUserIds().filter(id => id === String(alice.id)).length, 1);
   aliceSocket.disconnect();
