@@ -51,7 +51,7 @@ test("Phase 53: PostgreSQL group governance, invitations, polls, events and remi
   poll=await request("/api/groups/"+group.id+"/polls",admin,{method:"POST",body:JSON.stringify({question:"Preferred meeting day?",options:["Monday","Wednesday","Friday"],multipleChoice:false})});assert.equal(poll.status,201);const pollId=String(poll.data.poll.id),optionIds=poll.data.poll.options.map(o=>String(o.id));
   assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/vote",member,{method:"PUT",body:JSON.stringify({optionIds:[optionIds[0],optionIds[1]]})})).status,400);
   poll=await request("/api/groups/"+group.id+"/polls/"+pollId+"/vote",member,{method:"PUT",body:JSON.stringify({optionIds:[optionIds[1]]})});assert.equal(poll.status,200);assert.equal(poll.data.poll.options.find(o=>String(o.id)===optionIds[1]).votes,1);
-  assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/close",guest,{method:"POST"})).status,404);
+  assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/close",guest,{method:"POST"})).status,403);
   poll=await request("/api/groups/"+group.id+"/polls/"+pollId+"/close",admin,{method:"POST"});assert.equal(poll.status,200);assert.equal(poll.data.poll.status,"closed");
   assert.equal((await request("/api/groups/"+group.id+"/polls/"+pollId+"/vote",member,{method:"PUT",body:JSON.stringify({optionIds:[optionIds[0]]})})).status,400);
   const start=new Date(Date.now()+2*60*60*1000).toISOString();
