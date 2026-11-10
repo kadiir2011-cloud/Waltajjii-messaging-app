@@ -76,7 +76,7 @@ test("Phase 43: real PostgreSQL registration, login, JWT, and profile HTTP flow"
       assert.ok(BigInt(userId) > 0n, "PostgreSQL BIGINT identity is returned safely");
 
       const duplicate = await fetch(base + "/api/auth/register", {
-        method: "POST,
+        method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ username: username.toUpperCase(), password })
       });
