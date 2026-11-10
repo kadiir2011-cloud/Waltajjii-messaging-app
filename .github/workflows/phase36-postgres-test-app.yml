@@ -1,0 +1,31 @@
+name: Phase 36 PostgreSQL isolated test application
+
+on:
+  pull_request:
+    branches: [waltajjii-postgres-realtime-phase35]
+    paths:
+      - "src/postgres/test-app.js"
+      - "src/routes/postgres-presence.js"
+      - "test/postgres-test-app.test.js"
+      - ".github/workflows/phase36-postgres-test-app.yml"
+  push:
+    branches: [waltajjii-postgres-test-harness-phase36]
+    paths:
+      - "src/postgres/test-app.js"
+      - "src/routes/postgres-presence.js"
+      - "test/postgres-test-app.test.js"
+      - ".github/workflows/phase36-postgres-test-app.yml"
+
+jobs:
+  postgres-test-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install from committed lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Run isolated app and PostgreSQL service tests
+        run: node --test test/postgres-test-app.test.js test/postgres-realtime-service.test.js test/postgres-auth-service.test.js test/postgres-auth-route.test.js
