@@ -20,6 +20,8 @@ on:
       - "src/db/postgres-pool-config.js"
       - "test/postgres-adapter.test.js"
       - "test/postgres-pool-config.test.js"
+      - "src/services/postgres-auth-service.js"
+      - "test/postgres-auth-service.test.js"
       - ".github/workflows/phase33c-adapter-tests.yml"
 
 jobs:
