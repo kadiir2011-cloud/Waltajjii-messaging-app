@@ -9,6 +9,8 @@ on:
       - "src/db/postgres-pool-config.js"
       - "test/postgres-adapter.test.js"
       - "test/postgres-pool-config.test.js"
+      - "src/services/postgres-auth-service.js"
+      - "test/postgres-auth-service.test.js"
       - ".github/workflows/phase33c-adapter-tests.yml"
   push:
     branches:
@@ -31,4 +33,4 @@ jobs:
         with:
           node-version: "22"
       - name: Run PostgreSQL adapter unit tests
-        run: node --test test/postgres-adapter.test.js test/postgres-pool-config.test.js
+        run: node --test test/postgres-adapter.test.js test/postgres-pool-config.test.js test/postgres-auth-service.test.js
