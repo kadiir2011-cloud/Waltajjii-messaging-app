@@ -61,6 +61,13 @@ function createPostgresChannelsService({db}={}) {
   if(!body)body=mediaType==="video"?"[Video]":mediaType==="audio"?"[Audio]":mediaType==="document"?"[Document]":"[Image]";
   return db.withTransaction(async tx=>{
    await requireAdmin(cid,uid,tx);
+   if(mediaPath){
+    const ownedMedia=await tx.one(
+     "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose IN ('message','channel') AND deleted_at IS NULL",
+     [mediaPath,String(uid)]
+    );
+    if(!ownedMedia)throw fail(400,"This media file is unavailable or does not belong to your account.");
+   }
    const m=await tx.one(`INSERT INTO channel_messages(channel_id,sender_id,body,media_path,media_type)
     VALUES($1,$2,$3,$4,$5) RETURNING id`,[cid,uid,body,mediaPath||null,mediaPath?mediaType:null]);
    await tx.execute(`INSERT INTO channel_message_receipts(channel_message_id,user_id)
