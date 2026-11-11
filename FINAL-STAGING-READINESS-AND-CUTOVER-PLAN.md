@@ -180,3 +180,20 @@ This section records a live GitHub metadata and diff audit. It is a repository r
 - No changes to production `main`, Render, Supabase, or the live application database are included.
 
 **Gate 0 status: IN PROGRESS — dependency map and major branch conflicts verified; full diff/security/CI review and consolidated integration branch validation remain.**
+
+
+## Gate 0 — integration candidate created (11 November 2026)
+
+- Created protected review branch `waltajjii-gate0-integration` from the Phase 58 head `229c052382a1123f82e1083404f5c376235b438d`.
+- Opened draft PR #64 against `main`: https://github.com/kadiir2011-cloud/Waltajjii-messaging-app/pull/64
+- Ported the Phase 8 Low-Bandwidth Mode into the current Phase 58 frontend rather than copying the older Phase 8 frontend wholesale:
+  - browser-local preference, default off, saved with appearance preferences;
+  - opt-in loading for images, videos, voice messages and document downloads;
+  - reduced animation/transition behavior while the mode is enabled.
+- Added `test/gate0-low-bandwidth.test.js` and `.github/workflows/gate0-integration.yml` to check JavaScript syntax and the Low-Bandwidth frontend contract.
+- Initial Gate 0 frontend CI passed: https://github.com/kadiir2011-cloud/Waltajjii-messaging-app/actions/runs/43005624685
+- At the last audit snapshot, six of the twenty PR-triggered workflow runs on the integration head had completed successfully, including the new Gate 0 check and Phase 39–41, 44 and 57 checks; fourteen PostgreSQL integration/regression workflows were still running. Recheck the current run state before declaring the combined stack green.
+- PR #64 is draft, unmerged, and currently reported mergeable by GitHub. That metadata is not a merge recommendation.
+- This candidate includes the Phase 35–58 stacked history; it is an integration/test branch, not a production deployment branch.
+
+**Gate 0 status remains IN PROGRESS.** Do not merge PR #64 or any stacked parent PR until all CI runs finish, the full diff/security review is complete, and browser/mobile E2E plus the remaining operational checks have passed. No production deployment, Render setting, live Supabase schema/data, or live SQLite database was changed.
