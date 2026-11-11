@@ -21,6 +21,10 @@ function createPostgresMomentsService({db}={}) {
   if(mediaPath&&!/^[1-9][0-9]*$/.test(mediaPath))throw fail(400,"Invalid Moment media file.");
   if(mediaPath&&!["image","video"].includes(mediaType))throw fail(400,"Invalid Moment media type.");
   if(!mediaPath&&mediaType)throw fail(400,"Moment media type requires a media file.");
+  if(mediaPath){
+   const ownedMedia=await db.one("SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose='moment' AND deleted_at IS NULL",[mediaPath,String(viewerId)]);
+   if(!ownedMedia)throw fail(400,"This Moment media file is unavailable or does not belong to your account.");
+  }
   const moment=await db.one("INSERT INTO moments(user_id,content,media_path,media_type,audience) VALUES($1,$2,$3,$4,$5) RETURNING id,user_id AS \"userId\",content,media_path AS \"mediaPath\",media_type AS \"mediaType\",audience,created_at AS \"createdAt\",expires_at AS \"expiresAt\"",[viewerId,content,mediaPath,mediaType,audience]);
   const user=await db.one("SELECT username,full_name AS \"fullName\",avatar_path AS \"avatarPath\" FROM users WHERE id=$1",[viewerId]);
   return {moment:{...moment,...user,isMine:true}};
