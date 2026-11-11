@@ -25,11 +25,14 @@ async function request(url,user,options={}){
 test("Phase 46: group messaging HTTP and PostgreSQL integration",async()=>{
  const ddl=fs.readFileSync(path.join(__dirname,"..","migrations/postgres/001_initial_schema.sql"),"utf8");
  await pool.query(ddl);
+ await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/003_media_objects.sql"),"utf8"));
  const suffix=Date.now();
  for(const username of ["p46_alice_"+suffix,"p46_bob_"+suffix,"p46_carol_"+suffix]){
   users.push(await db.one("INSERT INTO users(username,password_hash) VALUES($1,'test-hash') RETURNING id,username",[username]));
  }
  const [alice,bob,carol]=users;
+ const aliceMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','image/png',128) RETURNING id",[alice.id,"phase46/"+alice.id+".png"]);
+ const bobMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','image/png',128) RETURNING id",[bob.id,"phase46/"+bob.id+".png"]);
  const app=express();app.use(express.json({limit:"30kb"}));
  app.use("/api/groups",createPostgresGroupsRouter({groupsService:service,jwtSecret:secret}));
  const emitted=[];
@@ -39,6 +42,12 @@ test("Phase 46: group messaging HTTP and PostgreSQL integration",async()=>{
   assert.equal((await request("/api/groups",null)).status,401);
   const created=await request("/api/groups",alice,{method:"POST",body:JSON.stringify({name:"Phase 46 Test Group",memberUsernames:[bob.username]})});
   assert.equal(created.status,201);groupId=String(created.data.group.id);
+  const ownGroupMedia=await request("/api/groups/"+groupId+"/messages",alice,{method:"POST",body:JSON.stringify({body:"",mediaPath:String(aliceMedia.id),mediaType:"image"})});
+  assert.equal(ownGroupMedia.status,201);
+  const foreignGroupMedia=await request("/api/groups/"+groupId+"/messages",bob,{method:"POST",body:JSON.stringify({body:"",mediaPath:String(aliceMedia.id),mediaType:"image"})});
+  assert.equal(foreignGroupMedia.status,400);
+  const ownBobGroupMedia=await request("/api/groups/"+groupId+"/messages",bob,{method:"POST",body:JSON.stringify({body:"",mediaPath:String(bobMedia.id),mediaType:"image"})});
+  assert.equal(ownBobGroupMedia.status,201);
   assert.ok(emitted.some(e=>e.action==="join"&&e.target==="group:"+groupId));
   const listed=await request("/api/groups",alice);assert.equal(listed.status,200);assert.ok(listed.data.groups.some(g=>String(g.id)===groupId&&g.myRole==="admin"));
   const members=await request("/api/groups/"+groupId+"/members",bob);assert.equal(members.status,200);assert.equal(members.data.members.length,2);
