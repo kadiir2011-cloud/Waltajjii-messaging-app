@@ -6,7 +6,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "preflight:sqlite": "node scripts/phase57-sqlite-migration-preflight.js"
   },
   "engines": {
     "node": "22.x"
