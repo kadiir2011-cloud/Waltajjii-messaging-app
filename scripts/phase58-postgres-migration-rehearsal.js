@@ -96,7 +96,7 @@ async function runMigrationRehearsal({sqlitePath,pool,allowDisposableTarget=fals
    tableReports.push({table,sourceRows:sourceCounts[table],importedRows:sourceCounts[table],stagedNullableReferences:[...stagedColumns]});
   }
   for(const fk of nullableForeignKeys){
-   const table=fk.table,pk=primaryKeys[table],columns=fk.columns.filter(name=>targetColumns[table].some(c=>c.column_name===name&&c.is_nullable==="YES"));
+   const table=fk.table,pk=primaryKeys[table],sourceNames=new Set(sourceMeta[table].map(c=>c.name)),columns=fk.columns.filter(name=>sourceNames.has(name)&&targetColumns[table].some(c=>c.column_name===name&&c.is_nullable==="YES"));
    if(!columns.length)continue;
    const pkSelect=pk.map(quote).join(",");
    for(const column of columns){
