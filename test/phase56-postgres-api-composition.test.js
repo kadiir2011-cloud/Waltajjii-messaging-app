@@ -53,6 +53,13 @@ test("PostgreSQL API composition mounts protected feature routers without switch
     assert.equal(response.status, 200, path + " should be mounted and accept an authenticated request");
     assert.ok(await response.json());
   }
+  const qr = await fetch(base + "/api/groups/invitation/qr", {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ url: base + "/?groupInvite=" + "A".repeat(48) })
+  });
+  assert.equal(qr.status, 200);
+  assert.match((await qr.json()).dataUrl, /^data:image\/png;base64,/);
   const media = await fetch(base + "/api/uploads/777", {
     headers: { Authorization: "Bearer " + token }
   });
