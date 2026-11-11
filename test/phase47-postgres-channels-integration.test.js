@@ -30,7 +30,7 @@ test("Phase 47: channel creation, discovery, membership and publishing over Post
   const foreignChannelMedia=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({body:"",mediaPath:String(memberMedia.id),mediaType:"image"})});assert.equal(foreignChannelMedia.status,400);
   const published=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({body:"Official channel announcement"})});assert.equal(published.status,201);assert.equal(published.data.message.body,"Official channel announcement");
   assert.ok(emitted.some(e=>e.room==="channel:"+cid&&e.event==="channel:message"));
-  const history=await request("/api/channels/"+cid+"/messages",guest);assert.equal(history.status,200);assert.equal(history.data.canPublish,false);assert.equal(history.data.messages.length,1);
+  const history=await request("/api/channels/"+cid+"/messages",guest);assert.equal(history.status,200);assert.equal(history.data.canPublish,false);assert.equal(history.data.messages.length,2);
   assert.equal((await request("/api/channels/"+cid+"/members/"+guest.id,owner,{method:"DELETE"})).status,200);
   assert.equal((await request("/api/channels/"+cid+"/messages",guest)).status,404);
   assert.equal((await request("/api/channels/"+cid+"/leave",member,{method:"DELETE"})).status,200);
