@@ -83,16 +83,16 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
       FROM media_objects mo
       WHERE mo.id=$1 AND mo.deleted_at IS NULL
         AND (
-          (mo.purpose='message' AND EXISTS (
+          (mo.purpose IN ('message','group','channel') AND EXISTS (
             SELECT 1 FROM messages m WHERE m.media_path=mo.id::text
               AND (m.sender_id=$2 OR m.receiver_id=$2) AND m.deleted_at IS NULL
           ))
-          OR (mo.purpose='group' AND EXISTS (
+          OR (mo.purpose IN ('message','group','channel') AND EXISTS (
             SELECT 1 FROM group_messages gm
             JOIN group_members mine ON mine.group_id=gm.group_id AND mine.user_id=$2
             WHERE gm.media_path=mo.id::text AND gm.deleted_at IS NULL
           ))
-          OR (mo.purpose='channel' AND EXISTS (
+          OR (mo.purpose IN ('message','group','channel') AND EXISTS (
             SELECT 1 FROM channel_messages cm
             JOIN channel_members mine ON mine.channel_id=cm.channel_id AND mine.user_id=$2
             WHERE cm.media_path=mo.id::text AND cm.deleted_at IS NULL
