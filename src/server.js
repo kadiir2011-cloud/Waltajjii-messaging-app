@@ -6,6 +6,7 @@ const path = require("path");
 const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
+const { createOriginPolicy } = require("./security/origin-policy");
 
 require("dotenv").config();
 const db = require("./db");
@@ -23,7 +24,20 @@ app.use(helmet({
   }
 }));
 
-app.use(cors());
+const originPolicy = createOriginPolicy(process.env);
+app.use((req, res, next) => {
+  const origin = req.get("Origin");
+  if (!originPolicy.isAllowedRequestOrigin(origin, req.get("host"))) {
+    return res.status(403).json({ error: "Origin not allowed." });
+  }
+  return cors({
+    origin: origin || false,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+    maxAge: 600,
+    credentials: false
+  })(req, res, next);
+});
 app.use(express.json({ limit: "20kb" }));
 
 app.use(rateLimit({
@@ -133,8 +147,17 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: originPolicy.allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: false
+  },
+  allowRequest: (request, callback) => {
+    const origin = request.headers.origin;
+    const requestHost = request.headers.host;
+    if (!originPolicy.isAllowedRequestOrigin(origin, requestHost)) {
+      return callback("Origin not allowed.", false);
+    }
+    return callback(null, true);
   }
 });
 
