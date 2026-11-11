@@ -11,6 +11,7 @@ const { createPostgresMomentsRouter } = require("../routes/postgres-moments");
 const { createPostgresPresenceRouter } = require("../routes/postgres-presence");
 const { createPostgresUploadsRouter } = require("../routes/postgres-uploads");
 const { createPostgresCallsRouter } = require("../routes/postgres-calls");
+const { createPostgresTranslationRouter } = require("../routes/postgres-translation");
 
 /**
  * Opt-in PostgreSQL API composition for integration tests and controlled
@@ -36,7 +37,11 @@ function createPostgresApiRouter({
   fetchImpl,
   uploadMiddleware,
   profileUploadMiddleware,
-  momentUploadMiddleware
+  momentUploadMiddleware,
+  openAiApiKey,
+  translationModel,
+  translationFetchImpl,
+  translationLimiter
 } = {}) {
   const required = [
     ["auth", ["register", "login", "getProfile", "updateProfile"]],
@@ -125,6 +130,10 @@ function createPostgresApiRouter({
   }));
   router.use("/calls", createPostgresCallsRouter({
     jwtSecret, jwtImplementation: jwt, apiKey: meteredApiKey, fetchImpl
+  }));
+  router.use("/translation", createPostgresTranslationRouter({
+    jwtSecret, jwtImplementation: jwt, apiKey: openAiApiKey,
+    model: translationModel, fetchImpl: translationFetchImpl, limiter: translationLimiter
   }));
 
   return router;
