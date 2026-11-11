@@ -31,7 +31,7 @@ test("browser client retains the principal API families and known advanced flows
     "/api/social/discover", "/api/moments", "/api/presence/online",
     "/api/calls/turn-credentials", "/api/translation/translate",
     "/api/groups/", "/invitations", "/join-requests", "/polls", "/events",
-    "/api/uploads/profile-picture"
+    "/api/uploads/profile-picture", "/api/groups/invitation/qr"
   ]) assert.ok(app.includes(fragment), "Missing browser API contract: " + fragment);
 });
 
@@ -106,9 +106,9 @@ test("known frontend integration gaps are explicit and test-visible", () => {
   const audit = read("PHASE-56-API-FRONTEND-COMPATIBILITY.md");
   for (const phrase of [
     "PostgreSQL API composition",
-    "Uploads/profile pictures",
-    "Calls/TURN credentials",
-    "Group invitation QR",
+    "Media uploads and profile pictures",
+    "Video calls",
+    "Invitation QR",
     "reminder worker",
     "not full browser E2E tests"
   ]) assert.ok(audit.includes(phrase), "Audit must retain explicit gap: " + phrase);
