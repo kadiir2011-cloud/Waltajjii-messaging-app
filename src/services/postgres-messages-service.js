@@ -36,6 +36,13 @@ function createPostgresMessagesService({ db } = {}) {
     if (!body) body = mediaType === "video" ? "[Video]" : mediaType === "document" ? "[Document]" : "[Image]";
 
     return db.withTransaction(async tx => {
+      if (mediaPath) {
+        const ownedMedia = await tx.one(
+          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose='message' AND deleted_at IS NULL",
+          [mediaPath, String(senderId)]
+        );
+        if (!ownedMedia) throw fail(400, "This media file is unavailable or does not belong to your account.");
+      }
       const receiver = await tx.one("SELECT id FROM users WHERE username = $1", [receiverUsername]);
       if (!receiver) throw fail(404, "Recipient not found.");
       if (String(receiver.id) === String(senderId)) throw fail(400, "You cannot message yourself.");
