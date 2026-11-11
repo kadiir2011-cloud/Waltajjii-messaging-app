@@ -20,7 +20,13 @@ const services = {
   governance: service(["changeRole", "leave", "removeMember", "updateDetails", "getDetails", "listActivity", "createInvitation", "listInvitations", "revokeInvitation", "previewInvitation", "joinByInvitation", "listJoinRequests", "reviewJoinRequest", "listPolls", "createPoll", "votePoll", "closePoll", "listEvents", "createEvent", "rsvp", "cancelEvent"]),
   channels: service(["listChannels", "createChannel", "joinChannel", "listMembers", "addMember", "removeMember", "getMessages", "publishMessage", "markDelivered", "markRead", "toggleReaction", "editMessage", "deleteMessage", "pinMessage", "leaveChannel"]),
   social: service(["discover", "follow", "unfollow", "connect", "listRequests", "respondRequest", "followers", "following", "feed", "createPost", "toggleLike", "listComments", "createComment", "listNotifications", "markNotificationsRead"]),
-  moments: service(["cleanupExpired", "listVisible", "create", "getVisibleMedia", "deleteOwn"]),
+  moments: {
+    cleanupExpired: async () => [],
+    listVisible: async () => [],
+    create: async () => ({ moment: { id: "22" } }),
+    getVisibleMedia: async () => ({ ownerId: "101", mediaPath: "777", mediaType: "image" }),
+    deleteOwn: async () => ({ mediaPath: "777" })
+  },
   realtime: service(["getOnlineProfiles"])
 };
 
