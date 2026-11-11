@@ -8,8 +8,11 @@ async function request(url,user,options={}){const headers={...(options.body?{"co
 test("Phase 48: channel reactions, receipts, editing, deletion, pinning and media metadata",async()=>{
  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/001_initial_schema.sql"),"utf8"));
  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/002_channel_message_interactions.sql"),"utf8"));
+ await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/003_media_objects.sql"),"utf8"));
  const suffix=Date.now();for(const username of ["p48_owner_"+suffix,"p48_member_"+suffix,"p48_admin_"+suffix])users.push(await db.one("INSERT INTO users(username,password_hash) VALUES($1,'test-hash') RETURNING id,username",[username]));
- const [owner,member,adminUser]=users,app=express();app.use(express.json({limit:"30kb"}));app.use("/api/channels",createPostgresChannelsRouter({channelsService:service,jwtSecret:secret}));
+ const [owner,member,adminUser]=users;
+ const ownerMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','application/pdf',256) RETURNING id",[owner.id,"phase48/"+owner.id+".pdf"]);
+ const app=express();app.use(express.json({limit:"30kb"}));app.use("/api/channels",createPostgresChannelsRouter({channelsService:service,jwtSecret:secret}));
  const emitted=[];app.set("io",{in(room){return{socketsJoin(target){emitted.push({room,target});}};},to(room){return{emit(event,payload){emitted.push({room,event,payload});}};}});
  server=http.createServer(app);await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));base="http://127.0.0.1:"+server.address().port;
  try{
@@ -26,7 +29,7 @@ test("Phase 48: channel reactions, receipts, editing, deletion, pinning and medi
   const edited=await request("/api/channels/"+cid+"/messages/"+mid,owner,{method:"PATCH",body:JSON.stringify({body:"Edited announcement"})});assert.equal(edited.status,200);assert.equal(edited.data.message.body,"Edited announcement");assert.ok(edited.data.message.editedAt);
   const pinned=await request("/api/channels/"+cid+"/messages/"+mid+"/pin",owner,{method:"PUT",body:JSON.stringify({pinned:true})});assert.equal(pinned.status,200);assert.ok(pinned.data.message.pinnedAt);
   const unpinned=await request("/api/channels/"+cid+"/messages/"+mid+"/pin",owner,{method:"PUT",body:JSON.stringify({pinned:false})});assert.equal(unpinned.status,200);assert.equal(unpinned.data.message.pinnedAt,null);
-  const media=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({mediaPath:"777",mediaType:"document"})});assert.equal(media.status,201);assert.equal(media.data.message.mediaType,"document");const mediaId=String(media.data.message.id);
+  const media=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({mediaPath:String(ownerMedia.id),mediaType:"document"})});assert.equal(media.status,201);assert.equal(media.data.message.mediaType,"document");const mediaId=String(media.data.message.id);
   const memberHistory=await request("/api/channels/"+cid+"/messages",member);assert.equal(memberHistory.status,200);assert.ok(memberHistory.data.messages.some(m=>String(m.id)===mid&&m.receipts.some(r=>String(r.userId)===String(member.id)&&r.readAt)));
   assert.equal((await request("/api/channels/"+cid+"/messages/"+mediaId,owner,{method:"PATCH",body:JSON.stringify({body:"cannot edit media"})})).status,400);
   const deleted=await request("/api/channels/"+cid+"/messages/"+mid,owner,{method:"DELETE"});assert.equal(deleted.status,200);assert.ok(deleted.data.message.deletedAt);assert.equal(deleted.data.message.body,"This message was deleted");assert.equal(deleted.data.message.pinnedAt,null);
