@@ -2,7 +2,7 @@
 const express=require("express");
 const jwt=require("jsonwebtoken");
 
-function createPostgresMessagesRouter({messagesService,jwtSecret,jwtImplementation=jwt}={}) {
+function createPostgresMessagesRouter({messagesService,mediaStorage,jwtSecret,jwtImplementation=jwt}={}) {
   if(!messagesService || !["listUsers","sendMessage","getConversation","markConversationRead","deleteMessage","editMessage","forwardMessage","toggleReaction"].every(k=>typeof messagesService[k]==="function")) throw new TypeError("A complete PostgreSQL messages service is required.");
   const router=express.Router();
   const allowed=new Set(["👍","❤️","😂","😮","😢","🎉","🙏","🔥"]);
@@ -36,6 +36,7 @@ function createPostgresMessagesRouter({messagesService,jwtSecret,jwtImplementati
   router.delete("/:messageId/delete",auth,handle(async(req,res)=>{
     if(!idOk(req.params.messageId))return res.status(400).json({error:"Choose a valid deletion option."});
     const result=await messagesService.deleteMessage(req.auth.userId,req.params.messageId,String(req.body?.scope||"me"));
+    if(result.mediaPath&&mediaStorage?.removeIfUnreferenced)await mediaStorage.removeIfUnreferenced(result.mediaPath).catch(error=>console.error("Media cleanup queued for retry:",error?.message||"Unknown error"));
     const io=req.app.get("io");if(io){io.to("user:"+result.senderId).emit("message:deleted",{messageId:result.messageId,scope:result.scope});io.to("user:"+result.receiverId).emit("message:deleted",{messageId:result.messageId,scope:result.scope});}
     return res.json({success:true,scope:result.scope});
   }));
