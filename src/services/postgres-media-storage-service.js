@@ -55,21 +55,21 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
     }
   }
 
-  async function getOwned(ownerId, mediaId) {
+  async function getOwned(ownerId, mediaId, purpose = null) {
     if (!/^[1-9][0-9]*$/.test(String(mediaId ?? ""))) throw fail(400, "Invalid media reference.");
     const row = await db.one(
-      "SELECT id,owner_id AS \"ownerId\",bucket,object_key AS \"objectKey\",purpose,mime_type AS \"mimeType\",file_size AS \"fileSize\",created_at AS \"createdAt\" FROM media_objects WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL",
-      [String(mediaId), String(ownerId)]
+      "SELECT id,owner_id AS \"ownerId\",bucket,object_key AS \"objectKey\",purpose,mime_type AS \"mimeType\",file_size AS \"fileSize\",created_at AS \"createdAt\" FROM media_objects WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL AND ($3::text IS NULL OR purpose=$3)",
+      [String(mediaId), String(ownerId), purpose]
     );
     if (!row) throw fail(404, "Media not found.");
     return row;
   }
 
-  async function removeOwned(ownerId, mediaId) {
-    const row = await getOwned(ownerId, mediaId);
+  async function removeOwned(ownerId, mediaId, purpose = null) {
+    const row = await getOwned(ownerId, mediaId, purpose);
     const { error } = await storage.remove([row.objectKey]);
     if (error) throw fail(502, "Media storage is temporarily unavailable.");
-    await db.execute("UPDATE media_objects SET deleted_at=CURRENT_TIMESTAMP WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL", [String(mediaId), String(ownerId)]);
+    await db.execute("UPDATE media_objects SET deleted_at=CURRENT_TIMESTAMP WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL AND ($3::text IS NULL OR purpose=$3)", [String(mediaId), String(ownerId), purpose]);
     return { id: String(mediaId), removed: true };
   }
 
@@ -119,8 +119,8 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
     return { id, removed: true };
   }
 
-  async function downloadOwned(ownerId, mediaId) {
-    const row = await getOwned(ownerId, mediaId);
+  async function downloadOwned(ownerId, mediaId, purpose = null) {
+    const row = await getOwned(ownerId, mediaId, purpose);
     const { data, error } = await storage.download(row.objectKey);
     if (error || !data) throw fail(502, "Media storage is temporarily unavailable.");
     return { metadata: row, buffer: Buffer.from(await data.arrayBuffer()) };
