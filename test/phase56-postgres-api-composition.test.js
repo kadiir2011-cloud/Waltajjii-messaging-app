@@ -10,7 +10,9 @@ const { createPostgresApiRouter } = require("../src/postgres/postgres-api-router
 const secret = "phase56-integration-secret-with-more-than-32-characters";
 const token = jwt.sign({ userId: "101", username: "phase56-user" }, secret, { issuer: "waltajjii", audience: "waltajjii-users" });
 const service = names => Object.fromEntries(names.map(name => [name, async () => ({})]));
-const mediaStorage = { upload: async () => ({ id: "777" }), removeOwned: async () => ({ removed: true }), downloadOwned: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }), downloadForViewer: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }) };\nconst db = { one: async () => null, execute: async () => 1 };\nconst services = {
+const mediaStorage = { upload: async () => ({ id: "777" }), removeOwned: async () => ({ removed: true }), downloadOwned: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }), downloadForViewer: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }) };
+const db = { one: async () => null, execute: async () => 1 };
+const services = {
   auth: service(["register", "login", "getProfile", "updateProfile"]),
   messages: service(["listUsers", "sendMessage", "getConversation", "markConversationRead", "deleteMessage", "editMessage", "forwardMessage", "toggleReaction"]),
   groups: service(["createGroup", "listGroups", "listMembers", "addMember", "getMessages", "sendMessage", "markDelivered", "toggleReaction", "editMessage", "deleteMessage", "pinMessage"]),
@@ -41,7 +43,7 @@ test("PostgreSQL API composition mounts protected feature routers without switch
     "/api/channels",
     "/api/social/feed",
     "/api/moments",
-    "/api/presence/online",\n    "/api/uploads/777"
+    "/api/presence/online"
   ]) {
     const unauthorized = await fetch(base + path);
     assert.equal(unauthorized.status, 401, path + " should reject anonymous requests");
@@ -51,6 +53,16 @@ test("PostgreSQL API composition mounts protected feature routers without switch
     assert.equal(response.status, 200, path + " should be mounted and accept an authenticated request");
     assert.ok(await response.json());
   }
+  const media = await fetch(base + "/api/uploads/777", {
+    headers: { Authorization: "Bearer " + token }
+  });
+  assert.equal(media.status, 200);
+  assert.equal(await media.text(), "image");
+  const calls = await fetch(base + "/api/calls/turn-credentials", {
+    headers: { Authorization: "Bearer " + token }
+  });
+  assert.equal(calls.status, 503);
+  assert.match((await calls.json()).error, /not configured/);
 });
 
 test("PostgreSQL API composition rejects incomplete service injection", () => {
