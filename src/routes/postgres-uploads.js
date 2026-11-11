@@ -88,7 +88,7 @@ function createPostgresUploadsRouter({ mediaStorage, db, jwtSecret, jwtImplement
     try {
       const user = await db.one("SELECT avatar_path AS \"avatarPath\" FROM users WHERE id=$1", [String(req.auth.userId)]);
       if (!user) return res.status(404).json({ error: "Account not found." });
-      const stored = await mediaStorage.upload(req.auth.userId, req.file, "profile");
+      stored = await mediaStorage.upload(req.auth.userId, req.file, "profile");
       const updated = await db.one("UPDATE users SET avatar_path=$1 WHERE id=$2 RETURNING id", [String(stored.id), String(req.auth.userId)]);
       if (!updated) {
         await mediaStorage.removeOwned(req.auth.userId, stored.id);
@@ -100,6 +100,7 @@ function createPostgresUploadsRouter({ mediaStorage, db, jwtSecret, jwtImplement
       }
       return res.json({ message: "Profile picture updated.", avatarPath: String(stored.id) });
     } catch (error) {
+      if (stored?.id) { try { await mediaStorage.removeOwned(req.auth.userId, stored.id); } catch (cleanupError) { console.error("New profile picture rollback failed:", cleanupError?.message || "Unknown error"); } }
       if (Number.isInteger(error?.status)) return res.status(error.status).json({ error: error.message });
       console.error("PostgreSQL profile picture upload failed:", error?.message || "Unknown error");
       return res.status(502).json({ error: "Could not store the profile picture." });
