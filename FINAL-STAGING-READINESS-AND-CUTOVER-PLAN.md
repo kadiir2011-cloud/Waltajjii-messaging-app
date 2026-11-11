@@ -31,11 +31,10 @@ The newer migration work is a dependency stack, not a set of independent PRs:
 
 1. PR #35 — production readiness/security audit.
 2. PR #36 — PostgreSQL adapter foundation.
-3. PR #37 — compatibility audit is a sibling of PR #38, both based on PR #36. It is not in the PR #38 ancestry; reconcile its findings/changes before integration.
-4. PR #38 — auth/profile PostgreSQL routes; PRs #39–#36 onward follow this lineage.
-5. PRs #39–#46 — realtime foundation, test harness, schema contract, schema reconciliation and disposable integration.
-6. PRs #47–#52 — auth/profile, realtime Socket.IO, direct messaging, groups, channels, channel interactions and Moments/social integration.
-7. PR #53–#59 — migration-chain audit, integration-readiness audit, Moments, group governance, durable media and full network Socket.IO integration.
+3. PR #37 and PR #38 both target the Phase 33C parent and change the same five files (416 additions each). A commit comparison shows PR #38 is one commit ahead of PR #37, with the only difference being branch filters in the Phase 34 workflow. PR #38 contains the PR #37 content plus that workflow correction; PR #39 is based on PR #38. Treat PR #38 as canonical and do not merge PR #37 separately.
+4. PRs #39–#46 — realtime foundation, test harness, schema contract, poll integrity, timezone contract, migration blueprint, schema reconciliation and disposable integration.
+5. PRs #47–#52 — auth/profile integration, realtime Socket.IO, direct messaging, groups, channels and channel interactions.
+6. PRs #53–#59 — migration-chain audit, application integration audit, social/feed, Moments, group governance, durable media and full network Socket.IO integration.
 8. PR #60 — API/frontend compatibility and regression baseline.
 9. PR #61 — read-only SQLite migration preflight.
 10. PR #62 — disposable PostgreSQL migration rehearsal.
