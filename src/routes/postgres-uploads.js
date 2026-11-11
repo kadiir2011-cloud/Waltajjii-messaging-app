@@ -85,6 +85,7 @@ function createPostgresUploadsRouter({ mediaStorage, db, jwtSecret, jwtImplement
     if (!req.file) return res.status(400).json({ error: "Please select a JPG, PNG or WebP picture." });
     const mime = String(req.file.mimetype || "").split(";")[0].toLowerCase();
     if (!PROFILE_TYPES.has(mime)) return res.status(415).json({ error: "Please use a JPG, PNG or WebP image." });
+    let stored = null;
     try {
       const user = await db.one("SELECT avatar_path AS \"avatarPath\" FROM users WHERE id=$1", [String(req.auth.userId)]);
       if (!user) return res.status(404).json({ error: "Account not found." });
