@@ -105,7 +105,7 @@ test("Phase 56 audit does not switch the production SQLite runtime", () => {
 test("known frontend integration gaps are explicit and test-visible", () => {
   const audit = read("PHASE-56-API-FRONTEND-COMPATIBILITY.md");
   for (const phrase of [
-    "No PostgreSQL application composition root",
+    "opt-in injected router",
     "Uploads/profile pictures",
     "Calls/TURN credentials",
     "Group invitation QR",
