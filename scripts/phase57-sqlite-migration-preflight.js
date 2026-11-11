@@ -52,6 +52,9 @@ function auditSqliteDatabase(databasePath){
   if(mediaReferences.some(m=>m.total>0))warnings.push("Media references were inventoried, but object existence and access permissions must be verified against the private Supabase Storage bucket separately.");
   warnings.push("This is a read-only SQLite preflight. It does not export records, create PostgreSQL rows, verify Supabase objects, or authorize a runtime cutover.");
   return {phase:57,title:"SQLite-to-PostgreSQL migration readiness preflight",sourceDatabase:path.basename(absolutePath),readOnly:true,generatedAt:new Date().toISOString(),status:blockers.length?"blocked":"ready_for_rehearsal",integrityCheck:integrityMessages,tableCount:tables.length,tables:tableReports,missingCoreTables,totalRows:tableReports.reduce((s,x)=>s+x.rowCount,0),usernameAudit,foreignKeyViolationCount:foreignKeyViolations.length,foreignKeyViolations,invalidTimestamps,negativePrimaryKeyCount:negativePrimaryKeys,mediaReferences,blockers,warnings};
+ } finally {
+  db.close();
+ }
 }
 function main(argv=process.argv.slice(2)){
  const args=[...argv];let outputPath=null;const i=args.indexOf("--out");
