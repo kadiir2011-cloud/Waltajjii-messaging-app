@@ -124,6 +124,13 @@ function createPostgresGroupsService({db}={}) {
     const isAnnouncement=input.isAnnouncement===true;
     return db.withTransaction(async tx=>{
       const me=await requireMember(groupId,senderId,tx);
+      if(mediaPath){
+        const ownedMedia=await tx.one(
+          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose IN ('message','group') AND deleted_at IS NULL",
+          [mediaPath,String(senderId)]
+        );
+        if(!ownedMedia)throw fail(400,"This media file is unavailable or does not belong to your account.");
+      }
       if(replyId!==null){
         const reply=await tx.one("SELECT id FROM group_messages WHERE id=$1 AND group_id=$2 AND deleted_at IS NULL",[replyId,groupId]);
         if(!reply)throw fail(400,"Reply target is not in this group.");
