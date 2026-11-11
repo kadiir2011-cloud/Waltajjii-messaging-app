@@ -163,7 +163,7 @@ function createPostgresGroupsService({db}={}) {
       const existing=await tx.one("SELECT 1 FROM group_message_reactions WHERE group_message_id=$1 AND user_id=$2 AND emoji=$3",[messageId,userId,emoji]);
       if(existing)await tx.execute("DELETE FROM group_message_reactions WHERE group_message_id=$1 AND user_id=$2 AND emoji=$3",[messageId,userId,emoji]);
       else await tx.execute("INSERT INTO group_message_reactions(group_message_id,user_id,emoji) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[messageId,userId,emoji]);
-      return {message:await getMessage(tx,groupId,messageId,userId),mediaPath:msg.mediaPath};
+      return {message:await getMessage(tx,groupId,messageId,userId)};
     });
   }
   async function editMessage(groupId,messageId,userId,body) {
@@ -176,7 +176,7 @@ function createPostgresGroupsService({db}={}) {
       if(msg.mediaPath||msg.deletedAt)throw fail(400,"Only active text messages can be edited.");
       const updated=await tx.execute("UPDATE group_messages SET body=$1,edited_at=CURRENT_TIMESTAMP WHERE id=$2 AND deleted_at IS NULL",[body,messageId]);
       if(!updated)throw fail(409,"This message could not be edited.");
-      return {message:await getMessage(tx,groupId,messageId,userId),mediaPath:msg.media_path};
+      return {message:await getMessage(tx,groupId,messageId,userId)};
     });
   }
   async function deleteMessage(groupId,messageId,userId) {
