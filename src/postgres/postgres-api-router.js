@@ -84,17 +84,17 @@ function createPostgresApiRouter({
     authService: services.auth, jwt, jwtSecret, limiter
   }));
   router.use("/messages", createPostgresMessagesRouter({
-    messagesService: services.messages, jwtSecret, jwtImplementation: jwt
+    messagesService: services.messages, mediaStorage, jwtSecret, jwtImplementation: jwt
   }));
   router.use("/groups", createPostgresGroupsRouter({
-    groupsService: services.groups, jwtSecret, jwtImplementation: jwt
+    groupsService: services.groups, mediaStorage, jwtSecret, jwtImplementation: jwt
   }));
   router.use("/groups", createPostgresGroupGovernanceRouter({
     governanceService: services.governance, jwtSecret,
     jwtImplementation: jwt, publicAppUrl
   }));
   router.use("/channels", createPostgresChannelsRouter({
-    channelsService: services.channels, jwtSecret, jwtImplementation: jwt
+    channelsService: services.channels, mediaStorage, jwtSecret, jwtImplementation: jwt
   }));
   router.use("/social", createPostgresSocialRouter({
     socialService: services.social, jwtSecret, jwtImplementation: jwt
