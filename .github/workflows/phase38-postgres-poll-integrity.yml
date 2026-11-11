@@ -1,0 +1,33 @@
+name: Phase 38 PostgreSQL poll integrity contract tests
+
+on:
+  push:
+    branches:
+      - waltajjii-postgres-poll-integrity-phase38
+    paths:
+      - "migrations/postgres/001_initial_schema.sql"
+      - "test/phase38-postgres-poll-integrity.test.js"
+      - ".github/workflows/phase38-postgres-poll-integrity.yml"
+  pull_request:
+    branches:
+      - waltajjii-postgres-schema-contract-audit-phase37
+    paths:
+      - "migrations/postgres/001_initial_schema.sql"
+      - "test/phase38-postgres-poll-integrity.test.js"
+      - ".github/workflows/phase38-postgres-poll-integrity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  poll-integrity-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run schema contract tests
+        run: node --test test/phase38-postgres-poll-integrity.test.js

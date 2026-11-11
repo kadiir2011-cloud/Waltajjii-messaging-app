@@ -1,0 +1,26 @@
+name: Phase 39 PostgreSQL timestamp contract
+
+on:
+  pull_request:
+    paths:
+      - "PHASE-39-POSTGRESQL-TIMESTAMP-TIMEZONE-CONTRACT.md"
+      - "test/phase39-postgres-timestamp-contract.test.js"
+      - ".github/workflows/phase39-postgres-timestamp-contract.yml"
+      - "migrations/postgres/001_initial_schema.sql"
+      - "src/db.js"
+      - "src/routes/groups.js"
+      - "src/server.js"
+
+permissions:
+  contents: read
+
+jobs:
+  timestamp-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify timestamp and timezone contracts
+        run: node --test test/phase39-postgres-timestamp-contract.test.js

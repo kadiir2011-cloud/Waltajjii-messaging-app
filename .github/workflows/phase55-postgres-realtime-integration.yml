@@ -1,0 +1,43 @@
+name: Phase 55 PostgreSQL realtime integration
+on:
+  pull_request:
+    paths:
+      - "src/postgres/postgres-realtime-socket.js"
+      - "src/postgres/postgres-realtime-server.js"
+      - "src/services/postgres-realtime-service.js"
+      - "test/phase55-postgres-realtime-integration.test.js"
+      - ".github/workflows/phase55-postgres-realtime-integration.yml"
+      - "migrations/postgres/**"
+      - "src/db/postgres-adapter.js"
+permissions:
+  contents: read
+jobs:
+  realtime-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase55_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase55_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase55_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked project dependencies
+        run: npm ci --ignore-scripts
+      - name: Install test-only Socket.IO client
+        run: npm install --no-save --package-lock=false socket.io-client@4.8.1
+      - name: Run real-client PostgreSQL Socket.IO integration
+        run: node --test test/phase55-postgres-realtime-integration.test.js

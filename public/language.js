@@ -52,7 +52,7 @@
       "end-call-button": "Bilbila cufi",
       "message-placeholder": "Ergaa barreessi...",
       "send-button": "Ergi",
-      "footer-text": "Waltajjii · Guddina jalqabaa"
+      "footer-text": "Waltajjii™ · © 2026 · Kan Kedir Negesso Tukeni uume"
     },
     am: {
       "app-subtitle": "በውይይት ይገናኙ",
@@ -79,7 +79,7 @@
       "end-call-button": "ጥሪውን ጨርስ",
       "message-placeholder": "መልዕክት ይጻፉ...",
       "send-button": "ላክ",
-      "footer-text": "ዋልታጂ · የመጀመሪያ የእድገት ስሪት"
+      "footer-text": "ዋልታጂ™ · © 2026 · በKedir Negesso Tukeni የተፈጠረ"
     },
     ar: {
       "app-subtitle": "تواصلوا من خلال المحادثة",
@@ -106,7 +106,7 @@
       "end-call-button": "إنهاء المكالمة",
       "message-placeholder": "اكتب رسالة...",
       "send-button": "إرسال",
-      "footer-text": "والتاجي · نسخة تطوير أولية"
+      "footer-text": "Waltajjii™ · © 2026 · من إنشاء Kedir Negesso Tukeni"
     },
     so: {
       "app-subtitle": "Ku xidhnow wada sheekaysi",
@@ -133,7 +133,7 @@
       "end-call-button": "Dhammee wicitaanka",
       "message-placeholder": "Qor farriin...",
       "send-button": "Dir",
-      "footer-text": "Waltajjii · Nooca horumarinta bilowga ah"
+      "footer-text": "Waltajjii™ · © 2026 · Waxaa sameeyay Kedir Negesso Tukeni"
     },
     fr: {
       "app-subtitle": "Connectez-vous par la conversation",
@@ -160,7 +160,7 @@
       "end-call-button": "Terminer l'appel",
       "message-placeholder": "Écrivez un message...",
       "send-button": "Envoyer",
-      "footer-text": "Waltajjii · Version de développement initiale"
+      "footer-text": "Waltajjii™ · © 2026 · Créé par Kedir Negesso Tukeni"
     },
     zh: {
       "app-subtitle": "通过交流建立联系",
@@ -187,7 +187,7 @@
       "end-call-button": "结束通话",
       "message-placeholder": "输入消息...",
       "send-button": "发送",
-      "footer-text": "Waltajjii · 早期开发版本"
+      "footer-text": "Waltajjii™ · © 2026 · 由 Kedir Negesso Tukeni 创建"
     }
   };
 
@@ -244,6 +244,66 @@
     } catch (_) {}
   }
 
+
+  // Extended interface vocabulary. User-authored messages, posts, names and biographies
+  // are deliberately excluded from automatic translation.
+  const phrases = {
+    "Your profile": ["Your profile","Pirofayila kee","መገለጫዎ","ملفك الشخصي","Boggaaga","Votre profil","你的个人资料"],
+    "Basic identity": ["Basic identity","Eenummaa bu'uuraa","መሠረታዊ መለያ","المعلومات الأساسية","Aqoonsiga aasaasiga ah","Identité de base","基本身份信息"],
+    "Professional information": ["Professional information","Odeeffannoo ogummaa","የሙያ መረጃ","المعلومات المهنية","Macluumaadka xirfadeed","Informations professionnelles","职业信息"],
+    "Profile picture": ["Profile picture","Suuraa pirofayila","የመገለጫ ፎቶ","الصورة الشخصية","Sawirka astaanta","Photo de profil","头像"],
+    "Save profile": ["Save profile","Pirofayila olkaa'i","መገለጫውን አስቀምጥ","حفظ الملف الشخصي","Kaydi bogga","Enregistrer le profil","保存个人资料"],
+    "Upload picture": ["Upload picture","Suuraa olkaa'i","ፎቶ ጫን","رفع الصورة","Soo geli sawir","Téléverser une photo","上传图片"],
+    "Remove picture": ["Remove picture","Suuraa haqi","ፎቶውን አስወግድ","إزالة الصورة","Ka saar sawirka","Supprimer la photo","删除图片"],
+    "Waltajjii Social": ["Waltajjii Social","Waltajjii Hawaasummaa","ዋልታጂ ማህበራዊ","والتاجي الاجتماعي","Waltajjii Bulsho","Waltajjii Social","Waltajjii 社交"],
+    "Discover": ["Discover","Barbaadi","ፈልግ","استكشف","Soo hel","Découvrir","发现"],
+    "Feed": ["Feed","Soorata","የዜና ማሰራጫ","آخر المستجدات","Qulqulka","Fil","动态"],
+    "Requests": ["Requests","Gaaffiiwwan","ጥያቄዎች","الطلبات","Codsiyada","Demandes","请求"],
+    "Following": ["Following","Kan hordoftu","የምትከታተላቸው","المتابَعون","Kuwaad raacdo","Abonnements","正在关注"],
+    "Followers": ["Followers","Hordoftoota","ተከታዮች","المتابعون","Kuwa ku raaca","Abonnés","粉丝"],
+    "Notifications": ["Notifications","Beeksisa","ማሳወቂያዎች","الإشعارات","Ogeysiisyada","Notifications","通知"],
+    "Search": ["Search","Barbaadi","ፈልግ","بحث","Raadi","Rechercher","搜索"],
+    "Publish post": ["Publish post","Maxxansi baasii","ጽሑፍ አትም","نشر المنشور","Daabac qoraal","Publier","发布帖子"],
+    "Connection requests": ["Connection requests","Gaaffii walquunnamtii","የግንኙነት ጥያቄዎች","طلبات الاتصال","Codsiyada xiriirka","Demandes de connexion","好友请求"],
+    "People you follow": ["People you follow","Namoota hordoftu","የምትከታተላቸው ሰዎች","الأشخاص الذين تتابعهم","Dadka aad raacdo","Personnes suivies","你关注的人"],
+    "Your followers": ["Your followers","Hordoftoota kee","ተከታዮችህ","متابعوك","Kuwa ku raaca","Vos abonnés","你的粉丝"],
+    "Mark all as read": ["Mark all as read","Hundaa akka dubbifame mallatteessi","ሁሉንም እንደተነበበ ምልክት አድርግ","تحديد الكل كمقروء","Dhammaan u calaamadee la akhriyay","Tout marquer comme lu","全部标记为已读"],
+    "Choose a recipient": ["Choose a recipient","Nama ergaa fudhatu filadhu","ተቀባይ ምረጥ","اختر المستلم","Dooro qaataha","Choisir un destinataire","选择接收者"],
+    "Load conversation": ["Load conversation","Haasa'a fe'i","ውይይት ጫን","تحميل المحادثة","Soo rar wada sheekaysiga","Charger la conversation","加载对话"],
+    "Video call": ["Video call","Bilbila viidiyoo","የቪዲዮ ጥሪ","مكالمة فيديو","Wicitaan muuqaal ah","Appel vidéo","视频通话"],
+    "Start video call": ["Start video call","Bilbila viidiyoo jalqabi","የቪዲዮ ጥሪ ጀምር","بدء مكالمة فيديو","Bilow wicitaan muuqaal ah","Démarrer l'appel vidéo","开始视频通话"],
+    "Voice call": ["Voice call","Bilbila sagalee","የድምፅ ጥሪ","مكالمة صوتية","Wicitaan cod ah","Appel vocal","语音通话"],
+    "Groups": ["Groups","Gareewwan","ቡድኖች","المجموعات","Kooxo","Groupes","群组"],
+    "Create group": ["Create group","Garee uumi","ቡድን ፍጠር","إنشاء مجموعة","Samee koox","Créer un groupe","创建群组"],
+    "Refresh groups": ["Refresh groups","Gareewwan haaromsi","ቡድኖችን አድስ","تحديث المجموعات","Cusboonaysii kooxaha","Actualiser les groupes","刷新群组"],
+    "Channels": ["Channels","Chaanaalii","ቻናሎች","القنوات","Kanaallada","Chaînes","频道"],
+    "Create channel": ["Create channel","Chaanaalii uumi","ቻናል ፍጠር","إنشاء قناة","Samee kanaal","Créer une chaîne","创建频道"],
+    "Refresh channels": ["Refresh channels","Chaanaalii haaromsi","ቻናሎችን አድስ","تحديث القنوات","Cusboonaysii kanaallada","Actualiser les chaînes","刷新频道"],
+    "Send": ["Send","Ergi","ላክ","إرسال","Dir","Envoyer","发送"],
+    "Log out": ["Log out","Ba'i","ውጣ","تسجيل الخروج","Ka bax","Se déconnecter","退出登录"]
+  };
+
+  const phraseObserver = new MutationObserver(() => translatePhrases());
+  function translatePhrases() {
+    const selector = document.getElementById("language-select");
+    const language = selector && dictionaries[selector.value] ? selector.value : "en";
+    const index = ["en","om","am","ar","so","fr","zh"].indexOf(language);
+    if (index < 0) return;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest("script,style,textarea,input,option,.message,.social-post,.social-comment,#profile-bio-display,[contenteditable='true']")) continue;
+      const current = node.nodeValue.trim();
+      const original = node.__waltajjiiOriginal || current;
+      const translated = phrases[original]?.[index];
+      if (!translated) continue;
+      if (!node.__waltajjiiOriginal) node.__waltajjiiOriginal = original;
+      if (current !== translated) node.nodeValue = node.nodeValue.replace(current, translated);
+    }
+  }
+
   function initialize() {
     const selector = document.getElementById("language-select");
     if (!selector) return;
@@ -256,7 +316,13 @@
     if (!dictionaries[saved]) saved = "en";
     selector.value = saved;
     applyLanguage(saved);
-    selector.addEventListener("change", () => applyLanguage(selector.value));
+    selector.addEventListener("change", () => {
+      applyLanguage(selector.value);
+      translatePhrases();
+      if (window.waltajjiiDynamicTranslate) window.waltajjiiDynamicTranslate();
+    });
+    translatePhrases();
+    phraseObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
   if (document.readyState === "loading") {
