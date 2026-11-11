@@ -4,10 +4,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const express = require("express");
 const http = require("node:http");
+const jwt = require("jsonwebtoken");
 const { createPostgresApiRouter } = require("../src/postgres/postgres-api-router");
 
 const secret = "phase56-integration-secret-with-more-than-32-characters";
-const jwt = { verify(token) { if (token !== "phase56-valid-test-token") throw new Error("invalid token"); return { userId: "101", username: "phase56-user" }; } };
+const token = jwt.sign({ userId: "101", username: "phase56-user" }, secret, { issuer: "waltajjii", audience: "waltajjii-users" });
 const service = names => Object.fromEntries(names.map(name => [name, async () => ({})]));
 const services = {
   auth: service(["register", "login", "getProfile", "updateProfile"]),
@@ -45,7 +46,7 @@ test("PostgreSQL API composition mounts protected feature routers without switch
     const unauthorized = await fetch(base + path);
     assert.equal(unauthorized.status, 401, path + " should reject anonymous requests");
     const response = await fetch(base + path, {
-      headers: { Authorization: "Bearer phase56-valid-test-token" }
+      headers: { Authorization: "Bearer " + token }
     });
     assert.equal(response.status, 200, path + " should be mounted and accept an authenticated request");
     assert.ok(await response.json());
