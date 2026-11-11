@@ -80,8 +80,9 @@ The PostgreSQL group governance router now supports `POST /api/groups/invitation
 - `test/phase56-postgres-media-call-routes.test.js`: upload response compatibility, authenticated media access, profile-picture upload, TURN credential response and safe missing-configuration behavior.
 - `test/phase56-postgres-translation.test.js`: authenticated translation, language validation, provider request safety and missing-key behavior.
 - `test/phase56-postgres-reminder-worker.test.js`: reminder worker overlap protection, idempotent start and graceful stop.
+- `test/phase56-browser-e2e.test.js`: Playwright Chromium desktop/mobile smoke tests for registration, login and direct messaging.
 
-These are injected-service HTTP integration and source-contract tests. They do not prove full Supabase integration, complete API parity or browser E2E behavior.
+These are injected-service HTTP integration and source-contract tests. The new Playwright suite in `test/phase56-browser-e2e.test.js` additionally exercises real Chromium desktop and mobile browser flows against a mocked API, including login, registration, recipient selection and direct-message sending. Browser coverage is a smoke-test baseline, not proof of full Supabase integration, complete API parity or full end-to-end coverage of every feature.
 
 ## Required exit criteria before PostgreSQL runtime cutover
 
