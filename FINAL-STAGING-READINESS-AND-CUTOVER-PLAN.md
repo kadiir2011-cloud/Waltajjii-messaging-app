@@ -170,8 +170,11 @@ This section records a live GitHub metadata and diff audit. It is a repository r
 ### Additional checks and outstanding Gate 0 evidence
 
 - The complete open-PR inventory was retrieved from GitHub. PR #29 is the notable closed/merged exception; it was merged into a feature branch, not `main`.
-- The Phase 15 comparison confirms that PR #15 and PR #17 are divergent histories, not a simple later commit replacing an earlier one.
+- The Phase 15 comparison confirms that PR #15 and PR #17 are divergent histories. PR #15 combines forwarding and deletion in one implementation; PR #17 rebuilds forwarding, and PR #18 adds a separate deletion design on top of PR #17. PR #18 uses a `message_hidden_for` table for per-user hiding and a tombstone for global deletion. PR #17/#18 currently have no PR-triggered workflow runs associated with their audited head commits, so automated tests must be added before approval.
+- PR #8/#9 also have no PR-triggered workflow runs associated with their audited head commits. Their same-file sibling integration therefore needs automated desktop/mobile regression tests.
+- PR #16 mounts a Basic-authenticated database export endpoint at `/api/backup/export`. Although it checks credential length, compares credentials timing-safely and deletes the temporary file after delivery, it exposes a full database export route in the application server. Keep it out of the public runtime; if retained for a controlled one-time backup, require a time-limited operational procedure, strong secret handling, rate limiting/monitoring and immediate removal/disablement afterward.
 - The Phase 33 comparison confirms that PR #38 contains the PR #37 commit and one additional workflow correction; the current PR #39 base is PR #38.
+- PR #29 is already merged to the Phase 29 feature branch. Verify the group-event implementation is present in the chosen product integration branch before any cutover.
 - PR metadata showing `mergeable: true` is not a substitute for a full integration test, and a successful CI run on a child branch is not approval to merge.
 - Still required before Gate 0 exit: inspect full diffs and current CI for every retained PR at its current head SHA; verify no secrets or unsafe debug endpoints; inspect SQLite migration idempotency/order; test combined sibling feature branches; resolve any stale workflow branch filters; and produce a green integrated regression run.
 - No changes to production `main`, Render, Supabase, or the live application database are included.
