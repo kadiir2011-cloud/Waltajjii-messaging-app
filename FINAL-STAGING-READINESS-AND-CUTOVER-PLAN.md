@@ -192,7 +192,7 @@ This section records a live GitHub metadata and diff audit. It is a repository r
   - reduced animation/transition behavior while the mode is enabled.
 - Added `test/gate0-low-bandwidth.test.js` and `.github/workflows/gate0-integration.yml` to check JavaScript syntax and the Low-Bandwidth frontend contract.
 - Initial Gate 0 frontend CI passed: https://github.com/kadiir2011-cloud/Waltajjii-messaging-app/actions/runs/43005624685
-- At the last audit snapshot, six of the twenty PR-triggered workflow runs on the integration head had completed successfully, including the new Gate 0 check and Phase 39–41, 44 and 57 checks; fourteen PostgreSQL integration/regression workflows were still running. Recheck the current run state before declaring the combined stack green.
+- Latest audit: 19 of 20 PR-triggered workflow runs on the integration head completed successfully, including the new Gate 0 check and the Phase 39–55, 57 and 58 workflows. The remaining Phase 56 workflow is still running its desktop/mobile browser E2E step; the API/frontend regression step is queued. Do not declare the full stack green until it finishes successfully.
 - PR #64 is draft, unmerged, and currently reported mergeable by GitHub. That metadata is not a merge recommendation.
 - This candidate includes the Phase 35–58 stacked history; it is an integration/test branch, not a production deployment branch.
 
