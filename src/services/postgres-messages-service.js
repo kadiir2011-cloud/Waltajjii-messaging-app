@@ -150,7 +150,7 @@ function createPostgresMessagesService({ db } = {}) {
       } else {
         await tx.execute("INSERT INTO message_hidden_for(message_id,user_id) VALUES($1,$2) ON CONFLICT(message_id,user_id) DO NOTHING",[rawId,viewerId]);
       }
-      return {success:true,scope,messageId:String(rawId),senderId:String(message.senderId),receiverId:String(message.receiverId),mediaPath:scope==="everyone"?message.mediaPath:null};
+      return {success:true,scope,messageId:String(rawId),senderId:String(message.senderId),receiverId:String(message.receiverId),mediaPath:scope==="everyone"?message.media_path:null};
     });
   }
 
