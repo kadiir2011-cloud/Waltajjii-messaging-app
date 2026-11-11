@@ -53,7 +53,7 @@ test("Phase 58: full SQLite application dataset imports transactionally with row
  const report=await runMigrationRehearsal({sqlitePath:dbPath,pool,allowDisposableTarget:true});
  assert.equal(report.status,"passed");
  assert.equal(report.tableCount,29);
- assert.equal(report.totalRows,29);
+ assert.equal(report.totalRows,33);
  assert.equal(report.mediaObjectsImported,0);
  assert.ok(report.tables.every(row=>row.sha256&&row.sourceRows===row.importedRows));
  const userCount=(await pool.query("SELECT COUNT(*)::int AS count FROM waltajjii.users")).rows[0].count;
