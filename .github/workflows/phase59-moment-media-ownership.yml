@@ -1,0 +1,24 @@
+name: Phase 59 Moment media ownership security
+
+on:
+  pull_request:
+    branches: [main, waltajjii-gate0-integration]
+  push:
+    branches: [waltajjii-phase59-moment-media-ownership]
+
+permissions:
+  contents: read
+
+jobs:
+  moment-media-ownership:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check service syntax
+        run: node --check src/services/postgres-moments-service.js
+      - name: Test Moment media ownership
+        run: node --test test/phase59-moment-media-ownership.test.js
