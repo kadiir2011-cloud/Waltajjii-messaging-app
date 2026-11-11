@@ -18,7 +18,7 @@ function createPostgresMomentsService({db}={}) {
   if(content.length>500)throw fail(400,"Moment text must be 500 characters or fewer.");
   if(!["everyone","followers"].includes(audience))throw fail(400,"Choose a valid Moment audience.");
   if(!content&&!mediaPath)throw fail(400,"Add text or choose a photo/video.");
-  if(mediaPath&&!/^[0-9a-f-]{36}\.(jpg|png|webp|gif|mp4|webm)$/i.test(mediaPath))throw fail(400,"Invalid Moment media file.");
+  if(mediaPath&&!/^[1-9][0-9]*$/.test(mediaPath))throw fail(400,"Invalid Moment media file.");
   if(mediaPath&&!["image","video"].includes(mediaType))throw fail(400,"Invalid Moment media type.");
   if(!mediaPath&&mediaType)throw fail(400,"Moment media type requires a media file.");
   const moment=await db.one("INSERT INTO moments(user_id,content,media_path,media_type,audience) VALUES($1,$2,$3,$4,$5) RETURNING id,user_id AS \"userId\",content,media_path AS \"mediaPath\",media_type AS \"mediaType\",audience,created_at AS \"createdAt\",expires_at AS \"expiresAt\"",[viewerId,content,mediaPath,mediaType,audience]);
