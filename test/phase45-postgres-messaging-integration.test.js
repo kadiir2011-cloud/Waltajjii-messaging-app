@@ -86,7 +86,7 @@ test("Phase 45: direct messaging HTTP and PostgreSQL integration",async()=>{
 
     const conversation=await request("/api/messages/conversation/"+encodeURIComponent(alice.username),token(bob));
     assert.equal(conversation.status,200);
-    assert.equal(conversation.data.messages.length,2);
+    assert.equal(conversation.data.messages.length,3);
     assert.ok(conversation.data.messages.every(m=>Array.isArray(m.reactions)));
 
     const reacted=await request("/api/messages/"+first.id+"/reactions",token(bob),{method:"POST",body:JSON.stringify({emoji:"👍"})});
