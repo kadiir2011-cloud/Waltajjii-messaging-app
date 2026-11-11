@@ -56,7 +56,7 @@ function createPostgresChannelsService({db}={}) {
  async function publishMessage(cid,uid,input={}) {
   let body=String(input.body||"").trim();const mediaPath=String(input.mediaPath||"").trim(),mediaType=String(input.mediaType||"").trim();
   if(body.length>4000||(!body&&!mediaPath))throw fail(400,"Write an announcement or attach media (maximum 4000 characters).");
-  if(mediaPath&&!/^[0-9a-f-]+\.(jpg|jpeg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath))throw fail(400,"Invalid media file.");
+  if(mediaPath&&!/^[1-9][0-9]*$/.test(mediaPath))throw fail(400,"Invalid media file.");
   if(mediaPath&&!["image","video","audio","document"].includes(mediaType))throw fail(400,"Invalid media type.");
   if(!body)body=mediaType==="video"?"[Video]":mediaType==="audio"?"[Audio]":mediaType==="document"?"[Document]":"[Image]";
   return db.withTransaction(async tx=>{
