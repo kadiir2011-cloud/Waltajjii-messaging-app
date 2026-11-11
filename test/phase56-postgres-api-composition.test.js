@@ -68,6 +68,9 @@ test("PostgreSQL API composition mounts protected feature routers without switch
   assert.equal(moment.status, 201);
   assert.equal(mediaCalls[0][0], "101");
   assert.equal(mediaCalls[0][2], "moment");
+  const momentMedia = await fetch(base + "/api/moments/media/22", { headers });
+  assert.equal(momentMedia.status, 200);
+  assert.equal(await momentMedia.text(), "image");
   const qr = await fetch(base + "/api/groups/invitation/qr", {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
