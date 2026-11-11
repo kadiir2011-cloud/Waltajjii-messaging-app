@@ -30,6 +30,7 @@ function token(user){return jwt.sign({userId:String(user.id),username:user.usern
 test("Phase 45: direct messaging HTTP and PostgreSQL integration",async()=>{
   const ddl=fs.readFileSync(path.join(__dirname,"..","migrations/postgres/001_initial_schema.sql"),"utf8");
   await pool.query(ddl);
+  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/003_media_objects.sql"),"utf8"));
   const suffix=Date.now();
   const users=[];
   for(const username of ["p45_alice_"+suffix,"p45_bob_"+suffix,"p45_carol_"+suffix]){
@@ -37,6 +38,8 @@ test("Phase 45: direct messaging HTTP and PostgreSQL integration",async()=>{
     users.push(row);
   }
   [alice,bob,carol]=users;
+  const aliceMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','image/png',128) RETURNING id",[alice.id,"phase45/"+alice.id+".png"]);
+  const bobMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','image/png',128) RETURNING id",[bob.id,"phase45/"+bob.id+".png"]);
 
   const app=express();app.use(express.json({limit:"30kb"}));
   app.use("/api/messages",createPostgresMessagesRouter({messagesService:service,jwtSecret:secret}));
@@ -61,6 +64,14 @@ test("Phase 45: direct messaging HTTP and PostgreSQL integration",async()=>{
     const sent=await request("/api/messages",token(alice),{method:"POST",body:JSON.stringify({receiverUsername:bob.username,body:"Hello from Phase 45"})});
     assert.equal(sent.status,201);
     const first=sent.data.message;
+    const ownAttachment=await request("/api/messages",token(alice),{method:"POST",body:JSON.stringify({receiverUsername:bob.username,body:"",mediaPath:String(aliceMedia.id),mediaType:"image"})});
+    assert.equal(ownAttachment.status,201);
+    assert.equal(String(ownAttachment.data.message.mediaPath),String(aliceMedia.id));
+    const foreignAttachment=await request("/api/messages",token(alice),{method:"POST",body:JSON.stringify({receiverUsername:bob.username,body:"",mediaPath:String(bobMedia.id),mediaType:"image"})});
+    assert.equal(foreignAttachment.status,400);
+    const forwardedAttachment=await request("/api/messages/"+ownAttachment.data.message.id+"/forward",token(alice),{method:"POST",body:JSON.stringify({receiverUsername:carol.username})});
+    assert.equal(forwardedAttachment.status,201);
+    assert.equal(String(forwardedAttachment.data.message.mediaPath),String(aliceMedia.id));
     assert.equal(first.sender,alice.username);
     assert.equal(first.recipient,bob.username);
     assert.equal(first.body,"Hello from Phase 45");
