@@ -14,11 +14,11 @@ const postgresSchema = fs.readFileSync(path.join(root, "migrations/postgres/001_
 const preflightSource = fs.readFileSync(path.join(root, "scripts/phase57-sqlite-migration-preflight.js"), "utf8");
 
 test("Phase 62: SQLite and PostgreSQL declare the same case-insensitive username identity rule", () => {
-  assert.match(sqliteDbSource, /username TEXT NOT NULL COLLATE NOCASE UNIQUE/);
-  assert.match(sqliteAuthSource, /WHERE username = \?/);
-  assert.match(postgresSchema, /CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uq ON users \\(LOWER\\(username\\)\\)/);
-  assert.match(postgresAuthSource, /WHERE LOWER\\(username\\) = LOWER\\(\\$1\\)/);
-  assert.match(preflightSource, /GROUP BY username COLLATE NOCASE HAVING COUNT\\(\\*\\)>1/);
+  assert.ok(sqliteDbSource.includes("username TEXT NOT NULL COLLATE NOCASE UNIQUE"));
+  assert.ok(sqliteAuthSource.includes("WHERE username = ?"));
+  assert.ok(postgresSchema.includes("CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uq ON users (LOWER(username))"));
+  assert.ok(postgresAuthSource.includes("WHERE LOWER(username) = LOWER($1)"));
+  assert.ok(preflightSource.includes("GROUP BY username COLLATE NOCASE HAVING COUNT(*)>1"));
 });
 
 test("Phase 62: SQLite username equality, uniqueness and login lookup are case-insensitive", () => {
@@ -43,13 +43,13 @@ test("Phase 62: both auth implementations trim input and restrict usernames to t
   for (const candidate of ["ab", "a b", "éclair", "alice!", "a".repeat(31), ""]) {
     assert.equal(grammar.test(candidate.trim()), false, candidate);
   }
-  assert.match(sqliteAuthSource, /String\\(req\\.body\\.username \\|\\| ""\\)\\.trim\\(\\)/);
-  assert.match(postgresAuthSource, /String\\(rawUsername \\|\\| ""\\)\\.trim\\(\\)/);
-  assert.match(sqliteAuthSource, /a-zA-Z0-9_/);
-  assert.match(postgresAuthSource, /a-zA-Z0-9_/);
+  assert.ok(sqliteAuthSource.includes('String(req.body.username || "").trim()'));
+  assert.ok(postgresAuthSource.includes('String(rawUsername || "").trim()'));
+  assert.ok(sqliteAuthSource.includes("^[a-zA-Z0-9_]{3,30}$"));
+  assert.ok(postgresAuthSource.includes("^[a-zA-Z0-9_]{3,30}$"));
 });
 
 test("Phase 62: preflight blocks legacy case-insensitive username collisions before migration", () => {
-  assert.match(preflightSource, /caseInsensitiveDuplicateGroups/);
-  assert.match(preflightSource, /Found case-insensitive duplicate username group/);
+  assert.ok(preflightSource.includes("caseInsensitiveDuplicateGroups"));
+  assert.ok(preflightSource.includes("Found case-insensitive duplicate username group"));
 });
