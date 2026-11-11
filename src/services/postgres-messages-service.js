@@ -29,7 +29,7 @@ function createPostgresMessagesService({ db } = {}) {
     if (replyId !== null && !/^[1-9][0-9]*$/.test(replyId)) throw fail(400, "Invalid reply target.");
     if (body.length > 2000) throw fail(400, "Message must not exceed 2000 characters.");
     if (!body && !mediaPath) throw fail(400, "Write a message or attach an image/video.");
-    if (mediaPath && !/^[0-9a-f-]+\.(jpg|png|webp|gif|mp4|webm|ogg|m4a|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(mediaPath)) {
+    if (mediaPath && !/^[1-9][0-9]*$/.test(mediaPath)) {
       throw fail(400, "Invalid media file.");
     }
     if (mediaPath && !["image","video","document"].includes(mediaType)) throw fail(400, "Invalid media type.");

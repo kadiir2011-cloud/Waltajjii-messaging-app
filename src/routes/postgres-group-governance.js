@@ -1,5 +1,5 @@
 "use strict";
-const express=require("express"),jwt=require("jsonwebtoken");
+const express=require("express"),jwt=require("jsonwebtoken"),QRCode=require("qrcode");
 function createPostgresGroupGovernanceRouter({governanceService,jwtSecret,jwtImplementation=jwt,publicAppUrl=""}={}) {
  const methods=["changeRole","leave","removeMember","updateDetails","getDetails","listActivity","createInvitation","listInvitations","revokeInvitation","previewInvitation","joinByInvitation","listJoinRequests","reviewJoinRequest","listPolls","createPoll","votePoll","closePoll","listEvents","createEvent","rsvp","cancelEvent"];
  if(!governanceService||!methods.every(k=>typeof governanceService[k]==="function"))throw new TypeError("A complete PostgreSQL group governance service is required.");
@@ -8,6 +8,28 @@ function createPostgresGroupGovernanceRouter({governanceService,jwtSecret,jwtImp
  router.use((req,res,next)=>{const [scheme,token]=String(req.headers.authorization||"").split(" ");if(scheme!=="Bearer"||!token)return res.status(401).json({error:"Login required."});try{req.auth=jwtImplementation.verify(token,jwtSecret,{issuer:"waltajjii",audience:"waltajjii-users"});if(!req.auth?.userId)return res.status(401).json({error:"Invalid or expired login token."});return next();}catch{return res.status(401).json({error:"Invalid or expired login token."});}});
  const handle=fn=>async(req,res)=>{try{return await fn(req,res);}catch(e){if(Number.isInteger(e?.status)&&e.status>=400&&e.status<600)return res.status(e.status).json({error:e.message});console.error("PostgreSQL group governance request failed:",e?.message||"Unknown error");return res.status(500).json({error:"Could not complete the group request."});}};
  const groupId=req=>{if(!validId(req.params.id))throw Object.assign(new Error("Invalid group."),{status:400});return String(req.params.id);};
+ router.post("/invitation/qr",handle(async(req,res)=>{
+  const value=String(req.body?.url||"").trim();
+  if(!value||value.length>2048)return res.status(400).json({error:"A valid invitation URL is required."});
+  let parsed;
+  try{
+   parsed=new URL(value);
+   const configured=String(publicAppUrl||process.env.PUBLIC_APP_URL||"").trim();
+   const origin=configured?new URL(configured).origin:req.protocol+"://"+req.get("host");
+   const inviteToken=parsed.searchParams.get("groupInvite")||"";
+   if(!["https:","http:"].includes(parsed.protocol)||parsed.origin!==origin||
+    parsed.pathname!=="/"||!/^[A-Za-z0-9_-]{40,100}$/.test(inviteToken)){
+    return res.status(400).json({error:"Only this Waltajjii app's secure invitation links can be encoded."});
+   }
+  }catch{return res.status(400).json({error:"The invitation URL is invalid."});}
+  try{
+   const dataUrl=await QRCode.toDataURL(value,{errorCorrectionLevel:"H",width:240,margin:2});
+   return res.json({dataUrl});
+  }catch(error){
+   console.error("PostgreSQL invitation QR generation failed:",error?.message||"Unknown error");
+   return res.status(500).json({error:"The QR code could not be generated. You can still use the invitation link."});
+  }
+ }));
  router.get("/invitation/:token",handle(async(req,res)=>res.json(await governanceService.previewInvitation(req.params.token))));
  router.post("/invitation/:token/join",handle(async(req,res)=>{
   const result=await governanceService.joinByInvitation(req.params.token,req.auth.userId);

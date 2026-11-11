@@ -73,6 +73,52 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
     return { id: String(mediaId), removed: true };
   }
 
+  async function downloadForViewer(viewerId, mediaId) {
+    const id = String(mediaId ?? "");
+    if (!/^[1-9][0-9]*$/.test(id)) throw fail(400, "Invalid media reference.");
+    const row = await db.one(`
+      SELECT mo.id,mo.owner_id AS "ownerId",mo.bucket,mo.object_key AS "objectKey",
+        mo.purpose,mo.mime_type AS "mimeType",mo.file_size AS "fileSize",
+        mo.created_at AS "createdAt"
+      FROM media_objects mo
+      WHERE mo.id=$1 AND mo.deleted_at IS NULL
+        AND (
+          (mo.purpose IN ('message','group','channel') AND EXISTS (
+            SELECT 1 FROM messages m WHERE m.media_path=mo.id::text
+              AND (m.sender_id=$2 OR m.receiver_id=$2) AND m.deleted_at IS NULL
+          ))
+          OR (mo.purpose IN ('message','group','channel') AND EXISTS (
+            SELECT 1 FROM group_messages gm
+            JOIN group_members mine ON mine.group_id=gm.group_id AND mine.user_id=$2
+            WHERE gm.media_path=mo.id::text AND gm.deleted_at IS NULL
+          ))
+          OR (mo.purpose IN ('message','group','channel') AND EXISTS (
+            SELECT 1 FROM channel_messages cm
+            JOIN channel_members mine ON mine.channel_id=cm.channel_id AND mine.user_id=$2
+            WHERE cm.media_path=mo.id::text AND cm.deleted_at IS NULL
+          ))
+        )
+    `, [id, String(viewerId)]);
+    if (!row) throw fail(404, "Media not found.");
+    const { data, error } = await storage.download(row.objectKey);
+    if (error || !data) throw fail(502, "Media storage is temporarily unavailable.");
+    return { metadata: row, buffer: Buffer.from(await data.arrayBuffer()) };
+  }
+
+  async function removeById(mediaId) {
+    const id = String(mediaId ?? "");
+    if (!/^[1-9][0-9]*$/.test(id)) throw fail(400, "Invalid media reference.");
+    const row = await db.one(
+      "SELECT id,owner_id AS \"ownerId\",object_key AS \"objectKey\" FROM media_objects WHERE id=$1 AND purpose='moment' AND deleted_at IS NULL",
+      [id]
+    );
+    if (!row) throw fail(404, "Moment media not found.");
+    const { error } = await storage.remove([row.objectKey]);
+    if (error) throw fail(502, "Media storage is temporarily unavailable.");
+    await db.execute("UPDATE media_objects SET deleted_at=CURRENT_TIMESTAMP WHERE id=$1 AND purpose='moment' AND deleted_at IS NULL", [id]);
+    return { id, removed: true };
+  }
+
   async function downloadOwned(ownerId, mediaId) {
     const row = await getOwned(ownerId, mediaId);
     const { data, error } = await storage.download(row.objectKey);
@@ -80,7 +126,7 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
     return { metadata: row, buffer: Buffer.from(await data.arrayBuffer()) };
   }
 
-  return Object.freeze({ upload, getOwned, removeOwned, downloadOwned });
+  return Object.freeze({ upload, getOwned, removeOwned, removeById, downloadOwned, downloadForViewer });
 }
 
 module.exports = { createPostgresMediaStorageService, MEDIA_TYPES: TYPES, MEDIA_LIMITS: LIMITS };

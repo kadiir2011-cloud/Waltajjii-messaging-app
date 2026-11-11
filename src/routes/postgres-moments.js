@@ -1,6 +1,6 @@
 "use strict";
-const express=require("express"),jwt=require("jsonwebtoken");
-function createPostgresMomentsRouter({momentsService,jwtSecret,jwtImplementation=jwt,uploadMiddleware=(req,res,next)=>next(),storeMedia,removeMedia,readMedia}={}) {
+const express=require("express"),jwt=require("jsonwebtoken"),multer=require("multer");
+function createPostgresMomentsRouter({momentsService,jwtSecret,jwtImplementation=jwt,uploadMiddleware=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:1}}).single("media"),storeMedia,removeMedia,readMedia}={}) {
  if(!momentsService||!["cleanupExpired","listVisible","create","getVisibleMedia","deleteOwn"].every(k=>typeof momentsService[k]==="function"))throw new TypeError("A complete PostgreSQL Moments service is required.");
  const router=express.Router();
  router.use((req,res,next)=>{const [scheme,token]=String(req.headers.authorization||"").split(" ");if(scheme!=="Bearer"||!token)return res.status(401).json({error:"Login required."});try{req.auth=jwtImplementation.verify(token,jwtSecret,{issuer:"waltajjii",audience:"waltajjii-users"});if(!req.auth?.userId)return res.status(401).json({error:"Invalid or expired login token."});return next();}catch{return res.status(401).json({error:"Invalid or expired login token."});}});
@@ -14,13 +14,13 @@ function createPostgresMomentsRouter({momentsService,jwtSecret,jwtImplementation
   if(!content&&!req.file)return res.status(400).json({error:"Add text or choose a photo/video."});
   let stored=null;
   try{
-   if(req.file){if(typeof storeMedia!=="function")return res.status(503).json({error:"Moment media storage is not configured."});stored=await storeMedia(req.file);}
+   if(req.file){if(typeof storeMedia!=="function")return res.status(503).json({error:"Moment media storage is not configured."});stored=await storeMedia(req.file,req.auth.userId);}
    const result=await momentsService.create(req.auth.userId,{content,audience,mediaPath:stored?.filename,mediaType:stored?.type});
    return res.status(201).json(result);
-  }catch(e){if(stored&&removeMedia){try{await removeMedia(stored.filename);}catch(cleanupError){console.error("Moment media rollback failed:",cleanupError?.message||"Unknown error");}}throw e;}
+  }catch(e){if(stored&&removeMedia){try{await removeMedia(stored.filename,req.auth.userId);}catch(cleanupError){console.error("Moment media rollback failed:",cleanupError?.message||"Unknown error");}}throw e;}
  }));
  router.get("/media/:momentId",handle(async(req,res)=>{await cleanup();const media=await momentsService.getVisibleMedia(req.auth.userId,req.params.momentId);if(typeof readMedia!=="function")return res.status(503).json({error:"Moment media delivery is not configured."});return readMedia(media,res);}));
- router.delete("/:momentId",handle(async(req,res)=>{const deleted=await momentsService.deleteOwn(req.auth.userId,req.params.momentId);if(deleted.mediaPath&&removeMedia){try{await removeMedia(deleted.mediaPath);}catch(e){console.error("Deleted Moment media cleanup failed:",e?.message||"Unknown error");}}return res.json({message:"Moment deleted."});}));
+ router.delete("/:momentId",handle(async(req,res)=>{const deleted=await momentsService.deleteOwn(req.auth.userId,req.params.momentId);if(deleted.mediaPath&&removeMedia){try{await removeMedia(deleted.mediaPath,req.auth.userId);}catch(e){console.error("Deleted Moment media cleanup failed:",e?.message||"Unknown error");}}return res.json({message:"Moment deleted."});}));
  return router;
 }
 module.exports={createPostgresMomentsRouter};
