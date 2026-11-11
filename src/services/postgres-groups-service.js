@@ -149,7 +149,7 @@ function createPostgresGroupsService({db}={}) {
   }
   async function markDelivered(groupId,messageId,userId) {
     await requireMember(groupId,userId);
-    const message=await db.one("SELECT id,sender_id AS \"senderId\" FROM group_messages WHERE id=$1 AND group_id=$2",[messageId,groupId]);
+    const message=await db.one("SELECT id,sender_id AS \"senderId\"  ,media_path FROM group_messages WHERE id=$1 AND group_id=$2 FOR UPDATE",[messageId,groupId]);
     if(!message||String(message.senderId)===String(userId))throw fail(404,"Message not found for this recipient.");
     const count=await db.execute("UPDATE group_message_receipts SET delivered_at=COALESCE(delivered_at,CURRENT_TIMESTAMP) WHERE group_message_id=$1 AND user_id=$2 AND delivered_at IS NULL",[messageId,userId]);
     return {delivered:true,updated:count>0};
