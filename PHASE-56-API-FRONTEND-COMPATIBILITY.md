@@ -89,7 +89,7 @@ These are injected-service HTTP integration and source-contract tests. They do n
 - Complete route composition for every current frontend API path and final request/response parity checks.
 - Endpoint-level HTTP contract tests for success and all important authorization/error cases.
 - Browser E2E coverage for registration/login, profiles, direct/group/channel messages, social/feed, moments/media, calls, translation and notifications.
-- PostgreSQL event reminder worker scheduling, shutdown, retry and idempotency verification.
+- Controlled staging integration of the PostgreSQL reminder worker, including scheduler ownership, shutdown, retries, monitoring and idempotency verification.
 - Username policy reconciliation.
 - Separate migration/recovery rehearsal, durable backup/restore, security/performance and rollback validation.
 
