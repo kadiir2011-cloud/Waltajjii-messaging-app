@@ -8,8 +8,12 @@ async function request(url,user,options={}){const headers={...(options.body?{"co
 test("Phase 47: channel creation, discovery, membership and publishing over PostgreSQL",async()=>{
  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/001_initial_schema.sql"),"utf8"));
  await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/002_channel_message_interactions.sql"),"utf8"));
+ await pool.query(fs.readFileSync(path.join(__dirname,"..","migrations/postgres/003_media_objects.sql"),"utf8"));
  const suffix=Date.now();for(const username of ["p47_owner_"+suffix,"p47_member_"+suffix,"p47_guest_"+suffix])users.push(await db.one("INSERT INTO users(username,password_hash) VALUES($1,'test-hash') RETURNING id,username",[username]));
- const [owner,member,guest]=users,app=express();app.use(express.json({limit:"30kb"}));app.use("/api/channels",createPostgresChannelsRouter({channelsService:service,jwtSecret:secret}));
+ const [owner,member,guest]=users;
+ const ownerMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','image/png',128) RETURNING id",[owner.id,"phase47/"+owner.id+".png"]);
+ const memberMedia=await db.one("INSERT INTO media_objects(owner_id,bucket,object_key,purpose,mime_type,file_size) VALUES($1,'waltajjii-media',$2,'message','image/png',128) RETURNING id",[member.id,"phase47/"+member.id+".png"]);
+ const app=express();app.use(express.json({limit:"30kb"}));app.use("/api/channels",createPostgresChannelsRouter({channelsService:service,jwtSecret:secret}));
  const emitted=[];app.set("io",{in(room){return{socketsJoin(target){emitted.push({room,target});}};},to(room){return{emit(event,payload){emitted.push({room,event,payload});}};}});server=http.createServer(app);await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));base="http://127.0.0.1:"+server.address().port;
  try{
   assert.equal((await request("/api/channels",null)).status,401);
@@ -22,6 +26,8 @@ test("Phase 47: channel creation, discovery, membership and publishing over Post
   assert.equal((await request("/api/channels/"+cid+"/messages",member,{method:"POST",body:JSON.stringify({body:"Not allowed"})})).status,403);
   assert.equal((await request("/api/channels/"+cid+"/members",owner,{method:"POST",body:JSON.stringify({username:guest.username})})).status,201);
   assert.equal((await request("/api/channels/"+cid+"/members",owner,{method:"POST",body:JSON.stringify({username:guest.username})})).status,409);
+  const ownChannelMedia=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({body:"",mediaPath:String(ownerMedia.id),mediaType:"image"})});assert.equal(ownChannelMedia.status,201);
+  const foreignChannelMedia=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({body:"",mediaPath:String(memberMedia.id),mediaType:"image"})});assert.equal(foreignChannelMedia.status,400);
   const published=await request("/api/channels/"+cid+"/messages",owner,{method:"POST",body:JSON.stringify({body:"Official channel announcement"})});assert.equal(published.status,201);assert.equal(published.data.message.body,"Official channel announcement");
   assert.ok(emitted.some(e=>e.room==="channel:"+cid&&e.event==="channel:message"));
   const history=await request("/api/channels/"+cid+"/messages",guest);assert.equal(history.status,200);assert.equal(history.data.canPublish,false);assert.equal(history.data.messages.length,1);
