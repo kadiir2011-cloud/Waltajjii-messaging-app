@@ -9,6 +9,8 @@ const { createPostgresChannelsRouter } = require("../routes/postgres-channels");
 const { createPostgresSocialRouter } = require("../routes/postgres-social");
 const { createPostgresMomentsRouter } = require("../routes/postgres-moments");
 const { createPostgresPresenceRouter } = require("../routes/postgres-presence");
+const { createPostgresUploadsRouter } = require("../routes/postgres-uploads");
+const { createPostgresCallsRouter } = require("../routes/postgres-calls");
 
 /**
  * Opt-in PostgreSQL API composition for integration tests and controlled
@@ -26,7 +28,13 @@ function createPostgresApiRouter({
   publicAppUrl = "",
   momentsMedia = {},
   io = null,
-  getOnlineUserIds = () => []
+  getOnlineUserIds = () => [],
+  mediaStorage,
+  db,
+  meteredApiKey,
+  fetchImpl,
+  uploadMiddleware,
+  profileUploadMiddleware
 } = {}) {
   const required = [
     ["auth", ["register", "login", "getProfile", "updateProfile"]],
@@ -55,6 +63,8 @@ function createPostgresApiRouter({
   if (typeof getOnlineUserIds !== "function") {
     throw new TypeError("getOnlineUserIds must be a function.");
   }
+
+  if (!mediaStorage || !db) throw new TypeError("PostgreSQL media storage and database services are required.");
 
   const router = express.Router();
   router.use((req, res, next) => {
