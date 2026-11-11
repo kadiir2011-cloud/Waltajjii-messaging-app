@@ -7,6 +7,9 @@ on:
       - "src/routes/postgres-*.js"
       - "src/postgres/postgres-api-router.js"
       - "test/phase56-*.test.js"
+      - "scripts/phase57-sqlite-migration-preflight.js"
+      - "test/phase57-sqlite-migration-preflight.test.js"
+      - "PHASE-57-SQLITE-MIGRATION-READINESS.md"
       - "PHASE-56-API-FRONTEND-COMPATIBILITY.md"
       - ".github/workflows/phase56-api-frontend-regression.yml"
 permissions:
@@ -21,6 +24,10 @@ jobs:
           node-version: 22
       - name: Install locked project dependencies
         run: npm ci --ignore-scripts
+      - name: Build read-only SQLite preflight dependency
+        run: npm rebuild better-sqlite3
+      - name: Run Phase 57 SQLite migration readiness tests
+        run: node --test test/phase57-sqlite-migration-preflight.test.js
       - name: Install isolated browser-test dependency
         run: npm install --prefix /tmp/wt-playwright --no-save playwright@1.55.0
       - name: Install Chromium for browser regression
