@@ -34,7 +34,7 @@ test("PostgreSQL API composition mounts protected feature routers without switch
   const app = express();
   app.use(express.json());
   app.use("/api", createPostgresApiRouter({
-    services, jwt, jwtSecret: secret, getOnlineUserIds: () => ["101", 102], mediaStorage, db, meteredApiKey: "", momentUploadMiddleware: (req, res, next) => { req.file = { buffer: Buffer.from("moment"), mimetype: "image/png" }; next(); }
+    services, jwt, jwtSecret: secret, getOnlineUserIds: () => ["101", 102], mediaStorage, db, meteredApiKey: "", openAiApiKey: "", momentUploadMiddleware: (req, res, next) => { req.file = { buffer: Buffer.from("moment"), mimetype: "image/png" }; next(); }
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -83,6 +83,12 @@ test("PostgreSQL API composition mounts protected feature routers without switch
   });
   assert.equal(media.status, 200);
   assert.equal(await media.text(), "image");
+  const translation = await fetch(base + "/api/translation/translate", {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "Hello", sourceLanguage: "English", targetLanguage: "Amharic" })
+  });
+  assert.equal(translation.status, 503);
   const calls = await fetch(base + "/api/calls/turn-credentials", {
     headers: { Authorization: "Bearer " + token }
   });
