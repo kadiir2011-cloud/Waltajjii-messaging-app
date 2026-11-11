@@ -176,7 +176,7 @@ function createPostgresGroupsService({db}={}) {
       if(msg.mediaPath||msg.deletedAt)throw fail(400,"Only active text messages can be edited.");
       const updated=await tx.execute("UPDATE group_messages SET body=$1,edited_at=CURRENT_TIMESTAMP WHERE id=$2 AND deleted_at IS NULL",[body,messageId]);
       if(!updated)throw fail(409,"This message could not be edited.");
-      return {message:await getMessage(tx,groupId,messageId,userId)};
+      return {message:await getMessage(tx,groupId,messageId,userId),mediaPath:msg.media_path};
     });
   }
   async function deleteMessage(groupId,messageId,userId) {
