@@ -69,7 +69,7 @@ test("Phase 58: production-like database names are rejected before writes",async
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),"waltajjii-phase58-gate-"));t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
  const Database=require("better-sqlite3"),sourcePath=path.join(temp,"source.db"),source=new Database(sourcePath);source.exec("CREATE TABLE users(id INTEGER PRIMARY KEY,username TEXT,password_hash TEXT)");source.close();
  const {runMigrationRehearsal}=require("../scripts/phase58-postgres-migration-rehearsal");
- const fakePool={connect:async()=>({query:async()=>({rows:[{database_name:"waltajjii_production"}]}),release(){}})};
+ const fakePool={query:async()=>({rows:[]}),connect:async()=>({query:async()=>({rows:[{database_name:"waltajjii_production"}]}),release(){}})};
  await assert.rejects(runMigrationRehearsal({sqlitePath:sourcePath,pool:fakePool,allowDisposableTarget:true}),/database name must clearly identify/);
 });
 test.after(async()=>{await pool.end();});
