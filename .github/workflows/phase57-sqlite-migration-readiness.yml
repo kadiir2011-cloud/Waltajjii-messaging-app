@@ -1,0 +1,24 @@
+name: Phase 57 SQLite migration readiness preflight
+on:
+  pull_request:
+    paths:
+      - "scripts/phase57-sqlite-migration-preflight.js"
+      - "test/phase57-sqlite-migration-preflight.test.js"
+      - "PHASE-57-SQLITE-MIGRATION-READINESS.md"
+      - "package.json"
+      - ".github/workflows/phase57-sqlite-migration-readiness.yml"
+permissions:
+  contents: read
+jobs:
+  sqlite-preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run read-only migration readiness tests
+        run: node --test test/phase57-sqlite-migration-preflight.test.js
