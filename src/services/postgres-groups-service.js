@@ -182,7 +182,7 @@ function createPostgresGroupsService({db}={}) {
   async function deleteMessage(groupId,messageId,userId) {
     return db.withTransaction(async tx=>{
       const me=await requireMember(groupId,userId,tx);
-      const msg=await tx.one("SELECT sender_id AS \"senderId\" FROM group_messages WHERE id=$1 AND group_id=$2",[messageId,groupId]);
+      const msg=await tx.one("SELECT sender_id AS \"senderId\" ,media_path FROM group_messages WHERE id=$1 AND group_id=$2 FOR UPDATE",[messageId,groupId]);
       if(!msg)throw fail(404,"Message not found.");
       if(String(msg.senderId)!==String(userId)&&me.role!=="admin")throw fail(403,"Only the sender or a group admin can delete this message.");
       await tx.execute("UPDATE group_messages SET body='This message was deleted',media_path=NULL,media_type=NULL,deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP) WHERE id=$1",[messageId]);
