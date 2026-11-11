@@ -107,10 +107,10 @@ function createPostgresApiRouter({
       return { filename: String(stored.id), type: mime.startsWith("video/") ? "video" : "image" };
     },
     removeMedia: async (mediaId, ownerId) => ownerId
-      ? mediaStorage.removeOwned(ownerId, mediaId)
+      ? mediaStorage.removeOwned(ownerId, mediaId, "moment")
       : mediaStorage.removeById(mediaId),
     readMedia: async (media, res) => {
-      const result = await mediaStorage.downloadOwned(media.ownerId, media.mediaPath);
+      const result = await mediaStorage.downloadOwned(media.ownerId, media.mediaPath, "moment");
       res.setHeader("Content-Type", result.metadata.mimeType || "application/octet-stream");
       res.setHeader("Content-Length", String(result.buffer.length));
       res.setHeader("X-Content-Type-Options", "nosniff");
