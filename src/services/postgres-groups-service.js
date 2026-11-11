@@ -126,7 +126,7 @@ function createPostgresGroupsService({db}={}) {
       const me=await requireMember(groupId,senderId,tx);
       if(mediaPath){
         const ownedMedia=await tx.one(
-          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose IN ('message','group') AND deleted_at IS NULL",
+          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose IN ('message','group') AND deleted_at IS NULL FOR UPDATE",
           [mediaPath,String(senderId)]
         );
         if(!ownedMedia)throw fail(400,"This media file is unavailable or does not belong to your account.");
@@ -163,7 +163,7 @@ function createPostgresGroupsService({db}={}) {
       const existing=await tx.one("SELECT 1 FROM group_message_reactions WHERE group_message_id=$1 AND user_id=$2 AND emoji=$3",[messageId,userId,emoji]);
       if(existing)await tx.execute("DELETE FROM group_message_reactions WHERE group_message_id=$1 AND user_id=$2 AND emoji=$3",[messageId,userId,emoji]);
       else await tx.execute("INSERT INTO group_message_reactions(group_message_id,user_id,emoji) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[messageId,userId,emoji]);
-      return {message:await getMessage(tx,groupId,messageId,userId)};
+      return {message:await getMessage(tx,groupId,messageId,userId),mediaPath:msg.mediaPath};
     });
   }
   async function editMessage(groupId,messageId,userId,body) {
