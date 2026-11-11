@@ -68,7 +68,7 @@ The PostgreSQL group governance router now supports `POST /api/groups/invitation
 1. Translation provider configuration must be supplied securely in the PostgreSQL runtime; no API key is stored in source or returned to the browser.
 3. Complete endpoint-by-endpoint response-shape, validation, forbidden/not-found and provider-failure parity tests remain necessary.
 4. Socket event names/payloads must be verified against every browser listener and all API mutations.
-5. Group-event reminder delivery still needs scheduled worker integration, shutdown/retry behavior and idempotency tests.
+5. The opt-in PostgreSQL reminder worker now has interval lifecycle, overlap protection and graceful shutdown; it is not started by the production server. It still needs controlled staging scheduling/retry/monitoring verification before cutover.
 6. SQLite exact-username login and PostgreSQL case-insensitive login behavior must be reconciled before cutover.
 7. Browser E2E regression coverage is still outstanding.
 7. Media lifecycle cleanup must cover deleted/expired message attachments and orphaned objects without deleting files still referenced by forwarded messages.
@@ -79,6 +79,7 @@ The PostgreSQL group governance router now supports `POST /api/groups/invitation
 - `test/phase56-postgres-api-composition.test.js`: HTTP-level route composition, auth protection, group invitation QR, media response and missing TURN configuration.
 - `test/phase56-postgres-media-call-routes.test.js`: upload response compatibility, authenticated media access, profile-picture upload, TURN credential response and safe missing-configuration behavior.
 - `test/phase56-postgres-translation.test.js`: authenticated translation, language validation, provider request safety and missing-key behavior.
+- `test/phase56-postgres-reminder-worker.test.js`: reminder worker overlap protection, idempotent start and graceful stop.
 
 These are injected-service HTTP integration and source-contract tests. They do not prove full Supabase integration, complete API parity or browser E2E behavior.
 
