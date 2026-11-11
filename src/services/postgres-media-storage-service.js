@@ -166,7 +166,7 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
     const claimed = await db.withTransaction(tx => tx.many(`
       WITH candidates AS (
         SELECT media_id FROM media_storage_cleanup
-        WHERE claimed_at IS NULL
+        WHERE claimed_at IS NULL OR claimed_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes'
         ORDER BY created_at,media_id
         FOR UPDATE SKIP LOCKED
         LIMIT $1
