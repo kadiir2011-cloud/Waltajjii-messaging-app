@@ -22,4 +22,4 @@ jobs:
       - name: Install locked project dependencies
         run: npm ci --ignore-scripts
       - name: Run Phase 56 API and frontend regression tests
-        run: node --test test/phase56-api-frontend-contract.test.js test/phase56-postgres-api-composition.test.js
+        run: node --test test/phase56-api-frontend-contract.test.js test/phase56-postgres-api-composition.test.js test/phase56-postgres-media-call-routes.test.js
