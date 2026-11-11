@@ -35,7 +35,8 @@ function createPostgresApiRouter({
   meteredApiKey,
   fetchImpl,
   uploadMiddleware,
-  profileUploadMiddleware
+  profileUploadMiddleware,
+  momentUploadMiddleware
 } = {}) {
   const required = [
     ["auth", ["register", "login", "getProfile", "updateProfile"]],
@@ -65,7 +66,7 @@ function createPostgresApiRouter({
     throw new TypeError("getOnlineUserIds must be a function.");
   }
 
-  if (!mediaStorage || !db) throw new TypeError("PostgreSQL media storage and database services are required.");
+  if (!mediaStorage || !["upload", "removeOwned", "removeById", "downloadOwned", "downloadForViewer"].every(k => typeof mediaStorage[k] === "function") || !db) throw new TypeError("Complete PostgreSQL media storage and database services are required.");
 
   const router = express.Router();
   router.use((req, res, next) => {
@@ -93,9 +94,27 @@ function createPostgresApiRouter({
   router.use("/social", createPostgresSocialRouter({
     socialService: services.social, jwtSecret, jwtImplementation: jwt
   }));
+  const durableMomentMedia = {
+    uploadMiddleware: momentUploadMiddleware,
+    storeMedia: async (file, ownerId) => {
+      const stored = await mediaStorage.upload(ownerId, file, "moment");
+      const mime = String(file.mimetype || "").split(";")[0].toLowerCase();
+      return { filename: String(stored.id), type: mime.startsWith("video/") ? "video" : "image" };
+    },
+    removeMedia: async (mediaId, ownerId) => ownerId
+      ? mediaStorage.removeOwned(ownerId, mediaId)
+      : mediaStorage.removeById(mediaId),
+    readMedia: async (media, res) => {
+      const result = await mediaStorage.downloadOwned(media.ownerId, media.mediaPath);
+      res.setHeader("Content-Type", result.metadata.mimeType || "application/octet-stream");
+      res.setHeader("Content-Length", String(result.buffer.length));
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.send(result.buffer);
+    }
+  };
   router.use("/moments", createPostgresMomentsRouter({
     momentsService: services.moments, jwtSecret, jwtImplementation: jwt,
-    ...momentsMedia
+    ...durableMomentMedia, ...momentsMedia
   }));
   router.use("/presence", createPostgresPresenceRouter({
     realtimeService: services.realtime, jwt, jwtSecret
