@@ -102,6 +102,7 @@ test("desktop browser: login, profile loads, select recipient and send a direct 
   await page.locator('#login-form button[type="submit"]').click();
 
   await assert.doesNotReject(() => page.locator("#chat-panel").waitFor({ state: "visible" }));
+  await page.locator('a[href="#wt-communication-section"]').click();
   await page.waitForFunction(() => Array.from(document.querySelector("#recipient")?.options || []).some(option => option.value === "bob"));
   await page.locator("#recipient").selectOption("bob");
   await page.locator("#message-input").fill("Hello from browser test");
