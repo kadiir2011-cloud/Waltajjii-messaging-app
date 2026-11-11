@@ -23,7 +23,7 @@ All PRs listed below were observed open and in draft state at the time of this r
 - PR #15 (forward/delete) and PR #17 (Phase 15A rebuild) are alternative branches from Phase 14 addressing overlapping functionality. Review their diffs and retain one coherent implementation; do not merge both blindly.
 - PR #16 is a temporary protected SQLite backup-export change. Treat it as a security-sensitive utility, not an ordinary product feature. Review access control, output protection, retention and removal/disablement before deciding whether it belongs in production.
 - PRs #18–#28 continue the product feature chain.
-- PR #30–#34 continue the later profile, presence, reminders and language work. PR numbering gaps should be checked in GitHub before deciding whether any omitted work is required.
+- PR #29 (Phase 27 group events) is closed as merged into the Phase 29 feature branch, not directly into `main`; confirm its event/RSVP changes are present in the eventual integrated product branch. PRs #30–#34 continue the profile, presence, reminders and language work.
 
 ### B. PostgreSQL migration stack
 
@@ -47,7 +47,7 @@ The newer migration work is a dependency stack, not a set of independent PRs:
 ### Gate 0 — Repository consolidation and code review
 
 - Review PRs #1–#62, including security-sensitive backup/export changes.
-- Resolve the Phase 7 sibling branch (#8/#9), Phase 14 alternatives (#15/#17), and Phase 33 sibling audit (#37/#38).
+- Combine Phase 7 siblings (#8/#9) after a same-file conflict review; select/rebuild one coherent Phase 15 forwarding implementation (#15 versus #17), preserve Phase 16 deletion (#18) on the chosen base, review PR #16 separately as a sensitive backup utility, and use PR #38 as canonical rather than merging duplicate PR #37.
 - Check all open PRs for stale bases, conflicts, missing CI, unreviewed secrets, generated files and unintended changes.
 - Confirm the final integration branch contains the intended user-facing features without duplicate routes or competing implementations.
 - Keep all PRs draft until their review and required checks are complete.
@@ -144,3 +144,37 @@ This document does not grant approval to perform any of these production actions
 The Phase 58 CI result is a successful controlled fixture rehearsal, not a migration of the user's actual database. The actual SQLite data, actual Supabase Storage objects, integrated PostgreSQL runtime and staging rollback have not yet been verified.
 
 **Next safest action:** complete Gate 0 by reconciling the outstanding PR stack and sibling/alternative branches, then prepare the protected actual-database backup and read-only Phase 57 audit. Do not change the Render production service or live Supabase project during this review.
+
+
+## Gate 0 — verified repository audit (11 November 2026)
+
+This section records a live GitHub metadata and diff audit. It is a repository review only; no branch was merged, no PR was closed, and no deployment or database action was performed.
+
+### Verified branch relationships
+
+| Workstream | Verified GitHub relationship | Gate 0 decision |
+|---|---|---|
+| PRs #1–#7 | Sequential feature chain from `main` through profile, social, channels, reliability, Moments, voice and personalization | Preserve the chain; review the complete diff stack and test on isolated staging |
+| PRs #8 and #9 | Both branch from the exact Phase 7 commit; both change `public/app.js` and `public/index.html` | Sibling integration required; combine carefully and rerun browser/mobile tests |
+| PRs #10–#14 | Sequentially continue from the Phase 9 navigation lineage | Keep in sequence |
+| PRs #15 and #17 | Both branch from the exact Phase 14 commit and diverge; both modify `public/app.js`, `src/db.js`, and `src/routes/messages.js`; PR #17 additionally changes `src/server.js` | Do not merge both. Review behavior and migrations, select one forwarding implementation |
+| PR #18 | Based on PR #17's `waltajjii-phase15-rebuild` head | Preserve deletion work only on the selected/reconciled Phase 15 base |
+| PR #16 | Separate branch from Phase 14 for temporary protected SQLite backup export | Security-sensitive standalone review; do not include automatically in the public application |
+| PR #19–#28 | Sequential feature stack after PR #18 | Preserve sequence; check cumulative frontend and SQLite migration compatibility |
+| PR #29 | Closed/merged; title Phase 27 group events; target branch is the Phase 29 feature branch, not `main` | Confirm its changes are retained in the product integration lineage |
+| PR #30–#34 | Sequential Phase 28–32 profile, live presence, reminders and language work | Preserve sequence; verify PR #29's merged content is included |
+| PR #35–#36 | Sequential production-readiness audit and PostgreSQL adapter foundation | Preserve sequence |
+| PR #37 and #38 | Same five changed paths and 416 additions; compare shows PR #38 is one commit ahead, differing only in the Phase 34 workflow branch filters | PR #38 is canonical; do not separately merge duplicate PR #37 |
+| PR #39–#62 | Continuous PostgreSQL stack from PR #38 through Phase 58; each child base SHA matches the preceding branch head | Preserve exact dependency order and rerun CI after integration batches |
+| PR #63 | This planning PR, based on PR #62 | Documentation only |
+
+### Additional checks and outstanding Gate 0 evidence
+
+- The complete open-PR inventory was retrieved from GitHub. PR #29 is the notable closed/merged exception; it was merged into a feature branch, not `main`.
+- The Phase 15 comparison confirms that PR #15 and PR #17 are divergent histories, not a simple later commit replacing an earlier one.
+- The Phase 33 comparison confirms that PR #38 contains the PR #37 commit and one additional workflow correction; the current PR #39 base is PR #38.
+- PR metadata showing `mergeable: true` is not a substitute for a full integration test, and a successful CI run on a child branch is not approval to merge.
+- Still required before Gate 0 exit: inspect full diffs and current CI for every retained PR at its current head SHA; verify no secrets or unsafe debug endpoints; inspect SQLite migration idempotency/order; test combined sibling feature branches; resolve any stale workflow branch filters; and produce a green integrated regression run.
+- No changes to production `main`, Render, Supabase, or the live application database are included.
+
+**Gate 0 status: IN PROGRESS — dependency map and major branch conflicts verified; full diff/security/CI review and consolidated integration branch validation remain.**
