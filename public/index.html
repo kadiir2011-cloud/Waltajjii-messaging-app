@@ -499,6 +499,12 @@
     body[data-wt-wallpaper="sky"] #messages { background:linear-gradient(135deg,#e8f2ff,#f4f8ff); }
     body[data-wt-wallpaper="warm"] #messages { background:linear-gradient(135deg,#fff3e6,#fff9f0); }
     body[data-wt-theme="dark"][data-wt-wallpaper="soft"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="sky"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="warm"] #messages { background:#121e27; }
+    .low-data-setting { grid-column:1/-1; padding:12px; border:1px solid var(--wt-line); border-radius:12px; background:var(--wt-soft,#f7fafb); }
+    .low-data-setting label { display:flex; align-items:center; gap:9px; cursor:pointer; }
+    .low-data-setting input { width:18px; min-height:18px; margin:0; accent-color:var(--wt-teal); }
+    .low-data-setting .profile-help { margin:6px 0 0 27px; }
+    .media-load-button { display:block; margin:8px 0; }
+    body[data-wt-low-data="true"] *, body[data-wt-low-data="true"] *::before, body[data-wt-low-data="true"] *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
     @media(max-width:560px) { .personalization-grid { grid-template-columns:1fr; } }
 
     /* Phase 10: profile-first navigation and click-to-open workspace */
@@ -788,6 +794,7 @@
           <div><label for="wt-theme">Appearance</label><select id="wt-theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">Use device setting</option></select></div>
           <div><label for="wt-accent">Accent colour</label><select id="wt-accent"><option value="teal">Waltajjii teal</option><option value="blue">Ocean blue</option><option value="violet">Violet</option><option value="rose">Rose</option><option value="green">Forest green</option></select></div>
           <div><label for="wt-wallpaper">Chat background</label><select id="wt-wallpaper"><option value="plain">Plain</option><option value="soft">Soft mint</option><option value="sky">Sky</option><option value="warm">Warm sand</option></select></div>
+          <div class="low-data-setting"><label><input id="wt-low-data" type="checkbox"> Enable Low-Bandwidth Mode</label><p class="profile-help">Images, videos, voice messages and documents load only when you choose to open them.</p></div>
         </div>
         <p id="wt-preferences-status" class="profile-help" role="status" aria-live="polite">Your choices are saved automatically on this device.</p>
       </section>
