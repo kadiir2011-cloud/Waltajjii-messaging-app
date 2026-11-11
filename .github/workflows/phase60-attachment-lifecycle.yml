@@ -44,5 +44,6 @@ jobs:
           node --check src/services/postgres-groups-service.js
           node --check src/services/postgres-channels-service.js
           node --check src/postgres/postgres-api-router.js
+          node --check src/workers/postgres-media-cleanup-worker.js
       - name: Run PostgreSQL attachment lifecycle integration tests
-        run: node --test test/phase60-attachment-lifecycle.test.js
+        run: node --test test/phase60-attachment-lifecycle.test.js test/phase60-media-cleanup-worker.test.js
