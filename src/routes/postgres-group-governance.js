@@ -1,5 +1,5 @@
 "use strict";
-const express=require("express"),jwt=require("jsonwebtoken");
+const express=require("express"),jwt=require("jsonwebtoken"),QRCode=require("qrcode");
 function createPostgresGroupGovernanceRouter({governanceService,jwtSecret,jwtImplementation=jwt,publicAppUrl=""}={}) {
  const methods=["changeRole","leave","removeMember","updateDetails","getDetails","listActivity","createInvitation","listInvitations","revokeInvitation","previewInvitation","joinByInvitation","listJoinRequests","reviewJoinRequest","listPolls","createPoll","votePoll","closePoll","listEvents","createEvent","rsvp","cancelEvent"];
  if(!governanceService||!methods.every(k=>typeof governanceService[k]==="function"))throw new TypeError("A complete PostgreSQL group governance service is required.");
