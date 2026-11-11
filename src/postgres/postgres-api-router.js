@@ -71,7 +71,7 @@ function createPostgresApiRouter({
     throw new TypeError("getOnlineUserIds must be a function.");
   }
 
-  if (!mediaStorage || !["upload", "removeOwned", "removeById", "downloadOwned", "downloadForViewer"].every(k => typeof mediaStorage[k] === "function") || !db) throw new TypeError("Complete PostgreSQL media storage and database services are required.");
+  if (!mediaStorage || !["upload", "removeOwned", "removeById", "downloadOwned", "downloadForViewer", "removeIfUnreferenced", "processCleanupQueue"].every(k => typeof mediaStorage[k] === "function") || !db) throw new TypeError("Complete PostgreSQL media storage and database services are required.");
 
   const router = express.Router();
   router.use((req, res, next) => {
