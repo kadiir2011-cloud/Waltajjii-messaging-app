@@ -84,17 +84,17 @@ function createPostgresApiRouter({
     authService: services.auth, jwt, jwtSecret, limiter
   }));
   router.use("/messages", createPostgresMessagesRouter({
-    messagesService: services.messages, jwtSecret, jwtImplementation: jwt
+    messagesService: services.messages, mediaStorage, jwtSecret, jwtImplementation: jwt
   }));
   router.use("/groups", createPostgresGroupsRouter({
-    groupsService: services.groups, jwtSecret, jwtImplementation: jwt
+    groupsService: services.groups, mediaStorage, jwtSecret, jwtImplementation: jwt
   }));
   router.use("/groups", createPostgresGroupGovernanceRouter({
     governanceService: services.governance, jwtSecret,
     jwtImplementation: jwt, publicAppUrl
   }));
   router.use("/channels", createPostgresChannelsRouter({
-    channelsService: services.channels, jwtSecret, jwtImplementation: jwt
+    channelsService: services.channels, mediaStorage, jwtSecret, jwtImplementation: jwt
   }));
   router.use("/social", createPostgresSocialRouter({
     socialService: services.social, jwtSecret, jwtImplementation: jwt
@@ -107,10 +107,10 @@ function createPostgresApiRouter({
       return { filename: String(stored.id), type: mime.startsWith("video/") ? "video" : "image" };
     },
     removeMedia: async (mediaId, ownerId) => ownerId
-      ? mediaStorage.removeOwned(ownerId, mediaId)
+      ? mediaStorage.removeOwned(ownerId, mediaId, "moment")
       : mediaStorage.removeById(mediaId),
     readMedia: async (media, res) => {
-      const result = await mediaStorage.downloadOwned(media.ownerId, media.mediaPath);
+      const result = await mediaStorage.downloadOwned(media.ownerId, media.mediaPath, "moment");
       res.setHeader("Content-Type", result.metadata.mimeType || "application/octet-stream");
       res.setHeader("Content-Length", String(result.buffer.length));
       res.setHeader("X-Content-Type-Options", "nosniff");

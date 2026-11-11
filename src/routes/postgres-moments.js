@@ -14,7 +14,12 @@ function createPostgresMomentsRouter({momentsService,jwtSecret,jwtImplementation
   if(!content&&!req.file)return res.status(400).json({error:"Add text or choose a photo/video."});
   let stored=null;
   try{
-   if(req.file){if(typeof storeMedia!=="function")return res.status(503).json({error:"Moment media storage is not configured."});stored=await storeMedia(req.file,req.auth.userId);}
+   if(req.file){
+    const mime=String(req.file.mimetype||"").split(";")[0].trim().toLowerCase();
+    if(!["image/jpeg","image/png","image/webp","image/gif","video/mp4","video/webm"].includes(mime))return res.status(415).json({error:"Moments support JPG, PNG, WebP, GIF, MP4 and WebM files only."});
+    if(typeof storeMedia!=="function")return res.status(503).json({error:"Moment media storage is not configured."});
+    stored=await storeMedia(req.file,req.auth.userId);
+   }
    const result=await momentsService.create(req.auth.userId,{content,audience,mediaPath:stored?.filename,mediaType:stored?.type});
    return res.status(201).json(result);
   }catch(e){if(stored&&removeMedia){try{await removeMedia(stored.filename,req.auth.userId);}catch(cleanupError){console.error("Moment media rollback failed:",cleanupError?.message||"Unknown error");}}throw e;}

@@ -1,0 +1,49 @@
+name: Phase 60 attachment lifecycle integration
+
+on:
+  pull_request:
+    branches: [main, waltajjii-gate0-integration, waltajjii-phase59-moment-media-ownership]
+  push:
+    branches: [waltajjii-phase60-attachment-lifecycle]
+
+permissions:
+  contents: read
+
+jobs:
+  attachment-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check attachment lifecycle syntax
+        run: |
+          node --check src/services/postgres-media-storage-service.js
+          node --check src/services/postgres-messages-service.js
+          node --check src/services/postgres-groups-service.js
+          node --check src/services/postgres-channels-service.js
+          node --check src/postgres/postgres-api-router.js
+          node --check src/workers/postgres-media-cleanup-worker.js
+      - name: Run PostgreSQL attachment lifecycle integration tests
+        run: node --test test/phase60-attachment-lifecycle.test.js test/phase60-media-cleanup-worker.test.js

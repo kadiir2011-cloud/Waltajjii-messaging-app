@@ -126,7 +126,7 @@ function createPostgresGroupsService({db}={}) {
       const me=await requireMember(groupId,senderId,tx);
       if(mediaPath){
         const ownedMedia=await tx.one(
-          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose IN ('message','group') AND deleted_at IS NULL",
+          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose IN ('message','group') AND deleted_at IS NULL FOR UPDATE",
           [mediaPath,String(senderId)]
         );
         if(!ownedMedia)throw fail(400,"This media file is unavailable or does not belong to your account.");
@@ -149,7 +149,7 @@ function createPostgresGroupsService({db}={}) {
   }
   async function markDelivered(groupId,messageId,userId) {
     await requireMember(groupId,userId);
-    const message=await db.one("SELECT id,sender_id AS \"senderId\" FROM group_messages WHERE id=$1 AND group_id=$2",[messageId,groupId]);
+    const message=await db.one("SELECT id,sender_id AS \"senderId\"  ,media_path FROM group_messages WHERE id=$1 AND group_id=$2 FOR UPDATE",[messageId,groupId]);
     if(!message||String(message.senderId)===String(userId))throw fail(404,"Message not found for this recipient.");
     const count=await db.execute("UPDATE group_message_receipts SET delivered_at=COALESCE(delivered_at,CURRENT_TIMESTAMP) WHERE group_message_id=$1 AND user_id=$2 AND delivered_at IS NULL",[messageId,userId]);
     return {delivered:true,updated:count>0};
@@ -182,12 +182,12 @@ function createPostgresGroupsService({db}={}) {
   async function deleteMessage(groupId,messageId,userId) {
     return db.withTransaction(async tx=>{
       const me=await requireMember(groupId,userId,tx);
-      const msg=await tx.one("SELECT sender_id AS \"senderId\" FROM group_messages WHERE id=$1 AND group_id=$2",[messageId,groupId]);
+      const msg=await tx.one("SELECT sender_id AS \"senderId\" ,media_path FROM group_messages WHERE id=$1 AND group_id=$2 FOR UPDATE",[messageId,groupId]);
       if(!msg)throw fail(404,"Message not found.");
       if(String(msg.senderId)!==String(userId)&&me.role!=="admin")throw fail(403,"Only the sender or a group admin can delete this message.");
       await tx.execute("UPDATE group_messages SET body='This message was deleted',media_path=NULL,media_type=NULL,deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP) WHERE id=$1",[messageId]);
       await tx.execute("DELETE FROM group_message_reactions WHERE group_message_id=$1",[messageId]);
-      return {message:await getMessage(tx,groupId,messageId,userId)};
+      return {message:await getMessage(tx,groupId,messageId,userId),mediaPath:msg.media_path};
     });
   }
   async function pinMessage(groupId,messageId,userId,pin=true) {
