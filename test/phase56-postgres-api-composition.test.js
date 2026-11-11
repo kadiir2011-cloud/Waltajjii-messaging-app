@@ -10,7 +10,7 @@ const { createPostgresApiRouter } = require("../src/postgres/postgres-api-router
 const secret = "phase56-integration-secret-with-more-than-32-characters";
 const token = jwt.sign({ userId: "101", username: "phase56-user" }, secret, { issuer: "waltajjii", audience: "waltajjii-users" });
 const service = names => Object.fromEntries(names.map(name => [name, async () => ({})]));
-const mediaStorage = { upload: async () => ({ id: "777" }), removeOwned: async () => ({ removed: true }), downloadOwned: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }), downloadForViewer: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }) };
+const mediaStorage = { upload: async () => ({ id: "777" }), removeOwned: async () => ({ removed: true }), removeById: async () => ({ removed: true }), downloadOwned: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }), downloadForViewer: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }) };
 const db = { one: async () => null, execute: async () => 1 };
 const services = {
   auth: service(["register", "login", "getProfile", "updateProfile"]),
