@@ -19,7 +19,7 @@ const LIMITS = Object.freeze({ profile: 2 * 1024 * 1024, message: 10 * 1024 * 10
 const PURPOSES = new Set(Object.keys(LIMITS));
 
 function createPostgresMediaStorageService({ db, storageClient, bucket = "waltajjii-media", idFactory = crypto.randomUUID } = {}) {
-  if (!db || typeof db.one !== "function" || typeof db.execute !== "function" || typeof db.withTransaction !== "function" || typeof db.many !== "function") throw new TypeError("A PostgreSQL adapter is required.");
+  if (!db || typeof db.one !== "function" || typeof db.execute !== "function") throw new TypeError("A PostgreSQL adapter is required.");
   if (!storageClient || typeof storageClient.from !== "function") throw new TypeError("A private Supabase Storage client is required.");
   if (!/^[a-z0-9][a-z0-9_-]{1,62}$/i.test(String(bucket))) throw new TypeError("A valid storage bucket is required.");
 
@@ -130,6 +130,7 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
   // Detachments enqueue storage deletion only after every live application reference is gone.
   // The media row lock serializes this check against message creation and forwarding.
   async function removeIfUnreferenced(mediaId) {
+    if (typeof db.withTransaction !== "function" || typeof db.many !== "function") throw new TypeError("A transactional PostgreSQL adapter is required for media cleanup.");
     const id = String(mediaId ?? "");
     if (!/^[1-9][0-9]*$/.test(id)) throw fail(400, "Invalid media reference.");
     const result = await db.withTransaction(async tx => {
@@ -162,6 +163,7 @@ function createPostgresMediaStorageService({ db, storageClient, bucket = "waltaj
   }
 
   async function processCleanupQueue(limit = 25) {
+    if (typeof db.withTransaction !== "function" || typeof db.many !== "function") throw new TypeError("A transactional PostgreSQL adapter is required for media cleanup.");
     const batch = Math.max(1, Math.min(100, Number.isInteger(limit) ? limit : 25));
     const claimed = await db.withTransaction(tx => tx.many(`
       WITH candidates AS (
