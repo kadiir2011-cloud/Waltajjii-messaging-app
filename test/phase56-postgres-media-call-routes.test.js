@@ -41,7 +41,7 @@ test("PostgreSQL uploads preserve frontend upload response and authorize media r
   const base = await listen(app, t);
   const headers = { Authorization: "Bearer " + token };
 
-  const unauthorized = await fetch(base + "/777");
+  const unauthorized = await fetch(base + "/api/uploads/777");
   assert.equal(unauthorized.status, 401);
 
   const uploaded = await fetch(base + "/", { method: "POST", headers });
@@ -50,13 +50,13 @@ test("PostgreSQL uploads preserve frontend upload response and authorize media r
   assert.equal(calls[0][1], "101");
   assert.equal(calls[0][3], "message");
 
-  const retrieved = await fetch(base + "/777", { headers });
+  const retrieved = await fetch(base + "/api/uploads/777", { headers });
   assert.equal(retrieved.status, 200);
   assert.equal(retrieved.headers.get("content-type"), "image/png");
   assert.equal(await retrieved.text(), "media");
   assert.deepEqual(calls.find(x => x[0] === "downloadForViewer"), ["downloadForViewer", "101", "777"]);
 
-  const avatar = await fetch(base + "/profile-picture", { method: "POST", headers });
+  const avatar = await fetch(base + "/api/uploads/profile-picture", { method: "POST", headers });
   assert.equal(avatar.status, 200);
   assert.equal((await avatar.json()).avatarPath, "777");
 });
@@ -73,7 +73,7 @@ test("PostgreSQL TURN route keeps provider credentials server-side and returns I
     }
   }));
   const base = await listen(app, t);
-  const response = await fetch(base + "/turn-credentials", { headers: { Authorization: "Bearer " + token } });
+  const response = await fetch(base + "/api/calls/turn-credentials", { headers: { Authorization: "Bearer " + token } });
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).iceServers, [{ urls: ["turn:example.test"], username: "temporary" }]);
   assert.ok(requestedUrl.includes("apiKey=private%20key%26value"));
@@ -83,7 +83,7 @@ test("PostgreSQL TURN route fails safely when provider credentials are absent", 
   const app = express();
   app.use("/api/calls", createPostgresCallsRouter({ jwtSecret: secret, apiKey: "" }));
   const base = await listen(app, t);
-  const response = await fetch(base + "/turn-credentials", { headers: { Authorization: "Bearer " + token } });
+  const response = await fetch(base + "/api/calls/turn-credentials", { headers: { Authorization: "Bearer " + token } });
   assert.equal(response.status, 503);
   assert.doesNotMatch(await response.text(), /apiKey|private key/i);
 });
