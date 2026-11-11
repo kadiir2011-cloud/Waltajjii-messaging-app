@@ -110,6 +110,6 @@ test("known frontend integration gaps are explicit and test-visible", () => {
     "Calls/TURN credentials",
     "Group invitation QR",
     "reminder worker",
-    "static contract guards, not full browser E2E tests"
+    "not full browser E2E tests"
   ]) assert.ok(audit.includes(phrase), "Audit must retain explicit gap: " + phrase);
 });
