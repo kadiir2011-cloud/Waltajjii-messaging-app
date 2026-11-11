@@ -1,0 +1,44 @@
+name: Phase 63 final API and browser security audit
+on:
+  pull_request:
+    paths:
+      - "src/server.js"
+      - "src/security/origin-policy.js"
+      - "src/routes/uploads.js"
+      - "public/app.js"
+      - "test/phase63-final-security-audit.test.js"
+      - "test/phase56-browser-e2e.test.js"
+      - "test/phase56-api-frontend-contract.test.js"
+      - "PHASE-63-FINAL-SECURITY-AUDIT.md"
+      - ".github/workflows/phase63-final-security-audit.yml"
+permissions:
+  contents: read
+jobs:
+  security-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Build the SQLite native dependency for isolated preflight tests
+        run: npm rebuild better-sqlite3
+      - name: Check server and frontend syntax
+        run: |
+          node --check src/server.js
+          node --check src/security/origin-policy.js
+          node --check src/routes/uploads.js
+          node --check public/app.js
+      - name: Run final security, migration-preflight and API contract tests
+        run: node --test test/phase63-final-security-audit.test.js test/phase57-sqlite-migration-preflight.test.js test/phase56-api-frontend-contract.test.js
+      - name: Install isolated Playwright test dependency
+        run: npm install --prefix /tmp/wt-playwright --no-save playwright@1.55.0
+      - name: Install Chromium
+        run: /tmp/wt-playwright/node_modules/.bin/playwright install chromium
+      - name: Run desktop and mobile browser smoke tests
+        timeout-minutes: 5
+        run: NODE_PATH=/tmp/wt-playwright/node_modules node --test --test-timeout=90000 test/phase56-browser-e2e.test.js
