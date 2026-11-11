@@ -2,67 +2,79 @@
 
 ## Scope and safety
 
-This phase establishes an evidence-based compatibility baseline between the existing browser client, SQLite production API, and isolated PostgreSQL route/service modules. It does **not** switch production runtime or claim full feature parity.
+Phase 56 establishes compatibility between the existing browser client, SQLite production API, and the isolated PostgreSQL services/routes. The PostgreSQL API remains opt-in and is **not** mounted by `src/server.js`.
 
 - Base: `waltajjii-postgres-realtime-integration-phase55`
 - Work branch: `waltajjii-phase56-api-frontend-regression`
-- PostgreSQL API composition is now available as an **opt-in** injected router for controlled staging/integration tests. It is not mounted in `src/server.js`.
-- CI tests use only injected fake services and an in-process HTTP server; no live Supabase or Render resources are accessed.
+- Tests use injected fake services, an in-process HTTP server, and local QR generation.
+- No live Supabase, Render, production database, or user data is accessed by CI.
 
-## Findings
+## Current production status
 
-### 1. Current production API remains SQLite
+The live server still mounts the SQLite routers for auth, messages, groups, channels, uploads, social, moments and calls. Translation and online presence also retain their existing SQLite-era server composition. The browser's current request helper and endpoint paths are preserved.
 
-`src/server.js` mounts the existing SQLite routers for auth, messages, groups, channels, uploads, social, moments, and calls. It also implements translation and online presence directly in the server. The browser client in `public/app.js` calls these established paths through a shared `api()` helper that adds bearer authorization and JSON content type.
+## PostgreSQL API composition now available
 
-### 2. PostgreSQL route coverage and composition
+`src/postgres/postgres-api-router.js` composes injected PostgreSQL services and routers for:
 
-| Feature | PostgreSQL implementation | Status |
-|---|---|---|
-| Registration, login, profile | `postgres-auth.js` | Core endpoints and opt-in composition exist; username case-sensitivity still needs reconciliation |
-| Direct messages | `postgres-messages.js` | Core paths composed; response semantics still need endpoint-level parity tests |
-| Groups and group messages | `postgres-groups.js` | Core paths composed |
-| Group governance | `postgres-group-governance.js` | Invitations, role changes, details, activity, join requests, polls and events composed alongside group routes |
-| Channels | `postgres-channels.js` | Core paths composed; compare every browser-used action and response shape |
-| Social/feed | `postgres-social.js` | Core paths composed |
-| Moments | `postgres-moments.js` | Composed; durable upload/read/delete callbacks must be injected and tested |
-| Online presence | `postgres-presence.js` + realtime service | Composed; online IDs are supplied by the caller's realtime snapshot |
-| Uploads/profile pictures | No complete PostgreSQL-compatible API router | **Gap:** existing browser upload and profile-picture flows still depend on SQLite-era upload behavior |
-| Calls/TURN credentials | Existing SQLite `calls.js` route | **Gap:** no equivalent PostgreSQL TURN-credentials endpoint |
-| Translation | Implemented directly in `src/server.js` | Database-independent; extract or explicitly retain in shared application composition |
-| Group invitation QR | Existing SQLite group route | **Gap:** PostgreSQL governance creates invitation URLs but has no matching QR endpoint |
+- Authentication and profiles
+- Direct messages
+- Groups and group governance (invitations, roles, polls, events, join requests)
+- Channels and social/feed
+- Moments and online presence
+- Media uploads/profile pictures
+- TURN credential retrieval
+- Secure group invitation QR generation
 
-### 3. Opt-in composition helper
+The caller must provide the PostgreSQL adapter, service instances, JWT verifier/secret, media storage service and realtime snapshot. The helper does not create a pool, read or expose database credentials, or mount itself into the production server.
 
-`src/postgres/postgres-api-router.js` composes the existing PostgreSQL routers using injected services, JWT verification, optional media callbacks, Socket.IO reference, and online-user snapshot. It does not create a database pool, read secrets from the environment, or change the live server. The caller owns lifecycle, service construction, and mounting.
+## Phase 56 media and call integration
 
-The helper intentionally does not mount uploads, TURN credentials, or translation. It throws early if required service methods or a strong JWT secret are missing.
+### Media uploads and profile pictures
 
-### 4. Remaining integration blockers
+- `src/routes/postgres-uploads.js` preserves the browser's `POST /api/uploads`, `GET /api/uploads/:mediaId`, profile-picture upload, delete and retrieval paths.
+- Message upload returns the expected `fileId` and `mediaType`; the ID is the PostgreSQL media-object BIGINT represented as a string.
+- Profile pictures are limited to JPG/PNG/WebP and 2 MB; other media is limited to 10 MB and the existing MIME allowlist.
+- Private objects are stored by the injected Supabase Storage service. No public bucket or public object URL is created.
+- Download authorization is checked against direct-message participants, group membership or channel membership before an object is read. Profile-picture reads are authenticated and owner-scoped.
+- Direct, group and channel PostgreSQL message services now validate opaque numeric media-object IDs rather than SQLite-era filenames.
+- If profile-picture database update fails after upload, the new object is cleaned up where possible.
 
-1. Upload/profile-picture APIs need durable object authorization, metadata/parent-record linkage, and safe media retrieval—not merely object upload.
-2. TURN credentials need a PostgreSQL-runtime-compatible route that preserves existing provider configuration and authorization.
-3. Group invitation QR generation needs a matching route or deliberate frontend-only QR implementation.
-4. Frontend response contracts need executable HTTP tests for success, validation, unauthorized, forbidden, not-found and provider/storage failures.
-5. Socket event names and payloads must remain consistent with browser listeners while PostgreSQL HTTP routers emit updates.
-6. Existing group-event reminder delivery method still needs scheduled worker integration and idempotent operational tests.
-7. SQLite login uses exact username matching while PostgreSQL auth lookup was previously audited as case-insensitive; decide and test one policy before cutover.
-8. Browser E2E regression coverage remains outstanding.
+### Video calls
+
+`src/routes/postgres-calls.js` preserves `GET /api/calls/turn-credentials`, verifies the JWT, obtains ICE server credentials from the existing Metered provider, and keeps the provider API key server-side. Missing provider configuration returns 503; provider failures return a generic 502 response.
+
+### Invitation QR
+
+The PostgreSQL group governance router now supports `POST /api/groups/invitation/qr`. It accepts only a Waltajjii-origin invitation URL with a well-formed `groupInvite` token and returns the same PNG data-URL response used by the browser UI.
+
+## Remaining integration blockers
+
+1. Moments still needs a complete durable-media lifecycle wired to media-object IDs, including expiry cleanup and ownership/visibility checks.
+2. Translation must be included in the shared PostgreSQL composition or explicitly extracted as a database-independent shared route.
+3. Complete endpoint-by-endpoint response-shape, validation, forbidden/not-found and provider-failure parity tests remain necessary.
+4. Socket event names/payloads must be verified against every browser listener and all API mutations.
+5. Group-event reminder delivery still needs scheduled worker integration, shutdown/retry behavior and idempotency tests.
+6. SQLite exact-username login and PostgreSQL case-insensitive login behavior must be reconciled before cutover.
+7. Browser E2E regression coverage is still outstanding.
+8. Media lifecycle cleanup must cover deleted/expired message attachments and orphaned objects without deleting files still referenced by forwarded messages.
 
 ## Regression coverage
 
-- `test/phase56-api-frontend-contract.test.js`: browser bearer-token/JSON behavior, major frontend API families, PostgreSQL route declarations, and a guard preventing accidental production runtime switching.
-- `test/phase56-postgres-api-composition.test.js`: real HTTP server verifies that PostgreSQL API feature routers are composed and protected by authentication; checks fail-fast configuration validation.
+- `test/phase56-api-frontend-contract.test.js`: browser bearer-token/JSON behavior, major frontend API families, PostgreSQL route declarations and a guard against accidental production runtime switching.
+- `test/phase56-postgres-api-composition.test.js`: HTTP-level route composition, auth protection, group invitation QR, media response and missing TURN configuration.
+- `test/phase56-postgres-media-call-routes.test.js`: upload response compatibility, authenticated media access, profile-picture upload, TURN credential response and safe missing-configuration behavior.
 
-These are source-contract and injected-service HTTP integration tests, not full browser E2E tests or proof of complete parity.
+These are injected-service HTTP integration and source-contract tests. They do not prove full Supabase integration, complete API parity or browser E2E behavior.
 
 ## Required exit criteria before PostgreSQL runtime cutover
 
-- Complete PostgreSQL API composition for every user-facing route, including uploads, profile pictures, TURN credentials, invitation QR and translation.
-- Complete browser/API request and response parity, including all governance and media flows.
-- HTTP contract tests for every endpoint, including authorization and error cases.
-- Browser E2E regression coverage for registration/login, profile, direct/group/channel messaging, social/feed, moments/media, calls, translation and notifications.
+- Full media lifecycle including Moments, message deletion/forwarding and orphan cleanup.
+- Complete route composition including translation and every current frontend API path.
+- Endpoint-level HTTP contract tests for success and all important authorization/error cases.
+- Browser E2E coverage for registration/login, profiles, direct/group/channel messages, social/feed, moments/media, calls, translation and notifications.
 - PostgreSQL event reminder worker scheduling, shutdown, retry and idempotency verification.
+- Username policy reconciliation.
 - Separate migration/recovery rehearsal, durable backup/restore, security/performance and rollback validation.
 
 **No production deployment, live database DDL, data migration, merge, or Render change is authorized or performed by this phase.**
