@@ -31,8 +31,8 @@ jobs:
         run: node --test test/phase57-sqlite-migration-preflight.test.js
       - name: Install isolated browser-test dependency
         run: npm install --prefix /tmp/wt-playwright --no-save playwright@1.55.0
-      - name: Install Chromium for browser regression
-        run: /tmp/wt-playwright/node_modules/.bin/playwright install --with-deps chromium
+      - name: Install Chromium browser binary
+        run: /tmp/wt-playwright/node_modules/.bin/playwright install chromium
       - name: Run Phase 56 desktop and mobile browser E2E tests
         timeout-minutes: 5
         run: NODE_PATH=/tmp/wt-playwright/node_modules node --test --test-timeout=90000 test/phase56-browser-e2e.test.js
