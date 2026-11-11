@@ -16,6 +16,7 @@ test("media cleanup worker avoids overlapping runs and stops cleanly",async()=>{
  assert.equal(worker.start(),false);
  const one=worker.runOnce(),two=worker.runOnce();
  assert.equal(one,two);
+ await Promise.resolve();
  assert.equal(calls,1);
  release();
  assert.deepEqual(await one,{claimed:1,removed:1,failed:0});
