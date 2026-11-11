@@ -62,8 +62,14 @@ test("Phase 53: PostgreSQL group governance, invitations, polls, events and remi
   assert.equal((await request("/api/groups/"+group.id+"/events/"+eventId+"/rsvp",member,{method:"PUT",body:JSON.stringify({response:"maybe"})})).status,409);
   const dueStart=new Date(Date.now()+2*60*1000).toISOString();
   event=await request("/api/groups/"+group.id+"/events",admin,{method:"POST",body:JSON.stringify({title:"Reminder delivery test",startsAt:dueStart,reminderMinutes:5})});assert.equal(event.status,201);
-  const first=await service.deliverDueEventReminders({now:new Date(),batchSize:100});assert.ok(first.delivered>=1);
-  const second=await service.deliverDueEventReminders({now:new Date(),batchSize:100});assert.equal(second.delivered,0);
+  const concurrent=await Promise.all([
+    service.deliverDueEventReminders({now:new Date(),batchSize:100}),
+    service.deliverDueEventReminders({now:new Date(),batchSize:100}),
+    service.deliverDueEventReminders({now:new Date(),batchSize:100})
+  ]);
+  assert.ok(concurrent.reduce((sum,result)=>sum+result.delivered,0)>=1);
+  const afterConcurrent=await service.deliverDueEventReminders({now:new Date(),batchSize:100});
+  assert.equal(afterConcurrent.delivered,0);
   const reminderNotifications=await db.many("SELECT id FROM notifications WHERE user_id=$1 AND type='group_event_reminder'",[member.id]);assert.equal(reminderNotifications.length,1);
   assert.equal((await request("/api/groups/"+group.id+"/leave",guest,{method:"DELETE"})).status,200);
   assert.equal((await request("/api/groups/"+group.id+"/members/"+guest2.id,admin,{method:"DELETE"})).status,200);
