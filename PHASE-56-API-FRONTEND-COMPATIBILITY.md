@@ -40,6 +40,14 @@ The caller must provide the PostgreSQL adapter, service instances, JWT verifier/
 - Direct, group and channel PostgreSQL message services now validate opaque numeric media-object IDs rather than SQLite-era filenames.
 - If profile-picture database update fails after upload, the new object is cleaned up where possible.
 
+### Moments media
+
+- The PostgreSQL Moments router now uses the private media-object service for upload, read and delete.
+- Media IDs are stored as opaque PostgreSQL BIGINT strings in the Moments record.
+- The visibility query is evaluated before the owner-scoped object download, so a follower/public viewer can read a visible Moment without gaining access to unrelated private objects.
+- Expiry cleanup removes associated objects through a dedicated `removeById` method restricted to `purpose='moment'`; normal user deletion remains owner-scoped.
+- Upload rollback removes the newly stored object if Moment creation fails.
+
 ### Video calls
 
 `src/routes/postgres-calls.js` preserves `GET /api/calls/turn-credentials`, verifies the JWT, obtains ICE server credentials from the existing Metered provider, and keeps the provider API key server-side. Missing provider configuration returns 503; provider failures return a generic 502 response.
@@ -50,14 +58,13 @@ The PostgreSQL group governance router now supports `POST /api/groups/invitation
 
 ## Remaining integration blockers
 
-1. Moments still needs a complete durable-media lifecycle wired to media-object IDs, including expiry cleanup and ownership/visibility checks.
-2. Translation must be included in the shared PostgreSQL composition or explicitly extracted as a database-independent shared route.
+1. Translation must be included in the shared PostgreSQL composition or explicitly extracted as a database-independent shared route.
 3. Complete endpoint-by-endpoint response-shape, validation, forbidden/not-found and provider-failure parity tests remain necessary.
 4. Socket event names/payloads must be verified against every browser listener and all API mutations.
 5. Group-event reminder delivery still needs scheduled worker integration, shutdown/retry behavior and idempotency tests.
 6. SQLite exact-username login and PostgreSQL case-insensitive login behavior must be reconciled before cutover.
 7. Browser E2E regression coverage is still outstanding.
-8. Media lifecycle cleanup must cover deleted/expired message attachments and orphaned objects without deleting files still referenced by forwarded messages.
+7. Media lifecycle cleanup must cover deleted/expired message attachments and orphaned objects without deleting files still referenced by forwarded messages.
 
 ## Regression coverage
 
@@ -69,7 +76,7 @@ These are injected-service HTTP integration and source-contract tests. They do n
 
 ## Required exit criteria before PostgreSQL runtime cutover
 
-- Full media lifecycle including Moments, message deletion/forwarding and orphan cleanup.
+- Complete media lifecycle tests for Moments, message deletion/forwarding and orphan cleanup.
 - Complete route composition including translation and every current frontend API path.
 - Endpoint-level HTTP contract tests for success and all important authorization/error cases.
 - Browser E2E coverage for registration/login, profiles, direct/group/channel messages, social/feed, moments/media, calls, translation and notifications.
