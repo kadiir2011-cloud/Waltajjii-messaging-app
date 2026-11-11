@@ -14,4 +14,7 @@ CREATE TABLE IF NOT EXISTS media_storage_cleanup (
 CREATE INDEX IF NOT EXISTS media_storage_cleanup_created_idx
   ON media_storage_cleanup(created_at);
 
+CREATE INDEX IF NOT EXISTS media_storage_cleanup_claimed_idx
+  ON media_storage_cleanup(claimed_at,created_at);
+
 COMMIT;
