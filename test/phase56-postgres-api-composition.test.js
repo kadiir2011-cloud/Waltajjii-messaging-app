@@ -10,7 +10,7 @@ const { createPostgresApiRouter } = require("../src/postgres/postgres-api-router
 const secret = "phase56-integration-secret-with-more-than-32-characters";
 const token = jwt.sign({ userId: "101", username: "phase56-user" }, secret, { issuer: "waltajjii", audience: "waltajjii-users" });
 const service = names => Object.fromEntries(names.map(name => [name, async () => ({})]));
-const services = {
+const mediaStorage = { upload: async () => ({ id: "777" }), removeOwned: async () => ({ removed: true }), downloadOwned: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }), downloadForViewer: async () => ({ metadata: { mimeType: "image/png" }, buffer: Buffer.from("image") }) };\nconst db = { one: async () => null, execute: async () => 1 };\nconst services = {
   auth: service(["register", "login", "getProfile", "updateProfile"]),
   messages: service(["listUsers", "sendMessage", "getConversation", "markConversationRead", "deleteMessage", "editMessage", "forwardMessage", "toggleReaction"]),
   groups: service(["createGroup", "listGroups", "listMembers", "addMember", "getMessages", "sendMessage", "markDelivered", "toggleReaction", "editMessage", "deleteMessage", "pinMessage"]),
@@ -25,7 +25,7 @@ test("PostgreSQL API composition mounts protected feature routers without switch
   const app = express();
   app.use(express.json());
   app.use("/api", createPostgresApiRouter({
-    services, jwt, jwtSecret: secret, getOnlineUserIds: () => ["101", 102]
+    services, jwt, jwtSecret: secret, getOnlineUserIds: () => ["101", 102], mediaStorage, db, meteredApiKey: ""
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -41,7 +41,7 @@ test("PostgreSQL API composition mounts protected feature routers without switch
     "/api/channels",
     "/api/social/feed",
     "/api/moments",
-    "/api/presence/online"
+    "/api/presence/online",\n    "/api/uploads/777"
   ]) {
     const unauthorized = await fetch(base + path);
     assert.equal(unauthorized.status, 401, path + " should reject anonymous requests");
@@ -55,12 +55,12 @@ test("PostgreSQL API composition mounts protected feature routers without switch
 
 test("PostgreSQL API composition rejects incomplete service injection", () => {
   assert.throws(() => createPostgresApiRouter({
-    services: {}, jwt, jwtSecret: secret
+    services: {}, jwt, jwtSecret: secret, mediaStorage, db
   }), /complete PostgreSQL auth service/);
 });
 
 test("PostgreSQL API composition requires a strong configured JWT secret", () => {
   assert.throws(() => createPostgresApiRouter({
-    services, jwt, jwtSecret: "short"
+    services, jwt, jwtSecret: "short", mediaStorage, db
   }), /at least 32 characters/);
 });
