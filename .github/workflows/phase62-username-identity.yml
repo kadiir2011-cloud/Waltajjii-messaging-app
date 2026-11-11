@@ -1,0 +1,31 @@
+name: Phase 62 username identity compatibility
+on:
+  pull_request:
+    paths:
+      - "src/db.js"
+      - "src/routes/auth.js"
+      - "src/services/postgres-auth-service.js"
+      - "migrations/postgres/001_initial_schema.sql"
+      - "scripts/phase57-sqlite-migration-preflight.js"
+      - "test/phase62-username-identity-contract.test.js"
+      - "PHASE-62-USERNAME-IDENTITY-COMPATIBILITY.md"
+      - ".github/workflows/phase62-username-identity.yml"
+permissions:
+  contents: read
+jobs:
+  username-identity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify username identity contract
+        run: node --test test/phase62-username-identity-contract.test.js test/phase57-sqlite-migration-preflight.test.js
+      - name: Verify PostgreSQL authentication HTTP integration
+        run: node --test test/phase43-postgres-auth-profile-integration.test.js
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
