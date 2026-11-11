@@ -7,7 +7,7 @@
 - Media rows are locked while direct/group/channel messages attach media and while direct messages are forwarded. Moment creation also locks the owned media row.
 - A shared media object is retained while any active direct, group, channel or unexpired Moment reference exists.
 - When the final live reference disappears, the media object is marked unavailable and a durable cleanup record is inserted in the same PostgreSQL transaction.
-- Supabase Storage deletion is retried from the queue. Failed removals increment an attempt counter and preserve a bounded error message; concurrent workers claim work using `FOR UPDATE SKIP LOCKED`.
+- Supabase Storage deletion is retried from the queue. Failed removals increment an attempt counter and preserve a bounded error message; concurrent workers claim work using `FOR UPDATE SKIP LOCKED`. Claims older than five minutes are treated as abandoned and become eligible for retry after a worker crash.
 
 ## Migration
 
