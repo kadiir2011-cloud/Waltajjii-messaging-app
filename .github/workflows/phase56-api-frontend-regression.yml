@@ -13,7 +13,7 @@ permissions:
   contents: read
 jobs:
   api-frontend-contract:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,10 +22,10 @@ jobs:
       - name: Install locked project dependencies
         run: npm ci --ignore-scripts
       - name: Install isolated browser-test dependency
-        run: npm install --no-save --package-lock=false playwright@1.55.0
+        run: npm install --prefix /tmp/wt-playwright --no-save playwright@1.55.0
       - name: Install Chromium for browser regression
-        run: npx playwright install --with-deps chromium
+        run: /tmp/wt-playwright/node_modules/.bin/playwright install --with-deps chromium
       - name: Run Phase 56 desktop and mobile browser E2E tests
-        run: node --test test/phase56-browser-e2e.test.js
+        run: NODE_PATH=/tmp/wt-playwright/node_modules node --test test/phase56-browser-e2e.test.js
       - name: Run Phase 56 API and frontend regression tests
         run: node --test test/phase56-api-frontend-contract.test.js test/phase56-postgres-api-composition.test.js test/phase56-postgres-media-call-routes.test.js test/phase56-postgres-translation.test.js test/phase56-postgres-reminder-worker.test.js
