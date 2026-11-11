@@ -38,7 +38,7 @@ function createPostgresMessagesService({ db } = {}) {
     return db.withTransaction(async tx => {
       if (mediaPath) {
         const ownedMedia = await tx.one(
-          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose='message' AND deleted_at IS NULL",
+          "SELECT id FROM media_objects WHERE id=$1 AND owner_id=$2 AND purpose='message' AND deleted_at IS NULL FOR UPDATE",
           [mediaPath, String(senderId)]
         );
         if (!ownedMedia) throw fail(400, "This media file is unavailable or does not belong to your account.");
@@ -150,7 +150,7 @@ function createPostgresMessagesService({ db } = {}) {
       } else {
         await tx.execute("INSERT INTO message_hidden_for(message_id,user_id) VALUES($1,$2) ON CONFLICT(message_id,user_id) DO NOTHING",[rawId,viewerId]);
       }
-      return {success:true,scope,messageId:String(rawId),senderId:String(message.senderId),receiverId:String(message.receiverId)};
+      return {success:true,scope,messageId:String(rawId),senderId:String(message.senderId),receiverId:String(message.receiverId),mediaPath:scope==="everyone"?message.mediaPath:null};
     });
   }
 
@@ -171,6 +171,7 @@ function createPostgresMessagesService({ db } = {}) {
     return db.withTransaction(async tx=>{
       const source=await tx.one(`SELECT m.id,m.body,m.media_path AS "mediaPath",m.media_type AS "mediaType",m.forwarded_from_username AS "forwardedFromUsername",s.username AS "originalSender" FROM messages m JOIN users s ON s.id=m.sender_id WHERE m.id=$1 AND m.deleted_at IS NULL AND (m.sender_id=$2 OR m.receiver_id=$2)`,[rawId,viewerId]);
       if(!source) throw fail(404,"This message is no longer available to forward.");
+      if(source.mediaPath){const media=await tx.one("SELECT id FROM media_objects WHERE id=$1 AND deleted_at IS NULL AND purpose IN ('message','group','channel') FOR UPDATE",[String(source.mediaPath)]);if(!media)throw fail(409,"The attachment is no longer available to forward.");}
       const receiver=await tx.one("SELECT id FROM users WHERE username=$1",[receiverUsername]);
       if(!receiver) throw fail(404,"Recipient not found.");
       if(String(receiver.id)===String(viewerId)) throw fail(400,"You cannot forward a message to yourself.");
