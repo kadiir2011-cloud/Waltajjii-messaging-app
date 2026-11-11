@@ -102,7 +102,7 @@ async function runMigrationRehearsal({sqlitePath,pool,allowDisposableTarget=fals
    for(const column of columns){
     const batch=[];const flush=async()=>{
      if(!batch.length)return;
-     const params=[],rows=batch.map(item=>"("+[item.value,...item.keys].map(v=>{params.push(v);return "$"+params.length;}).join(",")+")");
+     const params=[],rows=batch.map(item=>"("+[item.value,...item.keys].map(v=>{params.push(v);return "$"+params.length+"::bigint";}).join(",")+")");
      const aliases=["value",...pk].map(quote).join(",");
      const where=pk.map((k,i)=>"t."+quote(k)+"=v."+quote(k)).join(" AND ");
      await client.query("UPDATE "+qualify(schema,table)+" AS t SET "+quote(column)+"=v."+quote("value")+" FROM (VALUES "+rows.join(",")+") AS v("+aliases+") WHERE "+where,params);
