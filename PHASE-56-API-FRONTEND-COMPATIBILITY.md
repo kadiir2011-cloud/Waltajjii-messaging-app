@@ -52,13 +52,20 @@ The caller must provide the PostgreSQL adapter, service instances, JWT verifier/
 
 `src/routes/postgres-calls.js` preserves `GET /api/calls/turn-credentials`, verifies the JWT, obtains ICE server credentials from the existing Metered provider, and keeps the provider API key server-side. Missing provider configuration returns 503; provider failures return a generic 502 response.
 
+### Translation
+
+- `src/routes/postgres-translation.js` preserves the browser's authenticated `POST /api/translation/translate` endpoint and the existing language allowlist.
+- It validates source/target languages and text length, applies a per-minute rate limit, and uses the OpenAI Responses API through an injected provider key/fetch implementation.
+- Provider credentials remain server-side; responses are marked `Cache-Control: no-store`.
+- The route is included in the opt-in PostgreSQL API composition. Without `OPENAI_API_KEY`, it returns the existing safe 503 message.
+
 ### Invitation QR
 
 The PostgreSQL group governance router now supports `POST /api/groups/invitation/qr`. It accepts only a Waltajjii-origin invitation URL with a well-formed `groupInvite` token and returns the same PNG data-URL response used by the browser UI.
 
 ## Remaining integration blockers
 
-1. Translation must be included in the shared PostgreSQL composition or explicitly extracted as a database-independent shared route.
+1. Translation provider configuration must be supplied securely in the PostgreSQL runtime; no API key is stored in source or returned to the browser.
 3. Complete endpoint-by-endpoint response-shape, validation, forbidden/not-found and provider-failure parity tests remain necessary.
 4. Socket event names/payloads must be verified against every browser listener and all API mutations.
 5. Group-event reminder delivery still needs scheduled worker integration, shutdown/retry behavior and idempotency tests.
@@ -71,13 +78,14 @@ The PostgreSQL group governance router now supports `POST /api/groups/invitation
 - `test/phase56-api-frontend-contract.test.js`: browser bearer-token/JSON behavior, major frontend API families, PostgreSQL route declarations and a guard against accidental production runtime switching.
 - `test/phase56-postgres-api-composition.test.js`: HTTP-level route composition, auth protection, group invitation QR, media response and missing TURN configuration.
 - `test/phase56-postgres-media-call-routes.test.js`: upload response compatibility, authenticated media access, profile-picture upload, TURN credential response and safe missing-configuration behavior.
+- `test/phase56-postgres-translation.test.js`: authenticated translation, language validation, provider request safety and missing-key behavior.
 
 These are injected-service HTTP integration and source-contract tests. They do not prove full Supabase integration, complete API parity or browser E2E behavior.
 
 ## Required exit criteria before PostgreSQL runtime cutover
 
 - Complete media lifecycle tests for Moments, message deletion/forwarding and orphan cleanup.
-- Complete route composition including translation and every current frontend API path.
+- Complete route composition for every current frontend API path and final request/response parity checks.
 - Endpoint-level HTTP contract tests for success and all important authorization/error cases.
 - Browser E2E coverage for registration/login, profiles, direct/group/channel messages, social/feed, moments/media, calls, translation and notifications.
 - PostgreSQL event reminder worker scheduling, shutdown, retry and idempotency verification.
