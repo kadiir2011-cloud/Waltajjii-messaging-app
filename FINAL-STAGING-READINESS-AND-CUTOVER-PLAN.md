@@ -20,7 +20,7 @@ All PRs listed below were observed open and in draft state at the time of this r
 - PRs #2–#7 continue the feature chain.
 - PR #8 (Low-Bandwidth Mode) and PR #9 (navigation/responsive workspace) are sibling branches based on Phase 7. PR #8 is not in PR #9's ancestry; decide whether to integrate it or explicitly defer it.
 - PRs #10–#14 continue the PR #9 lineage.
-- PR #15 (forward/delete) and PR #17 (Phase 15A rebuild) are alternative branches from Phase 14 addressing overlapping functionality. Review their diffs and retain one coherent implementation; do not merge both blindly.
+- PR #17 (Phase 15A forwarding rebuild) and PR #18 (Phase 16 deletion) form the selected downstream lineage carried into PRs #19–#34 and the PostgreSQL stack. PR #15 is an alternative Phase 14 implementation outside that lineage; do not add it unless a specific missing behavior is identified and ported safely.
 - PR #16 is a temporary protected SQLite backup-export change. Treat it as a security-sensitive utility, not an ordinary product feature. Review access control, output protection, retention and removal/disablement before deciding whether it belongs in production.
 - PRs #18–#28 continue the product feature chain.
 - PR #29 (Phase 27 group events) is closed as merged into the Phase 29 feature branch, not directly into `main`; confirm its event/RSVP changes are present in the eventual integrated product branch. PRs #30–#34 continue the profile, presence, reminders and language work.
@@ -46,7 +46,7 @@ The newer migration work is a dependency stack, not a set of independent PRs:
 ### Gate 0 — Repository consolidation and code review
 
 - Review PRs #1–#62, including security-sensitive backup/export changes.
-- Combine Phase 7 siblings (#8/#9) after a same-file conflict review; select/rebuild one coherent Phase 15 forwarding implementation (#15 versus #17), preserve Phase 16 deletion (#18) on the chosen base, review PR #16 separately as a sensitive backup utility, and use PR #38 as canonical rather than merging duplicate PR #37.
+- Integrate the omitted Phase 8 Low-Bandwidth feature into the later product branch (or explicitly defer it) after same-file conflict review with Phase 9; retain the already-selected Phase 15A/16 lineage (#17/#18) and do not add alternative PR #15; exclude PR #16's temporary backup endpoint from the public runtime; and use PR #38 as canonical rather than merging duplicate PR #37.
 - Check all open PRs for stale bases, conflicts, missing CI, unreviewed secrets, generated files and unintended changes.
 - Confirm the final integration branch contains the intended user-facing features without duplicate routes or competing implementations.
 - Keep all PRs draft until their review and required checks are complete.
@@ -156,11 +156,11 @@ This section records a live GitHub metadata and diff audit. It is a repository r
 | PRs #1–#7 | Sequential feature chain from `main` through profile, social, channels, reliability, Moments, voice and personalization | Preserve the chain; review the complete diff stack and test on isolated staging |
 | PRs #8 and #9 | Both branch from the exact Phase 7 commit; both change `public/app.js` and `public/index.html` | Sibling integration required; combine carefully and rerun browser/mobile tests |
 | PRs #10–#14 | Sequentially continue from the Phase 9 navigation lineage | Keep in sequence |
-| PRs #15 and #17 | Both branch from the exact Phase 14 commit and diverge; both modify `public/app.js`, `src/db.js`, and `src/routes/messages.js`; PR #17 additionally changes `src/server.js` | Do not merge both. Review behavior and migrations, select one forwarding implementation |
+| PRs #15 and #17 | Both branch from the exact Phase 14 commit and diverge; PR #17 is the selected lineage, followed by PR #18 and PRs #19–#34; PR #15 is outside the downstream chain | Retain #17/#18; do not add #15 unless a verified missing behavior is ported |
 | PR #18 | Based on PR #17's `waltajjii-phase15-rebuild` head | Preserve deletion work only on the selected/reconciled Phase 15 base |
 | PR #16 | Separate branch from Phase 14 for temporary protected SQLite backup export | Security-sensitive standalone review; do not include automatically in the public application |
 | PR #19–#28 | Sequential feature stack after PR #18 | Preserve sequence; check cumulative frontend and SQLite migration compatibility |
-| PR #29 | Closed/merged; title Phase 27 group events; target branch is the Phase 29 feature branch, not `main` | Confirm its changes are retained in the product integration lineage |
+| PR #29 | Closed/merged into the Phase 29 feature branch; its merge commit matches the Phase 29 branch head used by PR #31 | Group-event/RSVP work is included in the later feature lineage; verify again in the consolidated branch |
 | PR #30–#34 | Sequential Phase 28–32 profile, live presence, reminders and language work | Preserve sequence; verify PR #29's merged content is included |
 | PR #35–#36 | Sequential production-readiness audit and PostgreSQL adapter foundation | Preserve sequence |
 | PR #37 and #38 | Same five changed paths and 416 additions; compare shows PR #38 is one commit ahead, differing only in the Phase 34 workflow branch filters | PR #38 is canonical; do not separately merge duplicate PR #37 |
