@@ -44,7 +44,7 @@ test("PostgreSQL uploads preserve frontend upload response and authorize media r
   const unauthorized = await fetch(base + "/api/uploads/777");
   assert.equal(unauthorized.status, 401);
 
-  const uploaded = await fetch(base + "/", { method: "POST", headers });
+  const uploaded = await fetch(base + "/api/uploads", { method: "POST", headers });
   assert.equal(uploaded.status, 201);
   assert.deepEqual(await uploaded.json(), { message: "File uploaded successfully.", fileId: "777", mediaType: "image" });
   assert.equal(calls[0][1], "101");
