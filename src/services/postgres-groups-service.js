@@ -187,7 +187,7 @@ function createPostgresGroupsService({db}={}) {
       if(String(msg.senderId)!==String(userId)&&me.role!=="admin")throw fail(403,"Only the sender or a group admin can delete this message.");
       await tx.execute("UPDATE group_messages SET body='This message was deleted',media_path=NULL,media_type=NULL,deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP) WHERE id=$1",[messageId]);
       await tx.execute("DELETE FROM group_message_reactions WHERE group_message_id=$1",[messageId]);
-      return {message:await getMessage(tx,groupId,messageId,userId)};
+      return {message:await getMessage(tx,groupId,messageId,userId),mediaPath:msg.media_path};
     });
   }
   async function pinMessage(groupId,messageId,userId,pin=true) {
