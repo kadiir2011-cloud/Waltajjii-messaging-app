@@ -142,7 +142,7 @@ function createPostgresMessagesService({ db } = {}) {
   async function deleteMessage(viewerId, rawId, scope="me") {
     if(!["me","everyone"].includes(scope)) throw fail(400,"Choose a valid deletion option.");
     return db.withTransaction(async tx=>{
-      const message=await tx.one("SELECT id,sender_id AS \"senderId\",receiver_id AS \"receiverId\" FROM messages WHERE id=$1 AND (sender_id=$2 OR receiver_id=$2)",[rawId,viewerId]);
+      const message=await tx.one("SELECT id,sender_id AS \"senderId\",receiver_id AS \"receiverId\" ,media_path FROM messages WHERE id=$1 AND (sender_id=$2 OR receiver_id=$2) FOR UPDATE",[rawId,viewerId]);
       if(!message) throw fail(404,"Message not found.");
       if(scope==="everyone") {
         if(String(message.senderId)!==String(viewerId)) throw fail(403,"Only the sender can delete this message for everyone.");
