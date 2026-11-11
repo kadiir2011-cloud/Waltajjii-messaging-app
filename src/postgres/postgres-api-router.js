@@ -17,8 +17,9 @@ const { createPostgresCallsRouter } = require("../routes/postgres-calls");
  * staging. The caller owns the Express app, DB pool, services, HTTP server,
  * Socket.IO lifecycle, and the production cutover decision.
  *
- * This intentionally does not mount uploads, calls/TURN, or translation:
- * those API contracts still require PostgreSQL-compatible implementations.
+ * Uploads and TURN credentials are composed through injected PostgreSQL media
+ * storage and provider configuration. Translation remains in the existing
+ * database-independent server layer until its shared API contract is extracted.
  */
 function createPostgresApiRouter({
   services,
@@ -98,6 +99,13 @@ function createPostgresApiRouter({
   }));
   router.use("/presence", createPostgresPresenceRouter({
     realtimeService: services.realtime, jwt, jwtSecret
+  }));
+  router.use("/uploads", createPostgresUploadsRouter({
+    mediaStorage, db, jwtSecret, jwtImplementation: jwt,
+    uploadMiddleware, profileUploadMiddleware
+  }));
+  router.use("/calls", createPostgresCallsRouter({
+    jwtSecret, jwtImplementation: jwt, apiKey: meteredApiKey, fetchImpl
   }));
 
   return router;
