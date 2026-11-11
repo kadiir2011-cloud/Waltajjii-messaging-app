@@ -21,4 +21,4 @@ jobs:
       - name: Check service syntax
         run: node --check src/services/postgres-moments-service.js
       - name: Test Moment media ownership
-        run: node --test test/phase59-moment-media-ownership.test.js
+        run: node --test test/phase59-moment-media-ownership.test.js test/phase59-moment-media-purpose.test.js
