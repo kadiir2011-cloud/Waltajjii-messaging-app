@@ -29,7 +29,7 @@ test("only the active call host can admit or decline a waiting participant", () 
 });
 
 test("the server refuses direct joining without a one-time host admission", () => {
-  assert.match(server, /!call\.admitted\?\.has\(userId\)/);
+  assert.match(server, /call\.admitted\?\.get\(userId\) !== socket\.id/);
   assert.match(server, /Wait for the host to admit you from the waiting room/);
   assert.match(server, /call\.admitted\.delete\(userId\)/);
 });
@@ -47,4 +47,6 @@ test("waiting-room responses are sent to the requesting socket, and pending user
   assert.match(server, /io\.to\(pending\.socketId\)\.emit\("group-call:admitted"/);
   assert.match(server, /io\.to\(pending\.socketId\)\.emit\("group-call:denied"/);
   assert.match(server, /for \(const pending of call\.waitingRoom\?\.values\(\) \|\| \[\]\)/);
+  assert.match(server, /pending\?\.socketId === socket\.id/);
+  assert.match(server, /call\.admitted\?\.get\(disconnectedUserId\) === socket\.id/);
 });
