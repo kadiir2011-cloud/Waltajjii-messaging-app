@@ -18,7 +18,7 @@ function validateNewPassword(password, username = "") {
   if (normalizedUsername.length >= 3 && normalized.includes(normalizedUsername)) {
     return "Your password must not contain your username.";
   }
-  if (/^(.)\\1+$/.test(password) || /^(?:012345|123456|abcdef|qwerty)/i.test(password)) {
+  if (/^(.)\1+$/.test(password) || /^(?:012345|123456|abcdef|qwerty)/i.test(password)) {
     return "Choose a less predictable password or passphrase.";
   }
   return null;
