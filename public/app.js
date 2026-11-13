@@ -1521,7 +1521,7 @@ function registerCallSocketHandlers(socket) {
     if (!data.candidate) return;
 
     try {
-      if (peerConnection?.remoteDescription) {
+      if (peerConnection?.remoteDescription && !callRecoveryInProgress) {
         await peerConnection.addIceCandidate(data.candidate);
       } else {
         pendingIceCandidates.push(data.candidate);
