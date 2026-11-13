@@ -1651,6 +1651,23 @@ function registerCallSocketHandlers(socket) {
     refreshGroupCallAvailability(data.groupId);
   });
 
+  socket.on("group-call:join-requested", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !groupCallIsHost) return;
+    renderGroupCallWaitingRequest(data);
+    if (groupCallStatus) groupCallStatus.textContent = (data.username || "A member") + " is waiting for admission.";
+  });
+
+  socket.on("group-call:admitted", data => {
+    if (!data || String(data.groupId) !== String(groupSelect?.value || "")) return;
+    completeApprovedGroupVideoJoin(String(data.groupId));
+  });
+
+  socket.on("group-call:denied", data => {
+    if (!data || String(data.groupId) !== String(groupSelect?.value || "")) return;
+    if (groupCallJoinButton) groupCallJoinButton.disabled = false;
+    if (groupCallStatus) groupCallStatus.textContent = data.message || "The host did not admit you to this call.";
+  });
+
   socket.on("group-call:available", data => {
     if (!data || String(data.groupId) !== String(groupSelect?.value || "")) return;
     if (!activeGroupCallId && groupCallJoinButton) groupCallJoinButton.disabled = false;
@@ -2218,6 +2235,8 @@ const groupCallLayoutButton = document.getElementById("wt-group-call-layout");
 const groupCallRoster = document.getElementById("wt-group-call-roster");
 const groupCallHandButton = document.getElementById("wt-group-call-hand");
 const groupCallRaisedHands = new Set();
+const groupCallWaitingRoom = document.getElementById("wt-group-call-waiting-room");
+const groupCallWaitingList = document.getElementById("wt-group-call-waiting-list");
 
 let groupCallLayout = "grid";
 let groupCallPinnedUserId = null;
@@ -2489,7 +2508,19 @@ async function joinGroupVideoCall() {
   }
   try {
     if (groupCallJoinButton) groupCallJoinButton.disabled = true;
-    if (groupCallStatus) groupCallStatus.textContent = "Requesting camera and microphone permission…";
+    if (groupCallStatus) groupCallStatus.textContent = "Requesting entry from the meeting host…";
+    await groupCallEmit("group-call:request-join", { groupId });
+    if (groupCallStatus) groupCallStatus.textContent = "Your request is in the waiting room. Camera and microphone remain off until the host admits you.";
+  } catch (error) {
+    if (groupCallStatus) groupCallStatus.textContent = error.message || "Could not request entry to the group call.";
+    if (groupCallJoinButton) groupCallJoinButton.disabled = false;
+  }
+}
+
+async function completeApprovedGroupVideoJoin(groupId) {
+  if (!groupId || String(groupId) !== String(groupSelect?.value || "") || activeGroupCallId) return;
+  try {
+    if (groupCallStatus) groupCallStatus.textContent = "The host admitted you. Requesting camera and microphone permission…";
     groupCallLocalStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     const response = await groupCallEmit("group-call:join", { groupId });
     activeGroupCallId = groupId;
@@ -2503,10 +2534,55 @@ async function joinGroupVideoCall() {
   } catch (error) {
     groupCallLocalStream?.getTracks().forEach(track => track.stop());
     groupCallLocalStream = null;
-    activeGroupCallId = null;
     if (groupCallStatus) groupCallStatus.textContent = error.message || "Could not join the group call.";
     if (groupCallJoinButton) groupCallJoinButton.disabled = false;
   }
+}
+
+function renderGroupCallWaitingRequest(data) {
+  if (!groupCallWaitingRoom || !groupCallWaitingList || !groupCallIsHost) return;
+  groupCallWaitingRoom.hidden = false;
+  const userId = String(data.userId || "");
+  if (!userId || groupCallWaitingList.querySelector('[data-waiting-user="' + CSS.escape(userId) + '"]')) return;
+  const item = document.createElement("div");
+  item.className = "wt-group-call-roster-item";
+  item.dataset.waitingUser = userId;
+  const name = document.createElement("span");
+  name.textContent = data.username || "Group member";
+  const actions = document.createElement("div");
+  actions.className = "wt-group-call-moderation-actions";
+  const admit = document.createElement("button");
+  admit.type = "button";
+  admit.textContent = "Admit";
+  admit.addEventListener("click", async () => {
+    admit.disabled = true;
+    try {
+      await groupCallEmit("group-call:admit", { groupId: activeGroupCallId, targetUserId: userId });
+      item.remove();
+      if (groupCallWaitingList.childElementCount === 0) groupCallWaitingRoom.hidden = true;
+    } catch (error) {
+      admit.disabled = false;
+      if (groupCallStatus) groupCallStatus.textContent = error.message;
+    }
+  });
+  const decline = document.createElement("button");
+  decline.type = "button";
+  decline.className = "secondary";
+  decline.textContent = "Decline";
+  decline.addEventListener("click", async () => {
+    decline.disabled = true;
+    try {
+      await groupCallEmit("group-call:deny", { groupId: activeGroupCallId, targetUserId: userId });
+      item.remove();
+      if (groupCallWaitingList.childElementCount === 0) groupCallWaitingRoom.hidden = true;
+    } catch (error) {
+      decline.disabled = false;
+      if (groupCallStatus) groupCallStatus.textContent = error.message;
+    }
+  });
+  actions.append(admit, decline);
+  item.append(name, actions);
+  groupCallWaitingList.appendChild(item);
 }
 
 function stopGroupVideoCall(sendSignal = true) {
@@ -2521,6 +2597,8 @@ function stopGroupVideoCall(sendSignal = true) {
   groupCallLocalStream = null;
   groupCallGrid?.replaceChildren();
   groupCallRaisedHands.clear();
+  groupCallWaitingList?.replaceChildren();
+  if (groupCallWaitingRoom) groupCallWaitingRoom.hidden = true;
   groupCallPinnedUserId = null;
   groupCallLayout = "grid";
   activeGroupCallId = null;
