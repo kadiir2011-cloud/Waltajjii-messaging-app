@@ -199,6 +199,7 @@ io.use((socket, next) => {
 
 const activeCalls = new Map();
 const activeGroupCalls = new Map();
+const activeGroupCallByUser = new Map();
 const onlineUsers = new Map();
 
 // Authenticated, privacy-limited snapshot of currently connected members.
@@ -546,6 +547,7 @@ io.on("connection", (socket) => {
     const id = String(userId);
     if (!call.participants.has(id)) return false;
     call.participants.delete(id);
+    activeGroupCallByUser.delete(id);
     socket.leave(`group-call:${groupId}`);
     groupCallMembership.delete(String(groupId));
     if (notify) {
@@ -570,9 +572,11 @@ io.on("connection", (socket) => {
       return acknowledge({ ok: false, error: "Only current group members can start a group call." });
     }
     if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
+    if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
     if (activeGroupCalls.has(groupId)) return acknowledge({ ok: false, error: "A group call is already active." });
     const call = { groupId, hostId: userId, participants: new Map([[userId, socket.data.username]]) };
     activeGroupCalls.set(groupId, call);
+    activeGroupCallByUser.set(userId, groupId);
     groupCallMembership.add(groupId);
     socket.join(`group-call:${groupId}`);
     acknowledge({ ok: true, groupId, participants: [{ userId, username: socket.data.username }] });
@@ -585,9 +589,11 @@ io.on("connection", (socket) => {
       return acknowledge({ ok: false, error: "No active group call is available to you." });
     }
     if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
+    if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
     if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
     call.participants.set(userId, socket.data.username);
+    activeGroupCallByUser.set(userId, groupId);
     groupCallMembership.add(groupId);
     socket.join(`group-call:${groupId}`);
     const participants = Array.from(call.participants, ([participantId, username]) => ({ userId: participantId, username }));
@@ -627,6 +633,7 @@ io.on("connection", (socket) => {
       return acknowledge({ ok: false, error: "Only the group-call host can end this call for everyone." });
     }
     activeGroupCalls.delete(groupId);
+    for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
     io.to(`group-call:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
     io.in(`group-call:${groupId}`).socketsLeave(`group-call:${groupId}`);
     acknowledge({ ok: true });
