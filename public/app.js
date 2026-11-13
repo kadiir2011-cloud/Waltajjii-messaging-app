@@ -1130,14 +1130,14 @@ function updateCaptionAvailability() {
   if (captionTranslateButton) captionTranslateButton.disabled = !latestCallCaption;
 }
 
-function appendCallCaption(speaker, text, isLocal = false) {
+function appendCallCaption(speaker, text) {
   if (!captionFeed || !text) return;
   const empty = captionFeed.querySelector(".wt-caption-empty");
   if (empty) empty.remove();
   const item = document.createElement("p");
   item.className = "wt-caption-item";
   const label = document.createElement("strong");
-  label.textContent = speaker + (isLocal ? " · You" : "");
+  label.textContent = speaker;
   const content = document.createElement("span");
   content.textContent = text;
   item.append(label, content);
@@ -1206,7 +1206,7 @@ function startLiveCallCaptions() {
       if (!result.isFinal) continue;
       const text = String(result[0]?.transcript || "").trim().slice(0, 500);
       if (!text) continue;
-      appendCallCaption("You", text, true);
+      appendCallCaption("You", text);
       if (captionShare?.checked && callSocket?.connected && activeCallUserId) {
         callSocket.emit("call:caption", { targetUserId: activeCallUserId, text }, response => {
           if (!response?.ok) setCaptionStatus(response?.error || "Could not share this caption.");
@@ -1662,6 +1662,7 @@ function endVideoCall(notifyRemote = true) {
   if (acceptCallButton) acceptCallButton.disabled = true;
   if (rejectCallButton) rejectCallButton.disabled = true;
   if (endCallButton) endCallButton.disabled = true;
+  updateCaptionAvailability();
 }
 
 if (captionStartButton) captionStartButton.addEventListener("click", startLiveCallCaptions);
