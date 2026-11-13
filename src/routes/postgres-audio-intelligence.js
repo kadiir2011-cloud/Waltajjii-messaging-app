@@ -23,7 +23,7 @@ function createPostgresAudioIntelligenceRouter({
   jwtSecret,
   jwtImplementation = jwt,
   apiKey = process.env.OPENAI_API_KEY,
-  model = process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe",
+  model = process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-transcribe",
   fetchImpl = globalThis.fetch,
   limiter
 } = {}) {
@@ -81,7 +81,7 @@ function createPostgresAudioIntelligenceRouter({
         form.append("file", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "voice-message.webm");
         form.append("model", model);
         form.append("response_format", "json");
-        if (language) form.append("language", language);
+        if (language) form.append("languages[]", language);
 
         const response = await fetchImpl("https://api.openai.com/v1/audio/transcriptions", {
           method: "POST",
