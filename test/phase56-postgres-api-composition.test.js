@@ -89,6 +89,13 @@ test("PostgreSQL API composition mounts protected feature routers without switch
     body: JSON.stringify({ text: "Hello", sourceLanguage: "English", targetLanguage: "Amharic" })
   });
   assert.equal(translation.status, 503);
+  const ai = await fetch(base + "/api/ai/assist", {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "summarize", context: "A user-selected conversation." })
+  });
+  assert.equal(ai.status, 503);
+  assert.match((await ai.json()).error, /not configured/);
   const calls = await fetch(base + "/api/calls/turn-credentials", {
     headers: { Authorization: "Bearer " + token }
   });

@@ -12,6 +12,7 @@ const { createPostgresPresenceRouter } = require("../routes/postgres-presence");
 const { createPostgresUploadsRouter } = require("../routes/postgres-uploads");
 const { createPostgresCallsRouter } = require("../routes/postgres-calls");
 const { createPostgresTranslationRouter } = require("../routes/postgres-translation");
+const { createPostgresAiAssistantRouter } = require("../routes/postgres-ai-assistant");
 
 /**
  * Opt-in PostgreSQL API composition for integration tests and controlled
@@ -19,8 +20,8 @@ const { createPostgresTranslationRouter } = require("../routes/postgres-translat
  * Socket.IO lifecycle, and the production cutover decision.
  *
  * Uploads and TURN credentials are composed through injected PostgreSQL media
- * storage and provider configuration. Translation remains in the existing
- * database-independent server layer until its shared API contract is extracted.
+ * storage and provider configuration. AI and translation are explicit,
+ * stateless provider calls; neither reads message history from the database.
  */
 function createPostgresApiRouter({
   services,
@@ -41,7 +42,10 @@ function createPostgresApiRouter({
   openAiApiKey,
   translationModel,
   translationFetchImpl,
-  translationLimiter
+  translationLimiter,
+  aiAssistantModel,
+  aiAssistantFetchImpl,
+  aiAssistantLimiter
 } = {}) {
   const required = [
     ["auth", ["register", "login", "getProfile", "updateProfile"]],
@@ -134,6 +138,10 @@ function createPostgresApiRouter({
   router.use("/translation", createPostgresTranslationRouter({
     jwtSecret, jwtImplementation: jwt, apiKey: openAiApiKey,
     model: translationModel, fetchImpl: translationFetchImpl, limiter: translationLimiter
+  }));
+  router.use("/ai", createPostgresAiAssistantRouter({
+    jwtSecret, jwtImplementation: jwt, apiKey: openAiApiKey,
+    model: aiAssistantModel, fetchImpl: aiAssistantFetchImpl, limiter: aiAssistantLimiter
   }));
 
   return router;
