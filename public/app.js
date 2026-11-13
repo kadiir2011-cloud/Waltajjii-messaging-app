@@ -1620,6 +1620,37 @@ function registerCallSocketHandlers(socket) {
   });
 
 
+
+  socket.on("group-call:hand-raised", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    const id = String(data.userId);
+    if (data.raised) groupCallRaisedHands.add(id);
+    else groupCallRaisedHands.delete(id);
+    refreshGroupCallRoster();
+    updateGroupCallHandButton();
+    if (groupCallStatus && data.raised) groupCallStatus.textContent = (data.username || "A participant") + " raised a hand.";
+  });
+
+  socket.on("group-call:mute-request", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    const accepted = window.confirm((data.requestedBy || "The moderator") + " asks you to mute your microphone. Mute now?");
+    if (!accepted) {
+      if (groupCallStatus) groupCallStatus.textContent = "You declined the mute request.";
+      return;
+    }
+    const tracks = groupCallLocalStream?.getAudioTracks() || [];
+    tracks.forEach(track => { track.enabled = false; });
+    updateGroupCallControls();
+    if (groupCallStatus) groupCallStatus.textContent = "Your microphone is muted.";
+  });
+
+  socket.on("group-call:removed", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    stopGroupVideoCall(false);
+    if (groupCallStatus) groupCallStatus.textContent = "You were removed from this group call by a moderator.";
+    refreshGroupCallAvailability(data.groupId);
+  });
+
   socket.on("group-call:available", data => {
     if (!data || String(data.groupId) !== String(groupSelect?.value || "")) return;
     if (!activeGroupCallId && groupCallJoinButton) groupCallJoinButton.disabled = false;
@@ -1681,6 +1712,7 @@ function registerCallSocketHandlers(socket) {
   socket.on("group-call:participant-left", data => {
     if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
     const id = String(data.userId);
+    groupCallRaisedHands.delete(id);
     groupPeerConnections.get(id)?.close();
     groupPeerConnections.delete(id);
     groupPendingIce.delete(id);
@@ -2184,6 +2216,9 @@ const groupCallMicButton = document.getElementById("wt-group-call-mic");
 const groupCallCameraButton = document.getElementById("wt-group-call-camera");
 const groupCallLayoutButton = document.getElementById("wt-group-call-layout");
 const groupCallRoster = document.getElementById("wt-group-call-roster");
+const groupCallHandButton = document.getElementById("wt-group-call-hand");
+const groupCallRaisedHands = new Set();
+
 let groupCallLayout = "grid";
 let groupCallPinnedUserId = null;
 
@@ -2203,6 +2238,23 @@ function updateGroupCallControls() {
   }
   if (groupCallLayoutButton) groupCallLayoutButton.disabled = !active;
   if (groupCallRoster) groupCallRoster.hidden = !active;
+  updateGroupCallHandButton();
+}
+
+
+function groupCallCanModerate() {
+  const selected = String(groupSelect?.value || "");
+  const group = cachedGroups.find(item => String(item.id) === selected);
+  return groupCallIsHost || group?.myRole === "admin";
+}
+
+function updateGroupCallHandButton() {
+  if (!groupCallHandButton) return;
+  const selfId = String(userIdsByUsername.get(currentUsername) || "");
+  const raised = Boolean(selfId && groupCallRaisedHands.has(selfId));
+  groupCallHandButton.disabled = !activeGroupCallId;
+  groupCallHandButton.textContent = raised ? "Lower hand" : "Raise hand";
+  groupCallHandButton.setAttribute("aria-pressed", String(raised));
 }
 
 function refreshGroupCallRoster() {
@@ -2228,6 +2280,53 @@ function refreshGroupCallRoster() {
       applyGroupCallLayout();
       refreshGroupCallRoster();
     });
+
+    if (groupCallRaisedHands.has(userId)) {
+      const raised = document.createElement("span");
+      raised.textContent = "✋ Hand raised";
+      raised.setAttribute("aria-label", "Hand raised");
+      item.appendChild(raised);
+    }
+    if (groupCallCanModerate() && userId && userId !== String(userIdsByUsername.get(currentUsername) || "")) {
+      const actions = document.createElement("div");
+      actions.className = "wt-group-call-moderation-actions";
+      const mute = document.createElement("button");
+      mute.type = "button";
+      mute.className = "secondary";
+      mute.textContent = "Request mute";
+      mute.addEventListener("click", async () => {
+        try {
+          await groupCallEmit("group-call:moderate", { groupId: activeGroupCallId, targetUserId: userId, action: "request-mute" });
+          if (groupCallStatus) groupCallStatus.textContent = "Mute request sent to " + label + ". They can accept or decline.";
+        } catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+      });
+      actions.appendChild(mute);
+      if (groupCallRaisedHands.has(userId)) {
+        const lower = document.createElement("button");
+        lower.type = "button";
+        lower.className = "secondary";
+        lower.textContent = "Lower hand";
+        lower.addEventListener("click", async () => {
+          try { await groupCallEmit("group-call:moderate", { groupId: activeGroupCallId, targetUserId: userId, action: "lower-hand" }); }
+          catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+        });
+        actions.appendChild(lower);
+      }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm("Remove " + label + " from this call? They may rejoin while the call remains active.")) return;
+        try {
+          await groupCallEmit("group-call:moderate", { groupId: activeGroupCallId, targetUserId: userId, action: "remove" });
+          if (groupCallStatus) groupCallStatus.textContent = label + " was removed from the call.";
+        } catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+      });
+      actions.appendChild(remove);
+      item.appendChild(actions);
+    }
+
     item.append(name, focus);
     groupCallRoster.appendChild(item);
   });
@@ -2421,6 +2520,7 @@ function stopGroupVideoCall(sendSignal = true) {
   groupCallLocalStream?.getTracks().forEach(track => track.stop());
   groupCallLocalStream = null;
   groupCallGrid?.replaceChildren();
+  groupCallRaisedHands.clear();
   groupCallPinnedUserId = null;
   groupCallLayout = "grid";
   activeGroupCallId = null;
@@ -2451,6 +2551,17 @@ if (groupCallCameraButton) groupCallCameraButton.addEventListener("click", () =>
 if (groupCallLayoutButton) groupCallLayoutButton.addEventListener("click", () => {
   groupCallLayout = groupCallLayout === "grid" ? "focus" : "grid";
   applyGroupCallLayout();
+});
+
+
+if (groupCallHandButton) groupCallHandButton.addEventListener("click", async () => {
+  if (!activeGroupCallId) return;
+  const selfId = String(userIdsByUsername.get(currentUsername) || "");
+  if (!selfId) return;
+  const raised = !groupCallRaisedHands.has(selfId);
+  try {
+    await groupCallEmit("group-call:hand-raise", { groupId: activeGroupCallId, raised });
+  } catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
 });
 
 if (groupCallStartButton) groupCallStartButton.addEventListener("click", startGroupVideoCall);
