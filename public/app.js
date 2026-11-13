@@ -2181,6 +2181,24 @@ let groupCallLocalStream = null;
 const groupPeerConnections = new Map();
 const groupPendingIce = new Map();
 
+async function refreshGroupCallAvailability(groupId = groupSelect?.value) {
+  if (!groupId || !callSocket?.connected || activeGroupCallId) return;
+  try {
+    const status = await groupCallEmit("group-call:status", { groupId: String(groupId) });
+    const selected = String(groupSelect?.value || "") === String(groupId);
+    if (!selected) return;
+    if (groupCallJoinButton) groupCallJoinButton.disabled = !status.active;
+    if (groupCallStartButton) groupCallStartButton.disabled = Boolean(status.active);
+    if (groupCallStatus) {
+      groupCallStatus.textContent = status.active
+        ? (status.hostUsername || "A group member") + " has an active group video call (" + status.participantCount + "/8)."
+        : "No active group video call. You can start one.";
+    }
+  } catch (error) {
+    if (groupCallStatus) groupCallStatus.textContent = error.message;
+  }
+}
+
 function groupCallEmit(eventName, payload) {
   return new Promise((resolve, reject) => {
     if (!callSocket?.connected) return reject(new Error("Call connection is not ready. Please log in again."));
@@ -2518,6 +2536,7 @@ async function openSelectedGroup() {
     renderGroupMessages(data.messages || []);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
+    await refreshGroupCallAvailability(id);
   } catch (error) {
     groupStatus.textContent = error.message;
   }
@@ -2528,6 +2547,7 @@ document.getElementById("load-group-button").addEventListener("click", openSelec
 groupSelect.addEventListener("change", () => {
   activeGroupId = null;
   groupMessagesBox.textContent = "Choose Open group to load messages.";
+  refreshGroupCallAvailability(groupSelect.value);
 });
 
 document.getElementById("create-group-button").addEventListener("click", async () => {
