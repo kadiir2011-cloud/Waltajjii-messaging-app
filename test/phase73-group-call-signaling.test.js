@@ -7,6 +7,8 @@ const server = fs.readFileSync(path.join(__dirname, "../src/server.js"), "utf8")
 
 test("group calls are tracked separately and require authenticated group membership", () => {
   assert.match(server, /const activeGroupCalls = new Map\(\)/);
+  assert.match(server, /const activeGroupCallByUser = new Map\(\)/);
+  assert.match(server, /You are already in another group call/);
   assert.match(server, /SELECT 1 FROM group_members WHERE group_id = \? AND user_id = \?/);
   assert.match(server, /socket\.on\("group-call:start"/);
   assert.match(server, /socket\.on\("group-call:join"/);
