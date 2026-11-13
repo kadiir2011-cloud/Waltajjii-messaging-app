@@ -48,22 +48,26 @@ function createPostgresAudioIntelligenceRouter({
     message: { error: "Voice transcription limit reached. Please wait before trying again." }
   });
 
-  router.post("/transcribe", requestLimit, (req, res) => {
+  function authenticate(req, res, next) {
+    const [scheme, token] = String(req.headers.authorization || "").split(" ");
+    if (scheme !== "Bearer" || !token) return res.status(401).json({ error: "Please log in to transcribe audio." });
+    try {
+      const claims = jwtImplementation.verify(token, jwtSecret, { issuer: "waltajjii", audience: "waltajjii-users" });
+      if (!claims?.userId) return res.status(401).json({ error: "Your session has expired. Please log in again." });
+      req.auth = claims;
+      return next();
+    } catch {
+      return res.status(401).json({ error: "Your session has expired. Please log in again." });
+    }
+  }
+
+  router.post("/transcribe", requestLimit, authenticate, (req, res) => {
     upload.single("audio")(req, res, async error => {
       if (error) {
         const message = error.code === "LIMIT_FILE_SIZE"
           ? "Audio file is too large. Maximum size is 15 MB."
           : error.message || "Audio upload failed.";
         return res.status(400).json({ error: message });
-      }
-
-      const [scheme, token] = String(req.headers.authorization || "").split(" ");
-      if (scheme !== "Bearer" || !token) return res.status(401).json({ error: "Please log in to transcribe audio." });
-      try {
-        const claims = jwtImplementation.verify(token, jwtSecret, { issuer: "waltajjii", audience: "waltajjii-users" });
-        if (!claims?.userId) return res.status(401).json({ error: "Your session has expired. Please log in again." });
-      } catch {
-        return res.status(401).json({ error: "Your session has expired. Please log in again." });
       }
 
       if (!req.file || !req.file.buffer?.length) return res.status(400).json({ error: "Choose a voice recording first." });
