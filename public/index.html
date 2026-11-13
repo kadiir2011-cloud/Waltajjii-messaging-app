@@ -1079,6 +1079,9 @@
       </select>
       <button type="button" id="wt-caption-translate" disabled>Translate latest caption</button>
       <p id="wt-caption-translation" aria-live="polite"></p>
+      <label class="wt-caption-check"><input type="checkbox" id="wt-caption-auto-translate"> Automatically translate captions received from the other caller (off by default).</label>
+      <p class="wt-caption-privacy">When enabled, each eligible incoming caption is sent as text to the configured translation service. Translation is shown only on your device. Automatic translation is limited to 30 captions per call and at most one request every 1.5 seconds; skipped captions are not queued.</p>
+      <p id="wt-caption-auto-translation" aria-live="polite"></p>
     </div>
     <p id="wt-caption-status" role="status" aria-live="polite">Start a voice or video call to enable captions.</p>
     <div id="wt-caption-feed" aria-label="Live call captions" aria-live="polite" aria-relevant="additions text">
