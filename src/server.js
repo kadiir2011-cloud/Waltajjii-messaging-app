@@ -557,6 +557,7 @@ io.on("connection", (socket) => {
     if (call.participants.size === 0 || (call.hostId === id && notify)) {
       for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
       activeGroupCalls.delete(String(groupId));
+      for (const waitingUserId of call.waitingRoom?.keys() || []) io.to("user:" + waitingUserId).emit("group-call:denied", { groupId: String(groupId), message: "The group call has ended." });
       io.to(`group-call:${groupId}`).emit("group-call:ended", {
         groupId: String(groupId), reason: call.hostId === id ? "host-ended" : "empty"
       });
@@ -577,7 +578,7 @@ io.on("connection", (socket) => {
     if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
     if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
     if (activeGroupCalls.has(groupId)) return acknowledge({ ok: false, error: "A group call is already active." });
-    const call = { groupId, hostId: userId, participants: new Map([[userId, socket.data.username]]), handRaised: new Set() };
+    const call = { groupId, hostId: userId, participants: new Map([[userId, socket.data.username]]), handRaised: new Set(), waitingRoom: new Map(), admitted: new Set() };
     activeGroupCalls.set(groupId, call);
     activeGroupCallByUser.set(userId, groupId);
     groupCallMembership.add(groupId);
@@ -597,6 +598,51 @@ io.on("connection", (socket) => {
       participantCount: call ? call.participants.size : 0
     });
   });
+  // Phase 77: participants wait for host admission before media capture or signaling.
+  socket.on("group-call:request-join", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const userId = String(socket.data.userId);
+    const call = activeGroupCalls.get(groupId);
+    if (!/^\\d+$/.test(groupId) || !call || !isCurrentGroupMember(groupId, socket.data.userId)) {
+      return acknowledge({ ok: false, error: "No active group call is available to you." });
+    }
+    if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
+    if (activeCalls.has(userId) || activeGroupCallByUser.has(userId)) {
+      return acknowledge({ ok: false, error: "End your current call before requesting group-call access." });
+    }
+    if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+    if (!call.waitingRoom) call.waitingRoom = new Map();
+    call.waitingRoom.set(userId, { username: socket.data.username, requestedAt: Date.now() });
+    io.to("user:" + call.hostId).emit("group-call:join-requested", {
+      groupId, userId, username: socket.data.username
+    });
+    acknowledge({ ok: true, waiting: true });
+  });
+
+  socket.on("group-call:admit", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || ""), targetUserId = String(data.targetUserId || "");
+    const call = activeGroupCalls.get(groupId);
+    if (!call || call.hostId !== String(socket.data.userId) || !call.waitingRoom?.has(targetUserId)) {
+      return acknowledge({ ok: false, error: "Only the active call host can admit a waiting participant." });
+    }
+    if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+    call.waitingRoom.delete(targetUserId);
+    call.admitted.add(targetUserId);
+    io.to("user:" + targetUserId).emit("group-call:admitted", { groupId });
+    acknowledge({ ok: true });
+  });
+
+  socket.on("group-call:deny", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || ""), targetUserId = String(data.targetUserId || "");
+    const call = activeGroupCalls.get(groupId);
+    if (!call || call.hostId !== String(socket.data.userId) || !call.waitingRoom?.has(targetUserId)) {
+      return acknowledge({ ok: false, error: "Only the active call host can decline a waiting participant." });
+    }
+    call.waitingRoom.delete(targetUserId);
+    io.to("user:" + targetUserId).emit("group-call:denied", { groupId, message: "The host did not admit you to this call." });
+    acknowledge({ ok: true });
+  });
+
   socket.on("group-call:join", (data = {}, acknowledge = () => {}) => {
     const groupId = String(data.groupId || "");
     const userId = String(socket.data.userId);
@@ -607,7 +653,10 @@ io.on("connection", (socket) => {
     if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
     if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
     if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
+    if (!call.admitted?.has(userId)) return acknowledge({ ok: false, error: "Wait for the host to admit you from the waiting room." });
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+    call.admitted.delete(userId);
+    call.waitingRoom?.delete(userId);
     call.participants.set(userId, socket.data.username);
     if (!call.handRaised) call.handRaised = new Set();
     activeGroupCallByUser.set(userId, groupId);
@@ -713,6 +762,7 @@ io.on("connection", (socket) => {
       return acknowledge({ ok: false, error: "Only the group-call host can end this call for everyone." });
     }
     activeGroupCalls.delete(groupId);
+    for (const waitingUserId of call.waitingRoom?.keys() || []) io.to("user:" + waitingUserId).emit("group-call:denied", { groupId, message: "The group call has ended." });
     for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
     io.to(`group-call:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
     io.to(`group:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
