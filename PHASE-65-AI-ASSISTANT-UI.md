@@ -25,7 +25,7 @@ Isolated draft branch based on Phase 64. Frontend-only integration for the state
 The endpoint is mounted only in the opt-in PostgreSQL API composition. The current production SQLite server does not mount it. This UI must be tested only with the controlled PostgreSQL staging composition; on the current SQLite service it will report that the endpoint is unavailable. No production server route is added in this phase.
 
 ## Verification
-Static UI contract tests check disclosure, consent, supported actions, selected-message context, safe text rendering, and the absence of automatic message submission. Browser smoke and responsive checks are included in CI.
+Static UI contract tests check disclosure, consent, supported actions, selected-message context, safe text rendering, and the absence of automatic message submission. This workflow does not yet exercise the AI panel in a real browser; browser-level interaction and responsive testing against controlled PostgreSQL staging remain required.
 
 ## Not included
 - Automatic AI history access or long-term AI chat memory.
