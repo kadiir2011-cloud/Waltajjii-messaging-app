@@ -1,0 +1,54 @@
+name: Phase 79 disposable database integration
+on:
+  pull_request:
+    paths:
+      - "migrations/postgres/**"
+      - "scripts/**"
+      - "src/db/**"
+      - "src/services/**"
+      - "src/routes/postgres-*.js"
+      - "src/postgres/**"
+      - "src/workers/postgres-*.js"
+      - "test/**"
+      - ".github/workflows/phase79-postgres-integration-ci.yml"
+      - "PHASE-79-POSTGRES-INTEGRATION-CI.md"
+permissions:
+  contents: read
+jobs:
+  disposable-database:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/waltajjii_test
+      PGSSL: "false"
+      WALTAJJII_ALLOW_DISPOSABLE_TARGET: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies including native SQLite test driver
+        run: npm ci
+      - name: Check JavaScript syntax
+        run: |
+          find src public test scripts -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Run database, migration, and feature test suites
+        shell: bash
+        run: |
+          mapfile -t TEST_FILES < <(find test -maxdepth 1 -type f -name '*.test.js' ! -name 'phase56-browser-e2e.test.js' -print | sort)
+          node --test --test-concurrency=1 "${TEST_FILES[@]}"
