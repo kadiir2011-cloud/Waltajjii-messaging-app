@@ -13,6 +13,7 @@ const { createPostgresUploadsRouter } = require("../routes/postgres-uploads");
 const { createPostgresCallsRouter } = require("../routes/postgres-calls");
 const { createPostgresTranslationRouter } = require("../routes/postgres-translation");
 const { createPostgresAiAssistantRouter } = require("../routes/postgres-ai-assistant");
+const { createPostgresAudioIntelligenceRouter } = require("../routes/postgres-audio-intelligence");
 
 /**
  * Opt-in PostgreSQL API composition for integration tests and controlled
@@ -45,7 +46,10 @@ function createPostgresApiRouter({
   translationLimiter,
   aiAssistantModel,
   aiAssistantFetchImpl,
-  aiAssistantLimiter
+  aiAssistantLimiter,
+  audioTranscriptionModel,
+  audioTranscriptionFetchImpl,
+  audioTranscriptionLimiter
 } = {}) {
   const required = [
     ["auth", ["register", "login", "getProfile", "updateProfile"]],
@@ -142,6 +146,11 @@ function createPostgresApiRouter({
   router.use("/ai", createPostgresAiAssistantRouter({
     jwtSecret, jwtImplementation: jwt, apiKey: openAiApiKey,
     model: aiAssistantModel, fetchImpl: aiAssistantFetchImpl, limiter: aiAssistantLimiter
+  }));
+  router.use("/audio", createPostgresAudioIntelligenceRouter({
+    jwtSecret, jwtImplementation: jwt, apiKey: openAiApiKey,
+    model: audioTranscriptionModel, fetchImpl: audioTranscriptionFetchImpl,
+    limiter: audioTranscriptionLimiter
   }));
 
   return router;
