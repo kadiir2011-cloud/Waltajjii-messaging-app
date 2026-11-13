@@ -61,7 +61,7 @@ test("audio transcription forwards an in-memory audio blob and returns only tran
   assert.equal(providerRequest.url, "https://api.openai.com/v1/audio/transcriptions");
   assert.equal(providerRequest.options.headers.Authorization, "Bearer test-provider-key");
   assert.equal(providerRequest.options.body.get("model"), "test-transcribe-model");
-  assert.equal(providerRequest.options.body.get("language"), "am");
+  assert.equal(providerRequest.options.body.get("languages[]"), "am");
   assert.equal(providerRequest.options.body.get("file").size, Buffer.byteLength("fake-webm-audio"));
 });
 
