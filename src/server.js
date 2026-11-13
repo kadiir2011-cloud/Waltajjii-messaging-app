@@ -321,6 +321,7 @@ io.on("connection", (socket) => {
 
     if (socket.data.typingTo && socket.data.typingTo !== targetUserId) {
       stopSocketTyping(socket);
+    for (const groupId of Array.from(groupCallMembership)) leaveGroupCall(groupId, disconnectedUserId, true);
     }
 
     socket.data.typingTo = targetUserId;
