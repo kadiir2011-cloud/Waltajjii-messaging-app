@@ -587,7 +587,7 @@ io.on("connection", (socket) => {
   });
   socket.on("group-call:status", (data = {}, acknowledge = () => {}) => {
     const groupId = String(data.groupId || "");
-    if (!/^\\d+$/.test(groupId) || !isCurrentGroupMember(groupId, socket.data.userId)) {
+    if (!/^\d+$/.test(groupId) || !isCurrentGroupMember(groupId, socket.data.userId)) {
       return acknowledge({ ok: false, error: "You are not a current member of this group." });
     }
     const call = activeGroupCalls.get(groupId);
