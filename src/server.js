@@ -560,6 +560,9 @@ io.on("connection", (socket) => {
       io.to(`group-call:${groupId}`).emit("group-call:ended", {
         groupId: String(groupId), reason: call.hostId === id ? "host-ended" : "empty"
       });
+      io.to(`group:${groupId}`).emit("group-call:ended", {
+        groupId: String(groupId), reason: call.hostId === id ? "host-ended" : "empty"
+      });
       io.in(`group-call:${groupId}`).socketsLeave(`group-call:${groupId}`);
       if (notify) call.participants.clear();
     }
@@ -579,6 +582,7 @@ io.on("connection", (socket) => {
     activeGroupCallByUser.set(userId, groupId);
     groupCallMembership.add(groupId);
     socket.join(`group-call:${groupId}`);
+    io.to(`group:${groupId}`).emit("group-call:available", { groupId, hostId: userId, hostUsername: socket.data.username });
     acknowledge({ ok: true, groupId, participants: [{ userId, username: socket.data.username }] });
   });
   socket.on("group-call:join", (data = {}, acknowledge = () => {}) => {
@@ -635,6 +639,7 @@ io.on("connection", (socket) => {
     activeGroupCalls.delete(groupId);
     for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
     io.to(`group-call:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
+    io.to(`group:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
     io.in(`group-call:${groupId}`).socketsLeave(`group-call:${groupId}`);
     acknowledge({ ok: true });
   });
