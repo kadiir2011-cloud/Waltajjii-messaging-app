@@ -1619,6 +1619,85 @@ function registerCallSocketHandlers(socket) {
     translateIncomingCallCaption(data.text.slice(0, 500), data.senderId);
   });
 
+
+  socket.on("group-call:available", data => {
+    if (!data || String(data.groupId) !== String(groupSelect?.value || "")) return;
+    if (!activeGroupCallId && groupCallJoinButton) groupCallJoinButton.disabled = false;
+    if (groupCallStatus && !activeGroupCallId) {
+      groupCallStatus.textContent = (data.hostUsername || "A group member") + " started a group video call. You can join now.";
+    }
+  });
+
+  socket.on("group-call:participant-joined", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) ||
+        String(data.userId) === String(userIdsByUsername.get(currentUsername))) return;
+    try { await createGroupPeerConnection(data.userId, data.username, false); }
+    catch (error) {
+      if (groupCallStatus) groupCallStatus.textContent = "Could not connect to " + (data.username || "a participant") + ": " + error.message;
+    }
+  });
+
+  socket.on("group-call:offer", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !data.description) return;
+    try {
+      const connection = await createGroupPeerConnection(data.senderId, data.senderUsername, false);
+      await connection.setRemoteDescription(data.description);
+      await flushGroupIce(data.senderId, connection);
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      await groupCallEmit("group-call:answer", {
+        groupId: activeGroupCallId, targetUserId: String(data.senderId), description: connection.localDescription
+      });
+    } catch (error) {
+      if (groupCallStatus) groupCallStatus.textContent = "Could not answer a group participant: " + error.message;
+    }
+  });
+
+  socket.on("group-call:answer", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !data.description) return;
+    const connection = groupPeerConnections.get(String(data.senderId));
+    if (!connection) return;
+    try {
+      await connection.setRemoteDescription(data.description);
+      await flushGroupIce(data.senderId, connection);
+    } catch (error) {
+      if (groupCallStatus) groupCallStatus.textContent = "Could not complete a participant connection: " + error.message;
+    }
+  });
+
+  socket.on("group-call:ice-candidate", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !data.candidate) return;
+    const id = String(data.senderId);
+    const connection = groupPeerConnections.get(id);
+    if (connection?.remoteDescription) {
+      try { await connection.addIceCandidate(data.candidate); }
+      catch (error) { console.warn("Group-call ICE candidate failed:", error.message); }
+    } else {
+      if (!groupPendingIce.has(id)) groupPendingIce.set(id, []);
+      groupPendingIce.get(id).push(data.candidate);
+    }
+  });
+
+  socket.on("group-call:participant-left", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    const id = String(data.userId);
+    groupPeerConnections.get(id)?.close();
+    groupPeerConnections.delete(id);
+    groupPendingIce.delete(id);
+    removeGroupCallTile(id);
+    if (groupCallStatus) groupCallStatus.textContent = (data.username || "A participant") + " left the group call.";
+  });
+
+  socket.on("group-call:ended", data => {
+    if (!data) return;
+    if (String(data.groupId) === String(activeGroupCallId)) {
+      stopGroupVideoCall(false);
+    } else if (String(data.groupId) === String(groupSelect?.value || "")) {
+      if (groupCallJoinButton) groupCallJoinButton.disabled = true;
+      if (groupCallStatus) groupCallStatus.textContent = "The group video call has ended.";
+    }
+  });
+
   socket.on("call:ended", () => {
     endVideoCall(false);
     setCallStatus("The other participant ended the call.");
@@ -2233,7 +2312,7 @@ async function joinGroupVideoCall() {
     createGroupCallTile("self", currentUsername || "You", groupCallLocalStream, true);
     if (groupCallLeaveButton) groupCallLeaveButton.disabled = false;
     if (groupCallStatus) groupCallStatus.textContent = "Joined group video call. Connecting to participants…";
-    const peers = (response.participants || []).filter(person => String(person.userId) !== String(userIdsByUsername.get(currentUsername)));
+    const peers = (response.participants || []).filter(person => String(person.username) !== String(currentUsername));
     for (const person of peers) await createGroupPeerConnection(person.userId, person.username, true);
   } catch (error) {
     groupCallLocalStream?.getTracks().forEach(track => track.stop());
