@@ -1,0 +1,27 @@
+name: Phase 69 call quality monitor
+on:
+  pull_request:
+    paths:
+      - "public/app.js"
+      - "public/index.html"
+      - "test/phase69-call-quality-monitor.test.js"
+      - "PHASE-69-CALL-QUALITY-MONITOR.md"
+      - ".github/workflows/phase69-call-quality-monitor.yml"
+permissions:
+  contents: read
+jobs:
+  call-quality-monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: node --check public/app.js
+      - name: Run call quality and interpreter regression tests
+        run: node --test test/phase69-call-quality-monitor.test.js test/phase68-live-call-interpreter.test.js test/phase67-live-call-captions.test.js test/phase44-postgres-realtime-socket.test.js
