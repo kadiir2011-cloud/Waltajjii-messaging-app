@@ -1,0 +1,29 @@
+name: Phase 68 live multilingual call interpreter
+on:
+  pull_request:
+    paths:
+      - "public/app.js"
+      - "public/index.html"
+      - "test/phase68-live-call-interpreter.test.js"
+      - "test/phase67-live-call-captions.test.js"
+      - "test/phase44-postgres-realtime-socket.test.js"
+      - "PHASE-68-LIVE-CALL-INTERPRETER.md"
+      - ".github/workflows/phase68-live-call-interpreter.yml"
+permissions:
+  contents: read
+jobs:
+  live-call-interpreter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: node --check public/app.js
+      - name: Run interpreter, caption and voice AI regression tests
+        run: node --test test/phase68-live-call-interpreter.test.js test/phase67-live-call-captions.test.js test/phase44-postgres-realtime-socket.test.js test/phase66-audio-intelligence.test.js test/phase66-audio-ui.test.js test/phase64-ai-assistant.test.js test/phase65-ai-assistant-ui.test.js
