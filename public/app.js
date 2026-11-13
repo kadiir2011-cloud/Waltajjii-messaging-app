@@ -1112,8 +1112,10 @@ if (callAdaptiveToggle) {
       applyAdaptiveVideoQuality("high");
     } else {
       if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; restoring standard video quality.";
-      applyAdaptiveVideoQuality("high").then(() => {
-        if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; standard video quality is restored.";
+      applyAdaptiveVideoQuality("high").then(restored => {
+        if (callAdaptiveStatus) callAdaptiveStatus.textContent = restored
+          ? "Automatic video adaptation is off; standard video quality is restored."
+          : "Automatic video adaptation is off; this browser could not reset video settings automatically.";
       });
     }
   });
@@ -1660,8 +1662,10 @@ async function applyAdaptiveVideoQuality(profile) {
     adaptiveVideoProfile = profile;
     const labels = { high: "Standard quality", balanced: "Balanced quality", conserve: "Data-saving quality" };
     if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic adaptation: " + labels[profile] + ". Adjusted on this device only.";
+    return true;
   } catch (error) {
     if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adjustment is not supported by this browser; call quality remains unchanged.";
+    return false;
   } finally {
     adaptiveApplyPending = false;
   }
