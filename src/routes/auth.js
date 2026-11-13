@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
+const { verifyAccessToken } = require("../security/access-token");
 
 const router = express.Router();
 
@@ -56,7 +57,7 @@ router.post("/login", authLimiter, async (req, res) => {
     const password = String(req.body.password || "");
 
     const user = db.prepare(
-      "SELECT id, username, password_hash FROM users WHERE username = ?"
+      "SELECT id, username, password_hash, token_version FROM users WHERE username = ?"
     ).get(username);
 
     const valid = user
@@ -75,7 +76,7 @@ router.post("/login", authLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { userId: user.id, username: user.username, tokenVersion: Number(user.token_version || 0) },
       secret,
       { expiresIn: "2h", issuer: "waltajjii", audience: "waltajjii-users" }
     );
@@ -100,10 +101,7 @@ function authenticateProfile(req, res, next) {
   }
 
   try {
-    req.auth = jwt.verify(token, process.env.JWT_SECRET, {
-      issuer: "waltajjii",
-      audience: "waltajjii-users"
-    });
+    req.auth = verifyAccessToken(token, db);
     next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired login token." });
@@ -160,4 +158,45 @@ router.patch("/profile", authenticateProfile, (req, res) => {
   res.json({ message: "Profile updated successfully.", fullName, profileBackground, bio, professionalTitle,
     organization, department, location, website, profileMode });
 });
+
+
+// Change password after re-authenticating with the current password.
+// All older access tokens are revoked; the current browser receives a fresh token.
+router.post("/change-password", authenticateProfile, async (req, res) => {
+  const currentPassword = typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
+  const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+  if (newPassword.length < 12 || newPassword.length > 128) {
+    return res.status(400).json({ error: "New password must be between 12 and 128 characters." });
+  }
+  try {
+    const user = db.prepare("SELECT id, username, password_hash, token_version FROM users WHERE id = ?")
+      .get(req.auth.userId);
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+      return res.status(401).json({ error: "Current password is incorrect." });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const nextVersion = Number(user.token_version || 0) + 1;
+    db.prepare("UPDATE users SET password_hash = ?, token_version = ? WHERE id = ?")
+      .run(passwordHash, nextVersion, user.id);
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, tokenVersion: nextVersion },
+      process.env.JWT_SECRET,
+      { expiresIn: "2h", issuer: "waltajjii", audience: "waltajjii-users" }
+    );
+    return res.json({ message: "Password changed. Other sessions have been signed out.", token });
+  } catch (error) {
+    console.error("Password change failed:", error.name || "Error");
+    return res.status(500).json({ error: "Could not change password." });
+  }
+});
+
+// Revoke every active session for this account, including the current token.
+router.post("/logout-all", authenticateProfile, (req, res) => {
+  const result = db.prepare("UPDATE users SET token_version = token_version + 1 WHERE id = ?")
+    .run(req.auth.userId);
+  if (!result.changes) return res.status(404).json({ error: "Account not found." });
+  res.set("Cache-Control", "no-store");
+  return res.json({ message: "All active sessions have been signed out. Please log in again." });
+});
+
 module.exports = router;
