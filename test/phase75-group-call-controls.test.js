@@ -26,7 +26,7 @@ test("grid and focus layouts can be switched without changing signaling", () => 
   assert.match(html, /id="wt-group-call-layout"/);
   assert.match(app, /function applyGroupCallLayout\(\)/);
   assert.match(app, /groupCallLayout === "grid" \? "focus" : "grid"/);
-  assert.match(app, /data-layout/);
+  assert.match(app, /groupCallGrid\.dataset\.layout = groupCallLayout/);
 });
 
 test("controls disable and roster clears when the group call ends", () => {
