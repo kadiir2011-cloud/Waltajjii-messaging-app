@@ -79,7 +79,7 @@ avatar_path TEXT,
 `);
 
 
-// Add profile fields to existing Waltajjii databases without deleting user data.
+// Phase 81: token versions allow password changes and global logout to revoke older sessions.\nconst sessionColumns = db.prepare("PRAGMA table_info(users)").all().map(column => column.name);\nif (!sessionColumns.includes("token_version")) {\n  db.exec("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0");\n}\n\n// Add profile fields to existing Waltajjii databases without deleting user data.
 const profileColumnNames = db.prepare("PRAGMA table_info(users)").all().map(column => column.name);
 const profileMigrations = [
   ["professional_title", "TEXT NOT NULL DEFAULT ''"],

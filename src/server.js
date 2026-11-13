@@ -4,12 +4,12 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 const http = require("http");
-const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 const { createOriginPolicy } = require("./security/origin-policy");
 
 require("dotenv").config();
 const db = require("./db");
+const { verifyAccessToken } = require("./security/access-token");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -77,10 +77,7 @@ app.post("/api/translation/translate", translationRateLimit, async (req, res) =>
     return res.status(401).json({ error: "Please log in to use translation." });
   }
   try {
-    jwt.verify(accessToken, process.env.JWT_SECRET, {
-      issuer: "waltajjii",
-      audience: "waltajjii-users"
-    });
+    verifyAccessToken(accessToken, db);
   } catch {
     return res.status(401).json({ error: "Your session has expired. Please log in again." });
   }
@@ -179,10 +176,7 @@ io.use((socket, next) => {
       return next(new Error("Server authentication is not configured."));
     }
 
-    const user = jwt.verify(token, secret, {
-      issuer: "waltajjii",
-      audience: "waltajjii-users"
-    });
+    const user = verifyAccessToken(token, db);
 
     if (!user.userId || !user.username) {
       return next(new Error("Invalid user token."));
@@ -211,10 +205,7 @@ app.get("/api/presence/online", (req, res) => {
   }
   let viewer;
   try {
-    viewer = jwt.verify(token, process.env.JWT_SECRET, {
-      issuer: "waltajjii",
-      audience: "waltajjii-users"
-    });
+    viewer = verifyAccessToken(token, db);
   } catch {
     return res.status(401).json({ error: "Invalid or expired login token." });
   }
