@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const root = path.join(__dirname, "..");
 const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
+const accessToken = fs.readFileSync(path.join(root, "src/security/access-token.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 const appJs = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 
@@ -27,8 +28,9 @@ test("HTTP boundary has security headers, origin validation, bounded JSON and ra
 test("Socket.IO requires a signed, scoped login token before accepting connections", () => {
   assert.match(server, /io\.use\(\(socket, next\) =>/);
   assert.match(server, /socket\.handshake\.auth\?\.token/);
-  assert.match(server, /issuer:\s*"waltajjii"/);
-  assert.match(server, /audience:\s*"waltajjii-users"/);
+  assert.match(accessToken, /issuer:\s*"waltajjii"/);
+  assert.match(accessToken, /audience:\s*"waltajjii-users"/);
+  assert.match(server, /verifyAccessToken\(token, db\)/);
   assert.match(server, /socket\.data\.userId\s*=\s*user\.userId/);
 });
 
