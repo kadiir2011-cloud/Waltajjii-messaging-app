@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const db = require("../db");
+const { verifyAccessToken } = require("../security/access-token");
 
 const router = express.Router();
 
@@ -13,10 +14,7 @@ function authenticate(req, res, next) {
   }
 
   try {
-    req.auth = jwt.verify(token, process.env.JWT_SECRET, {
-      issuer: "waltajjii",
-      audience: "waltajjii-users"
-    });
+    req.auth = verifyAccessToken(token, db);
     next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired login token." });
