@@ -1039,6 +1039,11 @@
     <video id="remote-video" autoplay playsinline
            style="width: 220px; max-width: 100%; background: #222; border-radius: 8px;"></video>
   </div>
+  <div id="wt-screen-share-preview-container" hidden>
+    <p>Screen share preview (visible only on this device)</p>
+    <video id="wt-screen-share-preview" autoplay muted playsinline
+           style="width: min(640px, 100%); background: #222; border-radius: 8px;"></video>
+  </div>
 
   <p id="call-status" role="status" aria-live="polite">
     Choose a recipient to start a call.
@@ -1051,8 +1056,11 @@
     <button type="button" id="reject-call-button" disabled>Reject</button>
     <button type="button" id="end-call-button" disabled>End call</button>
     <button type="button" id="wt-call-reconnect" disabled>Try to reconnect</button>
+    <button type="button" id="wt-screen-share" disabled>Share screen</button>
+    <button type="button" id="wt-screen-share-stop" disabled>Stop screen sharing</button>
   </div>
   <p class="wt-call-recovery-note">If a call drops temporarily while both participants remain connected to Waltajjii, either person can request an ICE restart. Reconnection is not guaranteed on every network.</p>
+  <p id="wt-screen-share-status" role="status" aria-live="polite">Screen sharing is available during a connected video call. The other caller will see your shared screen.</p>
   <p id="wt-call-quality" role="status" aria-live="polite">Call quality monitoring starts when a call begins. Metrics are measured on this device only and are not stored.</p>
   <div class="wt-call-adaptive-controls">
     <label for="wt-call-adaptive"><input type="checkbox" id="wt-call-adaptive" checked> Automatically adapt video quality to network conditions</label>
