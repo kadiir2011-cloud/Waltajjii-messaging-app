@@ -1124,7 +1124,7 @@ function setCaptionStatus(message) {
 }
 
 function updateCaptionAvailability() {
-  const active = Boolean(peerConnection && activeCallUserId && callSocket?.connected);
+  const active = Boolean(peerConnection && peerConnection.connectionState === "connected" && activeCallUserId && callSocket?.connected);
   if (captionStartButton) captionStartButton.disabled = !active || liveCaptionsActive;
   if (captionStopButton) captionStopButton.disabled = !liveCaptionsActive;
   if (captionTranslateButton) captionTranslateButton.disabled = !latestCallCaption;
@@ -1156,7 +1156,7 @@ function stopLiveCallCaptions(clear = false) {
     recognition.onend = null;
     try { recognition.stop(); } catch {}
   }
-  if (captionStartButton) captionStartButton.disabled = !Boolean(peerConnection && activeCallUserId && callSocket?.connected);
+  if (captionStartButton) captionStartButton.disabled = !Boolean(peerConnection && peerConnection.connectionState === "connected" && activeCallUserId && callSocket?.connected);
   if (captionStopButton) captionStopButton.disabled = true;
   if (clear) {
     if (captionFeed) {
@@ -1175,7 +1175,7 @@ function stopLiveCallCaptions(clear = false) {
 }
 
 function startLiveCallCaptions() {
-  if (!peerConnection || !activeCallUserId || !callSocket?.connected) {
+  if (!peerConnection || peerConnection.connectionState !== "connected" || !activeCallUserId || !callSocket?.connected) {
     setCaptionStatus("Start or accept a call before enabling captions.");
     return;
   }
@@ -1216,7 +1216,7 @@ function startLiveCallCaptions() {
   };
   recognition.onerror = event => {
     if (event.error === "no-speech") return;
-    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+    if (["not-allowed", "service-not-allowed", "language-not-supported", "audio-capture", "network"].includes(event.error)) {
       stopLiveCallCaptions(false);
       setCaptionStatus("Browser speech recognition permission was denied.");
     } else {
