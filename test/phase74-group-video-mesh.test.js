@@ -42,6 +42,8 @@ test("participants can leave and all media tracks and peer connections are relea
 
 test("server advertises active conferences and authorizes status lookup for group members", () => {
   assert.match(server, /group-call:available/);
+  assert.ok(server.includes("if (!/^\\d+$/.test(groupId)"));
+  assert.match(server, /Array\.from\(groupCallMembership\) leaveGroupCall/);
   assert.match(server, /socket\.on\("group-call:status"/);
   assert.match(server, /isCurrentGroupMember\(groupId, socket\.data\.userId\)/);
   assert.match(server, /call\.participants\.size >= 8/);
