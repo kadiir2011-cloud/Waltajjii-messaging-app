@@ -545,9 +545,31 @@ items.forEach(item => {
           .then(blob => { audio.src = URL.createObjectURL(blob); if (done) done(); })
           .catch(error => { title.textContent = "Voice message unavailable"; if (fail) fail(error); });
       };
+      const transcribeButton = document.createElement("button");
+      transcribeButton.type = "button";
+      transcribeButton.className = "secondary wt-audio-message-button";
+      transcribeButton.textContent = "Transcribe voice";
+      transcribeButton.addEventListener("click", async () => {
+        transcribeButton.disabled = true;
+        transcribeButton.textContent = "Loading audio…";
+        try {
+          const response = await fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } });
+          if (!response.ok) throw new Error("Voice message could not be loaded.");
+          const blob = await response.blob();
+          document.dispatchEvent(new CustomEvent("waltajjii:audio-context", {
+            detail: { blob, filename: "waltajjii-voice-message." + ((blob.type || "").includes("ogg") ? "ogg" : (blob.type || "").includes("mp4") ? "m4a" : (blob.type || "").includes("mpeg") ? "mp3" : "webm") }
+          }));
+          document.getElementById("wt-audio-ai")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch (error) {
+          title.textContent = error.message || "Voice message unavailable";
+        } finally {
+          transcribeButton.disabled = false;
+          transcribeButton.textContent = "Transcribe voice";
+        }
+      });
       if (isLowDataMode()) player.appendChild(createMediaLoadButton("Load voice message", loadVoiceMedia));
       else loadVoiceMedia();
-      player.append(top, waveform, audio);
+      player.append(top, waveform, audio, transcribeButton);
       content.appendChild(player);
     } else if (item.mediaType === "image") {
   const image = document.createElement("img");
