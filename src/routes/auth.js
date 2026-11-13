@@ -178,6 +178,7 @@ router.post("/change-password", authenticateProfile, async (req, res) => {
     const nextVersion = Number(user.token_version || 0) + 1;
     db.prepare("UPDATE users SET password_hash = ?, token_version = ? WHERE id = ?")
       .run(passwordHash, nextVersion, user.id);
+    req.app.get("io")?.in("user:" + String(user.id)).disconnectSockets(true);
     const token = jwt.sign(
       { userId: user.id, username: user.username, tokenVersion: nextVersion },
       process.env.JWT_SECRET,
@@ -195,6 +196,7 @@ router.post("/logout-all", authenticateProfile, (req, res) => {
   const result = db.prepare("UPDATE users SET token_version = token_version + 1 WHERE id = ?")
     .run(req.auth.userId);
   if (!result.changes) return res.status(404).json({ error: "Account not found." });
+  req.app.get("io")?.in("user:" + String(req.auth.userId)).disconnectSockets(true);
   res.set("Cache-Control", "no-store");
   return res.json({ message: "All active sessions have been signed out. Please log in again." });
 });
