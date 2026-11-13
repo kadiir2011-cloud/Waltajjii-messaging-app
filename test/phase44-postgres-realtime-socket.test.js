@@ -151,3 +151,32 @@ test("database failures return safe acknowledgements", async () => {
   await socket.events["message:delivered"]({ messageId: "12" }, value => { ack = value; });
   assert.deepEqual(ack, { ok: false, error: "Could not update message delivery." });
 });
+
+test("live captions are relayed only to the active call peer, with server identity and rate limits", async () => {
+  const h = makeHarness();
+  const caller = h.makeSocket("7", "caller"), recipient = h.makeSocket("8", "recipient");
+  for (const socket of [caller, recipient]) {
+    await runMiddleware(h.middlewares[0], socket);
+    await h.handlers.connection(socket);
+  }
+  let ack;
+  caller.events["call:caption"]({ targetUserId: "8", text: "before call" }, value => { ack = value; });
+  assert.deepEqual(ack, { ok: false, error: "Live captions are not authorized for this call." });
+
+  caller.events["call:offer"]({ targetUserId: "8", offer: { type: "offer" } }, value => { ack = value; });
+  assert.deepEqual(ack, { ok: true });
+  caller.events["call:caption"]({ targetUserId: "8", text: "  Hello there.  ", senderUsername: "spoofed" }, value => { ack = value; });
+  assert.deepEqual(ack, { ok: true });
+  const caption = h.emitted.find(item => item.room === "user:8" && item.event === "call:caption");
+  assert.equal(caption.payload.senderId, "7");
+  assert.equal(caption.payload.senderUsername, "caller");
+  assert.equal(caption.payload.text, "Hello there.");
+  assert.equal(typeof caption.payload.sentAt, "number");
+  assert.equal(h.emitted.some(item => item.room === "user:7" && item.event === "call:caption"), false);
+
+  caller.events["call:caption"]({ targetUserId: "8", text: "x".repeat(501) }, value => { ack = value; });
+  assert.deepEqual(ack, { ok: false, error: "Caption must contain between 1 and 500 characters." });
+  for (let i = 1; i < 20; i++) caller.events["call:caption"]({ targetUserId: "8", text: "caption " + i }, () => {});
+  caller.events["call:caption"]({ targetUserId: "8", text: "too many" }, value => { ack = value; });
+  assert.deepEqual(ack, { ok: false, error: "Live caption rate limit reached. Please slow down." });
+});
