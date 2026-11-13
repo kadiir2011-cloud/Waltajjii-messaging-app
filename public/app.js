@@ -678,6 +678,21 @@ items.forEach(item => {
   });
   messageActions.appendChild(replyButton);
 
+  if (!item.deletedAt && typeof item.body === "string" && item.body.trim()) {
+    const aiButton = document.createElement("button");
+    aiButton.type = "button";
+    aiButton.className = "wt-ai-message-button";
+    aiButton.textContent = "✨ Ask AI";
+    aiButton.setAttribute("aria-label", "Use this selected message with Waltajjii AI");
+    aiButton.addEventListener("click", () => {
+      document.dispatchEvent(new CustomEvent("waltajjii:ai-context", {
+        detail: { context: item.body.slice(0, 8000) }
+      }));
+      document.getElementById("wt-ai-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    messageActions.appendChild(aiButton);
+  }
+
   if (item.sender === currentUsername && !item.deletedAt && !item.mediaPath) {
     const editButton = document.createElement("button");
     editButton.type = "button";
