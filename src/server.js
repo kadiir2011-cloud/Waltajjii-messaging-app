@@ -577,7 +577,7 @@ io.on("connection", (socket) => {
     if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
     if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
     if (activeGroupCalls.has(groupId)) return acknowledge({ ok: false, error: "A group call is already active." });
-    const call = { groupId, hostId: userId, participants: new Map([[userId, socket.data.username]]) };
+    const call = { groupId, hostId: userId, participants: new Map([[userId, socket.data.username]]), handRaised: new Set() };
     activeGroupCalls.set(groupId, call);
     activeGroupCallByUser.set(userId, groupId);
     groupCallMembership.add(groupId);
@@ -609,6 +609,7 @@ io.on("connection", (socket) => {
     if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
     call.participants.set(userId, socket.data.username);
+    if (!call.handRaised) call.handRaised = new Set();
     activeGroupCallByUser.set(userId, groupId);
     groupCallMembership.add(groupId);
     socket.join(`group-call:${groupId}`);
@@ -637,6 +638,69 @@ io.on("connection", (socket) => {
       acknowledge({ ok: true });
     });
   }
+
+  // Phase 76: host/admin moderation. Mute is a request, never a remote track override.
+  socket.on("group-call:hand-raise", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const call = activeGroupCalls.get(groupId);
+    const userId = String(socket.data.userId);
+    if (!call || !call.participants.has(userId) || typeof data.raised !== "boolean") {
+      return acknowledge({ ok: false, error: "You are not an active participant in this group call." });
+    }
+    if (!call.handRaised) call.handRaised = new Set();
+    if (data.raised) call.handRaised.add(userId);
+    else call.handRaised.delete(userId);
+    io.to(`group-call:${groupId}`).emit("group-call:hand-raised", {
+      groupId, userId, username: socket.data.username, raised: data.raised
+    });
+    acknowledge({ ok: true, raised: data.raised });
+  });
+  socket.on("group-call:moderate", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const targetUserId = String(data.targetUserId || "");
+    const action = String(data.action || "");
+    const call = activeGroupCalls.get(groupId);
+    const actorId = String(socket.data.userId);
+    if (!call || !call.participants.has(actorId) || !call.participants.has(targetUserId) || actorId === targetUserId) {
+      return acknowledge({ ok: false, error: "This moderation action is not available for the current call." });
+    }
+    const membership = db.prepare(
+      "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?"
+    ).get(groupId, actorId);
+    const canModerate = call.hostId === actorId || membership?.role === "admin";
+    if (!canModerate) return acknowledge({ ok: false, error: "Only the call host or a group admin can moderate participants." });
+    if (!["remove", "lower-hand", "request-mute"].includes(action)) {
+      return acknowledge({ ok: false, error: "Unsupported moderation action." });
+    }
+    if (action === "remove") {
+      if (targetUserId === call.hostId) return acknowledge({ ok: false, error: "The call host cannot be removed." });
+      const targetUsername = call.participants.get(targetUserId);
+      call.participants.delete(targetUserId);
+      call.handRaised?.delete(targetUserId);
+      activeGroupCallByUser.delete(targetUserId);
+      io.to(`user:${targetUserId}`).emit("group-call:removed", {
+        groupId, reason: "removed-by-moderator"
+      });
+      io.in(`user:${targetUserId}`).socketsLeave(`group-call:${groupId}`);
+      io.to(`group-call:${groupId}`).emit("group-call:participant-left", {
+        groupId, userId: targetUserId, username: targetUsername, reason: "removed"
+      });
+      acknowledge({ ok: true, action, targetUserId });
+      return;
+    }
+    if (action === "lower-hand") {
+      call.handRaised?.delete(targetUserId);
+      io.to(`group-call:${groupId}`).emit("group-call:hand-raised", {
+        groupId, userId: targetUserId, username: call.participants.get(targetUserId), raised: false
+      });
+    } else {
+      io.to(`user:${targetUserId}`).emit("group-call:mute-request", {
+        groupId, requestedBy: socket.data.username
+      });
+    }
+    acknowledge({ ok: true, action, targetUserId });
+  });
+
   socket.on("group-call:leave", (data = {}, acknowledge = () => {}) => {
     const groupId = String(data.groupId || "");
     const ok = leaveGroupCall(groupId, socket.data.userId, true);

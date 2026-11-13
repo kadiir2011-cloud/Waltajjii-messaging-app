@@ -728,6 +728,9 @@
     .wt-group-call-roster { display:grid; gap:7px; margin:12px 0; padding:12px; border:1px solid #dce5eb; border-radius:10px; background:#fff; }
     .wt-group-call-roster-item { display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .wt-group-call-roster-item button { min-height:36px; padding:6px 10px; }
+    .wt-group-call-moderation-actions { display:flex; flex-wrap:wrap; gap:6px; }
+    .wt-group-call-moderation-actions button { min-height:32px; font-size:.85rem; }
+
     .wt-group-call-grid[data-layout="focus"] { grid-template-columns:minmax(0,1fr); }
     .wt-group-call-grid[data-layout="focus"] .wt-group-call-tile:not(.wt-group-call-pinned) { display:none; }
     .wt-group-call-grid[data-layout="focus"]:not(:has(.wt-group-call-pinned)) .wt-group-call-tile { display:block; }
@@ -1284,6 +1287,7 @@
             <button type="button" id="wt-group-call-mic" disabled aria-pressed="false">Mute microphone</button>
             <button type="button" id="wt-group-call-camera" disabled aria-pressed="false">Turn camera off</button>
             <button type="button" id="wt-group-call-layout" class="secondary" disabled>Switch to focus layout</button>
+            <button type="button" id="wt-group-call-hand" class="secondary" disabled aria-pressed="false">Raise hand</button>
           </div>
           <div id="wt-group-call-roster" class="wt-group-call-roster" aria-label="Group call participants" aria-live="polite" hidden></div>
 
