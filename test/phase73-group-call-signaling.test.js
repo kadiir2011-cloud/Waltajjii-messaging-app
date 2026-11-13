@@ -27,6 +27,6 @@ test("SDP and ICE signaling is relayed only between participants in the same act
 test("only the host can end a conference for everyone and disconnects clean up membership", () => {
   assert.match(server, /socket\.on\("group-call:end"/);
   assert.match(server, /call\.hostId !== String\(socket\.data\.userId\)/);
-  assert.match(server, /groupCallMembership\) leaveGroupCall/);
+  assert.match(server, /Array.from\(groupCallMembership\).*leaveGroupCall/);
   assert.match(server, /socket\.on\("group-call:leave"/);
 });
