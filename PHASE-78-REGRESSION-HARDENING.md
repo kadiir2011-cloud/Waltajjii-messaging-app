@@ -4,10 +4,13 @@
 Strengthen automated regression protection across the existing Waltajjii feature set before beginning production infrastructure changes.
 
 ## Delivered in this phase
-- Add cross-feature contract checks for mounted API modules, HTTP security boundaries, authenticated Socket.IO handshakes, translation validation/privacy, and critical call/language controls.
+- Add cross-feature contract checks for mounted API modules, HTTP security boundaries, authenticated Socket.IO handshakes, translation privacy, and critical call/language controls.
 - Add a dedicated GitHub Actions workflow that syntax-checks JavaScript under `src`, `public`, and `test`.
-- Run the complete Node test suite on pull requests, rather than relying only on the latest feature-specific test list.
-- Keep the work isolated on a draft pull request based on Phase 77.
+- Run the current feature regression tests and isolated PostgreSQL adapter/auth/realtime unit tests together on pull requests.
+- Document the limits of automated checks and the real-device acceptance tests still required before public launch.
+
+## Why some integration suites are separate
+The repository also contains tests that intentionally require a disposable PostgreSQL service, a populated SQLite fixture/native SQLite build, or a browser automation environment. They are not run by this isolated release-gate job because those dependencies have not yet been provisioned in this workflow. They must be enabled in dedicated database/browser CI jobs before production launch; their exclusion is not a pass result.
 
 ## What automated tests do not prove
 - Real two-account message delivery, persistence after restart, or attachment retrieval.
