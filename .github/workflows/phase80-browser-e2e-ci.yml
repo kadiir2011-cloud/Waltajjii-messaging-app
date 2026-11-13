@@ -1,0 +1,30 @@
+name: Phase 80 browser end-to-end tests
+on:
+  pull_request:
+    paths:
+      - "public/**"
+      - "test/phase56-browser-e2e.test.js"
+      - ".github/workflows/phase80-browser-e2e-ci.yml"
+      - "PHASE-80-BROWSER-E2E.md"
+permissions:
+  contents: read
+jobs:
+  chromium-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci
+      - name: Install pinned Playwright test runner
+        run: npm install --no-save --package-lock=false playwright@1.55.0
+      - name: Install Chromium and operating-system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Check browser test syntax
+        run: node --check test/phase56-browser-e2e.test.js
+      - name: Run desktop and mobile browser end-to-end tests
+        run: node --test test/phase56-browser-e2e.test.js
