@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
+const { validateNewPassword } = require("../security/password-policy");
 
 const router = express.Router();
 
@@ -24,10 +25,9 @@ router.post("/register", authLimiter, async (req, res) => {
       });
     }
 
-    if (password.length < 12 || password.length > 128) {
-      return res.status(400).json({
-        error: "Password must be between 12 and 128 characters."
-      });
+    const passwordError = validateNewPassword(password, username);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -80,6 +80,8 @@ router.post("/login", authLimiter, async (req, res) => {
       { expiresIn: "2h", issuer: "waltajjii", audience: "waltajjii-users" }
     );
 
+    res.set("Cache-Control", "no-store");
+    res.set("Pragma", "no-cache");
     return res.json({
       message: "Login successful.",
       token,
