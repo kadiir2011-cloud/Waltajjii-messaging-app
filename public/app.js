@@ -1105,6 +1105,8 @@ const startVoiceCallButton = document.getElementById("start-voice-call-button");
 const acceptCallButton = document.getElementById("accept-call-button");
 const rejectCallButton = document.getElementById("reject-call-button");
 const endCallButton = document.getElementById("end-call-button");
+const callReconnectButton = document.getElementById("wt-call-reconnect");
+let callRecoveryInProgress = false;
 const captionStartButton = document.getElementById("wt-caption-start");
 const captionStopButton = document.getElementById("wt-caption-stop");
 const captionConsent = document.getElementById("wt-caption-consent");
@@ -1517,6 +1519,49 @@ function registerCallSocketHandlers(socket) {
     }
   });
 
+  socket.on("call:recovery-requested", async data => {
+    if (!peerConnection || !activeCallUserId || String(data?.senderId) !== String(activeCallUserId)) return;
+    if (peerConnection.signalingState !== "stable" || callRecoveryInProgress) return;
+    try {
+      callRecoveryInProgress = true;
+      setCallStatus("Your contact requested a connection recovery. Reconnecting…");
+      const offer = await peerConnection.createOffer({ iceRestart: true });
+      await peerConnection.setLocalDescription(offer);
+      socket.emit("call:recovery-offer", { targetUserId: activeCallUserId, offer: peerConnection.localDescription });
+    } catch (error) {
+      callRecoveryInProgress = false;
+      setCallStatus("Could not prepare reconnection. Please try again or end the call.");
+    }
+  });
+
+  socket.on("call:recovery-offer", async data => {
+    if (!peerConnection || String(data?.senderId) !== String(activeCallUserId) || !data.offer) return;
+    try {
+      callRecoveryInProgress = true;
+      await peerConnection.setRemoteDescription(data.offer);
+      await applyPendingIceCandidates();
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit("call:recovery-answer", { targetUserId: activeCallUserId, answer: peerConnection.localDescription });
+      setCallStatus("Reconnection response sent. Restoring call…");
+    } catch (error) {
+      callRecoveryInProgress = false;
+      setCallStatus("Automatic reconnection could not complete. Please try again.");
+    }
+  });
+
+  socket.on("call:recovery-answer", async data => {
+    if (!peerConnection || String(data?.senderId) !== String(activeCallUserId) || !data.answer) return;
+    try {
+      await peerConnection.setRemoteDescription(data.answer);
+      await applyPendingIceCandidates();
+      setCallStatus("Reconnection accepted. Restoring call…");
+    } catch (error) {
+      callRecoveryInProgress = false;
+      setCallStatus("Could not apply the reconnection response. Please try again.");
+    }
+  });
+
   socket.on("call:ice-candidate", async data => {
     if (!data.candidate) return;
 
@@ -1631,10 +1676,13 @@ peerConnection = new RTCPeerConnection(rtcConfiguration);
     if (!peerConnection) return;
 
     if (peerConnection.connectionState === "connected") {
+      callRecoveryInProgress = false;
+      if (callReconnectButton) callReconnectButton.disabled = true;
       setCallStatus(localStream?.getVideoTracks().length ? "Video call connected." : "Voice call connected.");
       updateCaptionAvailability();
-    } else if (peerConnection.connectionState === "failed") {
-      setCallStatus("Connection failed. A TURN server may be needed.");
+    } else if (peerConnection.connectionState === "disconnected" || peerConnection.connectionState === "failed") {
+      if (callReconnectButton) callReconnectButton.disabled = false;
+      setCallStatus("Call connection interrupted. You can ask the other participant to reconnect.");
       updateCaptionAvailability();
     }
   };
@@ -1745,6 +1793,8 @@ function endVideoCall(notifyRemote = true) {
   callQualityTimer = null;
   if (callQualityStatus) callQualityStatus.textContent = "Call quality monitoring stops when the call ends. Metrics are measured on this device only.";
   const otherUserId = activeCallUserId;
+  callRecoveryInProgress = false;
+  if (callReconnectButton) callReconnectButton.disabled = true;
 
   if (notifyRemote && callSocket?.connected && otherUserId) {
     callSocket.emit("call:end", { targetUserId: otherUserId });
@@ -1803,6 +1853,25 @@ if (rejectCallButton) {
 
 if (endCallButton) {
   endCallButton.addEventListener("click", () => endVideoCall(true));
+}
+
+if (callReconnectButton) {
+  callReconnectButton.addEventListener("click", () => {
+    if (!peerConnection || !activeCallUserId || !callSocket?.connected || callRecoveryInProgress) {
+      setCallStatus("Reconnection is unavailable. Check that the call and messaging connection are still active.");
+      return;
+    }
+    callRecoveryInProgress = true;
+    callReconnectButton.disabled = true;
+    setCallStatus("Asking the other participant to restore the connection…");
+    callSocket.emit("call:recovery-request", { targetUserId: activeCallUserId }, response => {
+      if (!response?.ok) {
+        callRecoveryInProgress = false;
+        callReconnectButton.disabled = false;
+        setCallStatus(response?.error || "Could not request reconnection.");
+      }
+    });
+  });
 }
 
 
