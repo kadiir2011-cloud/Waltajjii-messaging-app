@@ -1102,6 +1102,7 @@ const screenShareButton = document.getElementById("wt-screen-share");
 const stopScreenShareButton = document.getElementById("wt-screen-share-stop");
 const screenShareStatus = document.getElementById("wt-screen-share-status");
 const screenSharePreview = document.getElementById("wt-screen-share-preview");
+const screenSharePreviewContainer = document.getElementById("wt-screen-share-preview-container");
 let screenShareStream = null;
 let screenShareSender = null;
 let screenShareCameraTrack = null;
@@ -1781,7 +1782,7 @@ async function startScreenSharing() {
     screenShareCameraTrack = cameraTrack;
     if (screenSharePreview) {
       screenSharePreview.srcObject = capture;
-      screenSharePreview.hidden = false;
+      if (screenSharePreviewContainer) screenSharePreviewContainer.hidden = false;
       screenSharePreview.play().catch(() => {});
     }
     screenTrack.addEventListener("ended", () => { stopScreenSharing(true); }, { once: true });
@@ -1816,7 +1817,7 @@ async function stopScreenSharing(restoreCamera = true) {
   if (screenSharePreview) {
     screenSharePreview.pause();
     screenSharePreview.srcObject = null;
-    screenSharePreview.hidden = true;
+    if (screenSharePreviewContainer) screenSharePreviewContainer.hidden = true;
   }
   if (screenShareButton) screenShareButton.disabled = !peerConnection || peerConnection.connectionState !== "connected";
   if (stopScreenShareButton) stopScreenShareButton.disabled = true;
