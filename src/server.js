@@ -556,6 +556,7 @@ io.on("connection", (socket) => {
       });
     }
     if (call.participants.size === 0 || (call.hostId === id && notify)) {
+      for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
       activeGroupCalls.delete(String(groupId));
       io.to(`group-call:${groupId}`).emit("group-call:ended", {
         groupId: String(groupId), reason: call.hostId === id ? "host-ended" : "empty"
