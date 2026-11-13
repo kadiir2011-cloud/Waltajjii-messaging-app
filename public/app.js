@@ -1098,6 +1098,7 @@ items.forEach(item => {
 const localVideo = document.getElementById("local-video");
 const remoteVideo = document.getElementById("remote-video");
 const callStatus = document.getElementById("call-status");
+const callQualityStatus = document.getElementById("wt-call-quality");
 
 const startCallButton = document.getElementById("start-call-button");
 const startVoiceCallButton = document.getElementById("start-voice-call-button");
