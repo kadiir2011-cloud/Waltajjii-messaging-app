@@ -461,6 +461,37 @@ io.on("connection", (socket) => {
     acknowledge({ ok: true });
   });
 
+  socket.on("call:recovery-request", (data = {}, acknowledge = () => {}) => {
+    const senderId = String(socket.data.userId);
+    const targetUserId = String(data.targetUserId || "");
+    if (!targetUserId || activeCalls.get(senderId) !== targetUserId || activeCalls.get(targetUserId) !== senderId) {
+      return acknowledge({ ok: false, error: "There is no active call to recover." });
+    }
+    if (!io.sockets.adapter.rooms.has(`user:${targetUserId}`)) {
+      return acknowledge({ ok: false, error: "The other participant is no longer connected." });
+    }
+    io.to(`user:${targetUserId}`).emit("call:recovery-requested", { senderId: socket.data.userId });
+    acknowledge({ ok: true });
+  });
+
+  socket.on("call:recovery-offer", (data = {}) => {
+    const senderId = String(socket.data.userId);
+    const targetUserId = String(data.targetUserId || "");
+    const offer = data.offer;
+    if (!targetUserId || !offer || typeof offer !== "object" || Array.isArray(offer) ||
+        activeCalls.get(senderId) !== targetUserId || activeCalls.get(targetUserId) !== senderId) return;
+    io.to(`user:${targetUserId}`).emit("call:recovery-offer", { senderId: socket.data.userId, offer });
+  });
+
+  socket.on("call:recovery-answer", (data = {}) => {
+    const senderId = String(socket.data.userId);
+    const targetUserId = String(data.targetUserId || "");
+    const answer = data.answer;
+    if (!targetUserId || !answer || typeof answer !== "object" || Array.isArray(answer) ||
+        activeCalls.get(senderId) !== targetUserId || activeCalls.get(targetUserId) !== senderId) return;
+    io.to(`user:${targetUserId}`).emit("call:recovery-answer", { senderId: socket.data.userId, answer });
+  });
+
   socket.on("call:ice-candidate", (data = {}) => {
     const senderId = String(socket.data.userId);
     const targetUserId = String(data.targetUserId || "");
