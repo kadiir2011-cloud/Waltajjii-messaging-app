@@ -774,12 +774,12 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     const disconnectedUserId = String(socket.data.userId);
+    for (const groupId of Array.from(groupCallMembership)) leaveGroupCall(groupId, disconnectedUserId, true);
     for (const call of activeGroupCalls.values()) {
       const pending = call.waitingRoom?.get(disconnectedUserId);
       if (pending?.socketId === socket.id) call.waitingRoom.delete(disconnectedUserId);
       if (call.admitted?.get(disconnectedUserId) === socket.id) call.admitted.delete(disconnectedUserId);
     }
-    for (const groupId of Array.from(groupCallMembership)) leaveGroupCall(groupId, disconnectedUserId, true);
     const targetUserId = activeCalls.get(disconnectedUserId);
 
     stopSocketTyping(socket);
