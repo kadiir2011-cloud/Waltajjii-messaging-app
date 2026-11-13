@@ -1,0 +1,30 @@
+name: Phase 70 call recovery
+on:
+  pull_request:
+    paths:
+      - "public/app.js"
+      - "public/index.html"
+      - "src/server.js"
+      - "test/phase70-call-recovery.test.js"
+      - "PHASE-70-CALL-RECOVERY.md"
+      - ".github/workflows/phase70-call-recovery.yml"
+permissions:
+  contents: read
+jobs:
+  call-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check src/server.js
+      - name: Run call recovery and regression tests
+        run: node --test test/phase70-call-recovery.test.js test/phase69-call-quality-monitor.test.js test/phase68-live-call-interpreter.test.js test/phase67-live-call-captions.test.js test/phase44-postgres-realtime-socket.test.js
