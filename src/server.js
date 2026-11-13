@@ -612,6 +612,7 @@ io.on("connection", (socket) => {
     }
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
     if (!call.waitingRoom) call.waitingRoom = new Map();
+    if (call.waitingRoom.size >= 20 && !call.waitingRoom.has(userId)) return acknowledge({ ok: false, error: "The waiting room is full. Please try again shortly." });
     call.waitingRoom.set(userId, { username: socket.data.username, socketId: socket.id, requestedAt: Date.now() });
     io.to("user:" + call.hostId).emit("group-call:join-requested", {
       groupId, userId, username: socket.data.username
@@ -625,10 +626,10 @@ io.on("connection", (socket) => {
     if (!call || call.hostId !== String(socket.data.userId) || !call.waitingRoom?.has(targetUserId)) {
       return acknowledge({ ok: false, error: "Only the active call host can admit a waiting participant." });
     }
-    if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+    if (call.participants.size + call.admitted.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
     const pending = call.waitingRoom.get(targetUserId);
     call.waitingRoom.delete(targetUserId);
-    call.admitted.set(targetUserId, pending.socketId);
+    call.admitted.set(targetUserId, { socketId: pending.socketId, admittedAt: Date.now() });
     io.to(pending.socketId).emit("group-call:admitted", { groupId });
     acknowledge({ ok: true });
   });
@@ -655,7 +656,11 @@ io.on("connection", (socket) => {
     if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
     if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
     if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
-    if (call.admitted?.get(userId) !== socket.id) return acknowledge({ ok: false, error: "Wait for the host to admit this device from the waiting room." });
+    const admission = call.admitted?.get(userId);
+    if (!admission || admission.socketId !== socket.id || Date.now() - admission.admittedAt > 60000) {
+      call.admitted?.delete(userId);
+      return acknowledge({ ok: false, error: "Wait for the host to admit this device from the waiting room." });
+    }
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
     call.admitted.delete(userId);
     call.waitingRoom?.delete(userId);
@@ -778,7 +783,7 @@ io.on("connection", (socket) => {
     for (const call of activeGroupCalls.values()) {
       const pending = call.waitingRoom?.get(disconnectedUserId);
       if (pending?.socketId === socket.id) call.waitingRoom.delete(disconnectedUserId);
-      if (call.admitted?.get(disconnectedUserId) === socket.id) call.admitted.delete(disconnectedUserId);
+      if (call.admitted?.get(disconnectedUserId)?.socketId === socket.id) call.admitted.delete(disconnectedUserId);
     }
     const targetUserId = activeCalls.get(disconnectedUserId);
 
