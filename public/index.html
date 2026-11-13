@@ -716,6 +716,13 @@
     #wt-caption-status{font-size:.85rem;color:var(--wt-muted,#64748b)}
     #wt-caption-translation{white-space:pre-wrap;overflow-wrap:anywhere}
 
+
+    .wt-group-call-panel { margin: 14px 0; padding: 14px; border: 1px solid #cbded8; border-radius: 12px; background: #f7fbf9; }
+    .wt-group-call-panel h3 { margin: 0 0 8px; }
+    .wt-group-call-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px; margin-top: 12px; }
+    .wt-group-call-tile { min-width: 0; padding: 8px; background: #18332e; color: #fff; border-radius: 10px; }
+    .wt-group-call-tile video { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #0b1714; border-radius: 7px; }
+    .wt-group-call-tile span { display: block; padding: 6px 2px 2px; overflow-wrap: anywhere; font-size: .9rem; }
   </style>
 </head>
 <body>
@@ -1253,6 +1260,18 @@
         </div>
         <p id="group-status" role="status" aria-live="polite" class="muted">Log in to view your groups.</p>
         <div id="group-members" class="group-members" aria-live="polite"></div>
+        <section id="wt-group-call-panel" class="wt-group-call-panel" aria-label="Group video conference">
+          <h3>Group video conference</h3>
+          <p id="wt-group-call-status" role="status" aria-live="polite">Open a group to start or join a video conference.</p>
+          <div class="row">
+            <button type="button" id="wt-group-call-start">Start group video call</button>
+            <button type="button" id="wt-group-call-join" disabled>Join active call</button>
+            <button type="button" id="wt-group-call-leave" disabled>Leave / end call</button>
+          </div>
+          <p class="muted">Up to 8 participants. Camera and microphone access are requested only when you start or join. Media is exchanged directly between participants; this initial mesh mode may use significant bandwidth.</p>
+          <div id="wt-group-call-grid" class="wt-group-call-grid" aria-live="polite"></div>
+        </section>
+
         <section id="group-invitations-panel" class="group-members" hidden aria-live="polite"></section>
         <section id="group-governance-panel" class="group-members" hidden aria-live="polite">
           <div id="group-settings-fields">
