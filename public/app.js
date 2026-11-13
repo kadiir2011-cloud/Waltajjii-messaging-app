@@ -1104,6 +1104,169 @@ const startVoiceCallButton = document.getElementById("start-voice-call-button");
 const acceptCallButton = document.getElementById("accept-call-button");
 const rejectCallButton = document.getElementById("reject-call-button");
 const endCallButton = document.getElementById("end-call-button");
+const captionStartButton = document.getElementById("wt-caption-start");
+const captionStopButton = document.getElementById("wt-caption-stop");
+const captionConsent = document.getElementById("wt-caption-consent");
+const captionShare = document.getElementById("wt-caption-share");
+const captionLanguage = document.getElementById("wt-caption-language");
+const captionTargetLanguage = document.getElementById("wt-caption-target-language");
+const captionTranslateButton = document.getElementById("wt-caption-translate");
+const captionTranslation = document.getElementById("wt-caption-translation");
+const captionFeed = document.getElementById("wt-caption-feed");
+const captionStatus = document.getElementById("wt-caption-status");
+
+let captionRecognition = null;
+let liveCaptionsActive = false;
+let latestCallCaption = "";
+
+function setCaptionStatus(message) {
+  if (captionStatus) captionStatus.textContent = message;
+}
+
+function updateCaptionAvailability() {
+  const active = Boolean(peerConnection && peerConnection.connectionState === "connected" && activeCallUserId && callSocket?.connected);
+  if (captionStartButton) captionStartButton.disabled = !active || liveCaptionsActive;
+  if (captionStopButton) captionStopButton.disabled = !liveCaptionsActive;
+  if (captionTranslateButton) captionTranslateButton.disabled = !latestCallCaption;
+}
+
+function appendCallCaption(speaker, text) {
+  if (!captionFeed || !text) return;
+  const empty = captionFeed.querySelector(".wt-caption-empty");
+  if (empty) empty.remove();
+  const item = document.createElement("p");
+  item.className = "wt-caption-item";
+  const label = document.createElement("strong");
+  label.textContent = speaker;
+  const content = document.createElement("span");
+  content.textContent = text;
+  item.append(label, content);
+  captionFeed.appendChild(item);
+  while (captionFeed.children.length > 20) captionFeed.firstElementChild.remove();
+  captionFeed.scrollTop = captionFeed.scrollHeight;
+  latestCallCaption = text;
+  updateCaptionAvailability();
+}
+
+function stopLiveCallCaptions(clear = false) {
+  liveCaptionsActive = false;
+  const recognition = captionRecognition;
+  captionRecognition = null;
+  if (recognition) {
+    recognition.onend = null;
+    try { recognition.stop(); } catch {}
+  }
+  if (captionStartButton) captionStartButton.disabled = !Boolean(peerConnection && peerConnection.connectionState === "connected" && activeCallUserId && callSocket?.connected);
+  if (captionStopButton) captionStopButton.disabled = true;
+  if (clear) {
+    if (captionFeed) {
+      captionFeed.replaceChildren();
+      const empty = document.createElement("p");
+      empty.className = "wt-caption-empty";
+      empty.textContent = "Captions will appear here when enabled.";
+      captionFeed.appendChild(empty);
+    }
+    latestCallCaption = "";
+    if (captionTranslation) captionTranslation.textContent = "";
+    if (captionConsent) captionConsent.checked = false;
+    if (captionShare) captionShare.checked = false;
+    if (captionTranslateButton) captionTranslateButton.disabled = true;
+  }
+}
+
+function startLiveCallCaptions() {
+  if (!peerConnection || peerConnection.connectionState !== "connected" || !activeCallUserId || !callSocket?.connected) {
+    setCaptionStatus("Start or accept a call before enabling captions.");
+    return;
+  }
+  if (!captionConsent?.checked) {
+    setCaptionStatus("Please confirm the browser speech-recognition notice first.");
+    captionConsent?.focus();
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setCaptionStatus("Live captions are not supported by this browser. Try a current Chrome or Edge browser.");
+    return;
+  }
+  if (liveCaptionsActive) return;
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = captionLanguage?.value || "en-US";
+  captionRecognition = recognition;
+  liveCaptionsActive = true;
+  updateCaptionAvailability();
+  setCaptionStatus("Live captions are listening to your microphone. Stop them at any time.");
+
+  recognition.onresult = event => {
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const result = event.results[index];
+      if (!result.isFinal) continue;
+      const text = String(result[0]?.transcript || "").trim().slice(0, 500);
+      if (!text) continue;
+      appendCallCaption("You", text);
+      if (captionShare?.checked && callSocket?.connected && activeCallUserId) {
+        callSocket.emit("call:caption", { targetUserId: activeCallUserId, text }, response => {
+          if (!response?.ok) setCaptionStatus(response?.error || "Could not share this caption.");
+        });
+      }
+    }
+  };
+  recognition.onerror = event => {
+    if (event.error === "no-speech") return;
+    if (["not-allowed", "service-not-allowed", "language-not-supported", "audio-capture", "network"].includes(event.error)) {
+      stopLiveCallCaptions(false);
+      setCaptionStatus("Browser speech recognition permission was denied.");
+    } else {
+      setCaptionStatus("Speech recognition issue: " + String(event.error || "unknown error") + ".");
+    }
+  };
+  recognition.onend = () => {
+    if (!liveCaptionsActive || captionRecognition !== recognition || !peerConnection) return;
+    try {
+      recognition.start();
+    } catch {
+      setCaptionStatus("Live captions paused. Press Start live captions to resume.");
+      stopLiveCallCaptions(false);
+    }
+  };
+  try {
+    recognition.start();
+  } catch (error) {
+    stopLiveCallCaptions(false);
+    setCaptionStatus("Could not start live captions: " + (error.message || "speech recognition unavailable"));
+  }
+}
+
+async function translateLatestCallCaption() {
+  if (!latestCallCaption) return;
+  const targetLanguage = captionTargetLanguage?.value;
+  if (!targetLanguage) {
+    setCaptionStatus("Choose a target language before translating.");
+    captionTargetLanguage?.focus();
+    return;
+  }
+  captionTranslateButton.disabled = true;
+  setCaptionStatus("Translating the latest caption…");
+  try {
+    const result = await api("/api/translation/translate", {
+      method: "POST",
+      body: JSON.stringify({
+        text: latestCallCaption,
+        sourceLanguage: "Auto-detect",
+        targetLanguage
+      })
+    });
+    captionTranslation.textContent = result.translation || "No translation was returned.";
+    setCaptionStatus("Translation ready. It is shown only on this device.");
+  } catch (error) {
+    setCaptionStatus(error.message || "Could not translate this caption.");
+  } finally {
+    updateCaptionAvailability();
+  }
+}
 
 let peerConnection = null;
 let localStream = null;
@@ -1304,6 +1467,11 @@ function registerCallSocketHandlers(socket) {
     }
   });
 
+  socket.on("call:caption", data => {
+    if (!data || String(data.senderId) !== String(activeCallUserId) || typeof data.text !== "string") return;
+    appendCallCaption(data.senderUsername || "Caller", data.text.slice(0, 500), false);
+  });
+
   socket.on("call:ended", () => {
     endVideoCall(false);
     setCallStatus("The other participant ended the call.");
@@ -1357,8 +1525,10 @@ peerConnection = new RTCPeerConnection(rtcConfiguration);
 
     if (peerConnection.connectionState === "connected") {
       setCallStatus(localStream?.getVideoTracks().length ? "Video call connected." : "Voice call connected.");
+      updateCaptionAvailability();
     } else if (peerConnection.connectionState === "failed") {
       setCallStatus("Connection failed. A TURN server may be needed.");
+      updateCaptionAvailability();
     }
   };
 }
@@ -1463,6 +1633,7 @@ async function acceptIncomingCall() {
 }
 
 function endVideoCall(notifyRemote = true) {
+  stopLiveCallCaptions(true);
   const otherUserId = activeCallUserId;
 
   if (notifyRemote && callSocket?.connected && otherUserId) {
@@ -1491,7 +1662,15 @@ function endVideoCall(notifyRemote = true) {
   if (acceptCallButton) acceptCallButton.disabled = true;
   if (rejectCallButton) rejectCallButton.disabled = true;
   if (endCallButton) endCallButton.disabled = true;
+  updateCaptionAvailability();
 }
+
+if (captionStartButton) captionStartButton.addEventListener("click", startLiveCallCaptions);
+if (captionStopButton) captionStopButton.addEventListener("click", () => {
+  stopLiveCallCaptions(false);
+  setCaptionStatus("Live captions stopped.");
+});
+if (captionTranslateButton) captionTranslateButton.addEventListener("click", translateLatestCallCaption);
 
 if (startCallButton) {
   startCallButton.addEventListener("click", startVideoCall);

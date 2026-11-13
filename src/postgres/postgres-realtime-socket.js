@@ -180,6 +180,34 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
           activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) return;
       emitToUser(target, "call:ice-candidate", { senderId: userId, candidate });
     });
+
+    socket.on("call:caption", (data = {}, acknowledge = () => {}) => {
+      const target = validId(data.targetUserId);
+      const caption = typeof data.text === "string" ? data.text.trim() : "";
+      if (!target || target === userId ||
+          activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) {
+        return acknowledge({ ok: false, error: "Live captions are not authorized for this call." });
+      }
+      if (!caption || caption.length > 500) {
+        return acknowledge({ ok: false, error: "Caption must contain between 1 and 500 characters." });
+      }
+      const now = Date.now();
+      const window = socket.data.captionWindow;
+      if (!window || now - window.startedAt >= 10000) {
+        socket.data.captionWindow = { startedAt: now, count: 0 };
+      }
+      if (socket.data.captionWindow.count >= 20) {
+        return acknowledge({ ok: false, error: "Live caption rate limit reached. Please slow down." });
+      }
+      socket.data.captionWindow.count += 1;
+      emitToUser(target, "call:caption", {
+        senderId: userId,
+        senderUsername: socket.data.username,
+        text: caption,
+        sentAt: now
+      });
+      return acknowledge({ ok: true });
+    });
     socket.on("call:end", data => {
       const target = validId(data?.targetUserId);
       if (target) endCall(userId, target, true);
