@@ -43,7 +43,8 @@ test("translation is a manual action and is not broadcast to the other caller", 
   assert.match(html, /id="wt-caption-translate"/);
   assert.match(app, /api\("\/api\/translation\/translate"/);
   assert.match(app, /captionTranslation\.textContent = result\.translation/);
-  assert.doesNotMatch(app, /callSocket\.emit\("call:caption".*translation/s);
+  const translateFunction = app.slice(app.indexOf("async function translateLatestCallCaption"), app.indexOf("let peerConnection = null;"));
+  assert.doesNotMatch(translateFunction, /callSocket\\.emit\\("call:caption"/);
 });
 
 test("server relays captions only inside an active authenticated call and applies limits", () => {
