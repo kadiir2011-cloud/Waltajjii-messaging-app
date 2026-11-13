@@ -1331,6 +1331,7 @@ async function translateIncomingCallCaption(text, peerId) {
 }
 
 let peerConnection = null;
+let callQualityTimer = null;
 let localStream = null;
 let activeCallUserId = null;
 let incomingCallOffer = null;
@@ -1555,6 +1556,47 @@ async function applyPendingIceCandidates() {
   }
 }
 
+async function updateCallQuality() {
+  if (!peerConnection || !callQualityStatus) return;
+  try {
+    const stats = await peerConnection.getStats();
+    let rttMs = null;
+    let jitterMs = null;
+    let packetsLost = 0;
+    let packetsReceived = 0;
+    stats.forEach(report => {
+      if (report.type === "candidate-pair" &&
+          (report.selected || (report.nominated && report.state === "succeeded")) &&
+          Number.isFinite(report.currentRoundTripTime)) rttMs = report.currentRoundTripTime * 1000;
+      if (report.type === "inbound-rtp" && !report.isRemote) {
+        if (Number.isFinite(report.jitter)) jitterMs = Math.max(jitterMs ?? 0, report.jitter * 1000);
+        packetsLost += Number(report.packetsLost) || 0;
+        packetsReceived += Number(report.packetsReceived) || 0;
+      }
+    });
+    const totalPackets = packetsLost + packetsReceived;
+    const lossPercent = totalPackets > 0 ? packetsLost / totalPackets * 100 : null;
+    const poor = (rttMs !== null && rttMs > 400) || (jitterMs !== null && jitterMs > 30) || (lossPercent !== null && lossPercent > 5);
+    const fair = !poor && ((rttMs !== null && rttMs > 180) || (jitterMs !== null && jitterMs > 15) || (lossPercent !== null && lossPercent > 2));
+    const label = poor ? "Needs attention" : fair ? "Fair" : "Good";
+    const metrics = [
+      rttMs === null ? "RTT: measuring" : "RTT: " + Math.round(rttMs) + " ms",
+      jitterMs === null ? "Jitter: measuring" : "Jitter: " + Math.round(jitterMs) + " ms",
+      lossPercent === null ? "Packet loss: measuring" : "Packet loss: " + lossPercent.toFixed(1) + "%"
+    ];
+    callQualityStatus.textContent = "Connection quality: " + label + " · " + metrics.join(" · ");
+  } catch (error) {
+    callQualityStatus.textContent = "Call quality details are temporarily unavailable.";
+  }
+}
+
+function startCallQualityMonitor() {
+  if (callQualityTimer) clearInterval(callQualityTimer);
+  if (callQualityStatus) callQualityStatus.textContent = "Connection quality: measuring…";
+  callQualityTimer = setInterval(updateCallQuality, 5000);
+  updateCallQuality();
+}
+
 async function prepareMediaConnection(videoEnabled = true) {
   localStream = await navigator.mediaDevices.getUserMedia({
     video: videoEnabled,
@@ -1565,6 +1607,7 @@ async function prepareMediaConnection(videoEnabled = true) {
 
   const rtcConfiguration = await getRtcConfiguration();
 peerConnection = new RTCPeerConnection(rtcConfiguration);
+  startCallQualityMonitor();
 
   localStream.getTracks().forEach(track => {
     peerConnection.addTrack(track, localStream);
@@ -1697,6 +1740,9 @@ async function acceptIncomingCall() {
 
 function endVideoCall(notifyRemote = true) {
   stopLiveCallCaptions(true);
+  if (callQualityTimer) clearInterval(callQualityTimer);
+  callQualityTimer = null;
+  if (callQualityStatus) callQualityStatus.textContent = "Call quality monitoring stops when the call ends. Metrics are measured on this device only.";
   const otherUserId = activeCallUserId;
 
   if (notifyRemote && callSocket?.connected && otherUserId) {
