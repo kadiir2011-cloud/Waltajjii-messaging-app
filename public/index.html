@@ -723,6 +723,17 @@
     .wt-group-call-tile { min-width: 0; padding: 8px; background: #18332e; color: #fff; border-radius: 10px; }
     .wt-group-call-tile video { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #0b1714; border-radius: 7px; }
     .wt-group-call-tile span { display: block; padding: 6px 2px 2px; overflow-wrap: anywhere; font-size: .9rem; }
+    .wt-group-call-controls { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+    .wt-group-call-controls button:disabled { opacity:.55; cursor:not-allowed; }
+    .wt-group-call-roster { display:grid; gap:7px; margin:12px 0; padding:12px; border:1px solid #dce5eb; border-radius:10px; background:#fff; }
+    .wt-group-call-roster-item { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .wt-group-call-roster-item button { min-height:36px; padding:6px 10px; }
+    .wt-group-call-grid[data-layout="focus"] { grid-template-columns:minmax(0,1fr); }
+    .wt-group-call-grid[data-layout="focus"] .wt-group-call-tile:not(.wt-group-call-pinned) { display:none; }
+    .wt-group-call-grid[data-layout="focus"]:not(:has(.wt-group-call-pinned)) .wt-group-call-tile { display:block; }
+    .wt-group-call-tile.wt-group-call-pinned { outline:3px solid #e0a52b; outline-offset:2px; }
+    @media(max-width:640px) { .wt-group-call-controls button { flex:1 1 100%; } }
+
   </style>
 </head>
 <body>
@@ -1268,6 +1279,14 @@
             <button type="button" id="wt-group-call-join" disabled>Join active call</button>
             <button type="button" id="wt-group-call-leave" disabled>Leave / end call</button>
           </div>
+
+          <div class="wt-group-call-controls" role="group" aria-label="Your group call controls">
+            <button type="button" id="wt-group-call-mic" disabled aria-pressed="false">Mute microphone</button>
+            <button type="button" id="wt-group-call-camera" disabled aria-pressed="false">Turn camera off</button>
+            <button type="button" id="wt-group-call-layout" class="secondary" disabled>Switch to focus layout</button>
+          </div>
+          <div id="wt-group-call-roster" class="wt-group-call-roster" aria-label="Group call participants" aria-live="polite" hidden></div>
+
           <p class="muted">Up to 8 participants. Camera and microphone access are requested only when you start or join. Media is exchanged directly between participants; this initial mesh mode may use significant bandwidth.</p>
           <div id="wt-group-call-grid" class="wt-group-call-grid" aria-live="polite"></div>
         </section>
