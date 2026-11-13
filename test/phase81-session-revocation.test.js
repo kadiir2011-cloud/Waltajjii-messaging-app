@@ -70,6 +70,7 @@ test("Phase 81: password change re-authenticates and rotates the token version; 
   assert.match(auth, /tokenVersion: nextVersion/);
   assert.match(auth, /router\.post\(["']\/logout-all["']/);
   assert.match(auth, /token_version = token_version \+ 1/);
+  assert.equal((auth.match(/disconnectSockets\\(true\\)/g) || []).length, 2);
 });
 
 test("Phase 81: database adds token_version without resetting existing user records", () => {
