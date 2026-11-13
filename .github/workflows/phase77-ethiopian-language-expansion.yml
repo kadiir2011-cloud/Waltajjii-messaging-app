@@ -1,0 +1,29 @@
+name: Phase 77 Ethiopian language expansion
+on:
+  pull_request:
+    paths:
+      - "src/server.js"
+      - "public/index.html"
+      - "test/phase77-ethiopian-language-expansion.test.js"
+      - "PHASE-77-ETHIOPIAN-LANGUAGE-EXPANSION.md"
+      - ".github/workflows/phase77-ethiopian-language-expansion.yml"
+permissions:
+  contents: read
+jobs:
+  language-expansion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check public/app.js
+      - name: Run language and call regression tests
+        run: node --test test/phase77-ethiopian-language-expansion.test.js test/phase76-group-meeting-management.test.js test/phase75-group-call-controls.test.js test/phase74-group-video-mesh.test.js test/phase73-group-call-signaling.test.js test/phase72-secure-call-screen-sharing.test.js test/phase71-smart-network-adaptation.test.js test/phase70-call-recovery.test.js test/phase69-call-quality-monitor.test.js test/phase68-live-call-interpreter.test.js test/phase67-live-call-captions.test.js test/phase66-voice-intelligence.test.js test/phase65-ai-assistant-ui.test.js test/phase63-final-security-audit.test.js test/phase56-api-frontend-regression.test.js
