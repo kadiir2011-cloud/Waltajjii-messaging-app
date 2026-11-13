@@ -1,0 +1,31 @@
+name: Phase 65 AI assistant UI
+on:
+  pull_request:
+    paths:
+      - "public/index.html"
+      - "public/app.js"
+      - "public/ai-assistant.js"
+      - "test/phase65-ai-assistant-ui.test.js"
+      - "test/phase64-ai-assistant.test.js"
+      - "PHASE-65-AI-ASSISTANT-UI.md"
+      - ".github/workflows/phase65-ai-assistant-ui.yml"
+permissions:
+  contents: read
+jobs:
+  ai-assistant-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check public/ai-assistant.js
+      - name: Run Phase 64 and 65 contract tests
+        run: node --test test/phase64-ai-assistant.test.js test/phase65-ai-assistant-ui.test.js

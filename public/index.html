@@ -671,7 +671,29 @@
     .wt-language-bridge .secondary{background:#e8eef2;color:#263e4d}
     .wt-language-bridge-note{font-size:12px;color:#64748b;margin:10px 0 0}
     @media(max-width:520px){.wt-language-bridge-heading{align-items:flex-start;flex-direction:column}.wt-language-bridge-languages{grid-template-columns:1fr}}
-\n  </style>
+\n  
+    /* Phase 65: user-controlled Waltajjii AI assistant */
+    .wt-ai-panel{margin:16px 0 4px;padding:16px;border:1px solid #d8e5e9;border-radius:15px;background:linear-gradient(135deg,#f5fbfa,#f7f8ff)}
+    .wt-ai-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .wt-ai-heading p{margin:4px 0 0}
+    .wt-ai-label{flex:0 0 auto;padding:5px 9px;border-radius:999px;background:#e1f3ee;color:#176b5b;font-size:.75rem;font-weight:700}
+    .wt-ai-privacy{padding:10px 12px;border-left:3px solid #087f78;background:#eaf5f3;border-radius:8px;color:#365b5a;font-size:.84rem}
+    .wt-ai-panel textarea{width:100%;min-height:90px;padding:11px;margin:6px 0 12px;resize:vertical}
+    .wt-ai-controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .wt-ai-controls select{width:100%;margin:6px 0 12px}
+    .wt-ai-consent{display:flex;align-items:flex-start;gap:9px;margin:6px 0 12px;font-size:.86rem}
+    .wt-ai-consent input{width:18px;min-width:18px;height:18px;min-height:18px;margin:2px 0 0}
+    .wt-ai-result{margin-top:14px;padding:13px;border:1px solid #dce5eb;border-radius:12px;background:#fff}
+    .wt-ai-result-text{white-space:pre-wrap;overflow-wrap:anywhere;min-height:50px;padding:11px;margin:8px 0;border-radius:9px;background:#f6f9fa;color:#172b3a}
+    .wt-ai-message-button{font-size:.78rem;padding:4px 8px;background:#e6f3f1;color:#086d67;box-shadow:none}
+    body[data-wt-theme="dark"] .wt-ai-panel{background:#152d37;border-color:#ffffff24}
+    body[data-wt-theme="dark"] .wt-ai-privacy{background:#183b3a;color:#d3f5ed}
+    body[data-wt-theme="dark"] .wt-ai-result{background:#172a36;border-color:#ffffff24}
+    body[data-wt-theme="dark"] .wt-ai-result-text{background:#10212c;color:#edf7fb}
+    body[data-wt-theme="dark"] .wt-ai-label{background:#16443f;color:#b9f2e5}
+    @media(max-width:520px){.wt-ai-heading{align-items:flex-start;flex-direction:column}.wt-ai-controls{grid-template-columns:1fr}}
+
+  </style>
 </head>
 <body>
   <header>
@@ -1050,6 +1072,50 @@
     <p class="wt-language-bridge-note">Your message is sent only when you press Send. Do not enter passwords or other highly sensitive information into translation.</p>
   </div>
 </div>
+<div class="wt-ai-panel" id="wt-ai-panel" aria-labelledby="wt-ai-heading">
+  <div class="wt-ai-heading">
+    <div>
+      <strong id="wt-ai-heading">✨ Waltajjii AI Assistant</strong>
+      <p class="muted">Summarize a selected message, draft a reply, or identify action items.</p>
+    </div>
+    <span class="wt-ai-label">You stay in control</span>
+  </div>
+  <p class="wt-ai-privacy">Privacy notice: only the text shown below is sent to the configured AI provider when you press Generate. Waltajjii AI does not automatically read your conversation history, send messages, or create tasks.</p>
+  <label for="wt-ai-context">Selected conversation text</label>
+  <textarea id="wt-ai-context" rows="4" maxlength="8000" placeholder="Use “Ask AI” on a text message above, or paste the text you want help with."></textarea>
+  <div class="wt-ai-controls">
+    <div>
+      <label for="wt-ai-action">What should AI do?</label>
+      <select id="wt-ai-action">
+        <option value="summarize">Summarize</option>
+        <option value="suggest_reply">Suggest a reply</option>
+        <option value="extract_tasks">Extract action items</option>
+      </select>
+    </div>
+    <div>
+      <label for="wt-ai-language">Answer language</label>
+      <select id="wt-ai-language">
+        <option value="">Same as the conversation</option>
+        <option>Afaan Oromo</option><option>Amharic</option><option>English</option>
+        <option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Arabic</option>
+      </select>
+    </div>
+  </div>
+  <label class="wt-ai-consent"><input type="checkbox" id="wt-ai-consent"> I understand that the selected text will be sent to the AI provider for this request.</label>
+  <div class="row">
+    <button type="button" id="wt-ai-generate">Generate with AI</button>
+    <span id="wt-ai-status" class="muted" role="status" aria-live="polite">Select text and review the privacy notice before continuing.</span>
+  </div>
+  <section id="wt-ai-result-wrap" class="wt-ai-result" hidden aria-label="AI result">
+    <label for="wt-ai-result">AI result — review before using</label>
+    <div id="wt-ai-result" class="wt-ai-result-text" tabindex="0"></div>
+    <div class="row">
+      <button type="button" id="wt-ai-use-result">Use in message composer</button>
+      <button type="button" class="secondary" id="wt-ai-copy-result">Copy result</button>
+    </div>
+  </section>
+</div>
+
       </section>
       <section class="wt-content-section" id="wt-groups-section" aria-label="Groups">
       <section class="group-panel" aria-labelledby="groups-heading">
@@ -1163,6 +1229,7 @@
   <script src="/language.js?v=footer-translation-1" defer></script>
   <script src="/dynamic-language.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/ai-assistant.js" defer></script>
   <script src="/group-presence.js" defer></script>
 </body>
 </html>
