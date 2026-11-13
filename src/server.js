@@ -198,6 +198,7 @@ io.use((socket, next) => {
 });
 
 const activeCalls = new Map();
+const activeGroupCalls = new Map();
 const onlineUsers = new Map();
 
 // Authenticated, privacy-limited snapshot of currently connected members.
@@ -527,6 +528,107 @@ io.on("connection", (socket) => {
     }
 
     endTrackedCall(senderId, targetUserId, true);
+  });
+
+
+  // Phase 73: authenticated group-call signaling. Media remains peer-to-peer;
+  // the server only authorizes and relays signaling among current group members.
+  const groupCallMembership = new Set();
+  function isCurrentGroupMember(groupId, userId) {
+    return Boolean(db.prepare(
+      "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?"
+    ).get(groupId, userId));
+  }
+  function leaveGroupCall(groupId, userId, notify = true) {
+    const call = activeGroupCalls.get(String(groupId));
+    if (!call) return false;
+    const id = String(userId);
+    if (!call.participants.has(id)) return false;
+    call.participants.delete(id);
+    socket.leave(`group-call:${groupId}`);
+    groupCallMembership.delete(String(groupId));
+    if (notify) {
+      io.to(`group-call:${groupId}`).emit("group-call:participant-left", {
+        groupId: String(groupId), userId: id
+      });
+    }
+    if (call.participants.size === 0 || (call.hostId === id && notify)) {
+      activeGroupCalls.delete(String(groupId));
+      io.to(`group-call:${groupId}`).emit("group-call:ended", {
+        groupId: String(groupId), reason: call.hostId === id ? "host-ended" : "empty"
+      });
+      io.in(`group-call:${groupId}`).socketsLeave(`group-call:${groupId}`);
+      if (notify) call.participants.clear();
+    }
+    return true;
+  }
+  socket.on("group-call:start", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const userId = String(socket.data.userId);
+    if (!/^\\d+$/.test(groupId) || !isCurrentGroupMember(groupId, socket.data.userId)) {
+      return acknowledge({ ok: false, error: "Only current group members can start a group call." });
+    }
+    if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
+    if (activeGroupCalls.has(groupId)) return acknowledge({ ok: false, error: "A group call is already active." });
+    const call = { groupId, hostId: userId, participants: new Map([[userId, socket.data.username]]) };
+    activeGroupCalls.set(groupId, call);
+    groupCallMembership.add(groupId);
+    socket.join(`group-call:${groupId}`);
+    acknowledge({ ok: true, groupId, participants: [{ userId, username: socket.data.username }] });
+  });
+  socket.on("group-call:join", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const userId = String(socket.data.userId);
+    const call = activeGroupCalls.get(groupId);
+    if (!call || !isCurrentGroupMember(groupId, socket.data.userId)) {
+      return acknowledge({ ok: false, error: "No active group call is available to you." });
+    }
+    if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
+    if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
+    if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+    call.participants.set(userId, socket.data.username);
+    groupCallMembership.add(groupId);
+    socket.join(`group-call:${groupId}`);
+    const participants = Array.from(call.participants, ([participantId, username]) => ({ userId: participantId, username }));
+    socket.emit("group-call:participants", { groupId, participants });
+    socket.to(`group-call:${groupId}`).emit("group-call:participant-joined", {
+      groupId, userId, username: socket.data.username
+    });
+    acknowledge({ ok: true, groupId, participants });
+  });
+  for (const eventName of ["group-call:offer", "group-call:answer", "group-call:ice-candidate"]) {
+    socket.on(eventName, (data = {}, acknowledge = () => {}) => {
+      const groupId = String(data.groupId || "");
+      const targetUserId = String(data.targetUserId || "");
+      const call = activeGroupCalls.get(groupId);
+      const senderId = String(socket.data.userId);
+      const payload = eventName === "group-call:ice-candidate" ? data.candidate : data.description;
+      if (!call || !call.participants.has(senderId) || !call.participants.has(targetUserId) ||
+          senderId === targetUserId || !payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return acknowledge({ ok: false, error: "Group-call signaling is not authorized." });
+      }
+      io.to(`user:${targetUserId}`).emit(eventName, {
+        groupId, senderId, senderUsername: socket.data.username,
+        ...(eventName === "group-call:ice-candidate" ? { candidate: payload } : { description: payload })
+      });
+      acknowledge({ ok: true });
+    });
+  }
+  socket.on("group-call:leave", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const ok = leaveGroupCall(groupId, socket.data.userId, true);
+    acknowledge({ ok });
+  });
+  socket.on("group-call:end", (data = {}, acknowledge = () => {}) => {
+    const groupId = String(data.groupId || "");
+    const call = activeGroupCalls.get(groupId);
+    if (!call || call.hostId !== String(socket.data.userId)) {
+      return acknowledge({ ok: false, error: "Only the group-call host can end this call for everyone." });
+    }
+    activeGroupCalls.delete(groupId);
+    io.to(`group-call:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
+    io.in(`group-call:${groupId}`).socketsLeave(`group-call:${groupId}`);
+    acknowledge({ ok: true });
   });
 
   socket.on("disconnect", () => {
