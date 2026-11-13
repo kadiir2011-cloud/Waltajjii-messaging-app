@@ -8,7 +8,7 @@ Give account owners a server-enforced way to invalidate previously issued login 
 - Add a shared signed-token verifier that checks issuer, audience, account existence, and the token version stored for that account.
 - Apply the verifier to authenticated REST routes, presence/translation endpoints, and Socket.IO connection authentication.
 - Add `POST /api/auth/change-password`: requires the current password, validates the new password (12–128 characters), hashes it with bcrypt, increments the account token version, and returns a fresh token for the current browser.
-- Add `POST /api/auth/logout-all`: increments the account token version and invalidates all currently issued tokens, including the caller's token.
+- Add `POST /api/auth/logout-all`: increments the account token version, disconnects the account's active Socket.IO sessions, and invalidates all previously issued tokens, including the caller's token.
 - Keep legacy tokens without a version working only for accounts whose token version remains zero; this avoids forcing all existing users to sign in again on first upgrade.
 
 ## API use
