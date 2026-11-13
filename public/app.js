@@ -1114,10 +1114,16 @@ const captionTranslateButton = document.getElementById("wt-caption-translate");
 const captionTranslation = document.getElementById("wt-caption-translation");
 const captionFeed = document.getElementById("wt-caption-feed");
 const captionStatus = document.getElementById("wt-caption-status");
+const captionAutoTranslate = document.getElementById("wt-caption-auto-translate");
+const captionAutoTranslation = document.getElementById("wt-caption-auto-translation");
 
 let captionRecognition = null;
 let liveCaptionsActive = false;
 let latestCallCaption = "";
+let autoCaptionCallPeerId = null;
+let autoCaptionTranslationCount = 0;
+let autoCaptionLastRequestAt = 0;
+let autoCaptionTranslationPending = false;
 
 function setCaptionStatus(message) {
   if (captionStatus) captionStatus.textContent = message;
@@ -1168,6 +1174,12 @@ function stopLiveCallCaptions(clear = false) {
     }
     latestCallCaption = "";
     if (captionTranslation) captionTranslation.textContent = "";
+    if (captionAutoTranslation) captionAutoTranslation.textContent = "";
+    autoCaptionCallPeerId = null;
+    autoCaptionTranslationCount = 0;
+    autoCaptionLastRequestAt = 0;
+    autoCaptionTranslationPending = false;
+    if (captionAutoTranslate) captionAutoTranslate.checked = false;
     if (captionConsent) captionConsent.checked = false;
     if (captionShare) captionShare.checked = false;
     if (captionTranslateButton) captionTranslateButton.disabled = true;
@@ -1265,6 +1277,56 @@ async function translateLatestCallCaption() {
     setCaptionStatus(error.message || "Could not translate this caption.");
   } finally {
     updateCaptionAvailability();
+  }
+}
+
+
+async function translateIncomingCallCaption(text, peerId) {
+  if (!captionAutoTranslate?.checked || !text || !peerId) return;
+  const targetLanguage = captionTargetLanguage?.value;
+  if (!targetLanguage) {
+    if (captionAutoTranslation) captionAutoTranslation.textContent = "Choose a translation language to use the live interpreter.";
+    return;
+  }
+  if (String(peerId) !== String(activeCallUserId)) return;
+  if (String(autoCaptionCallPeerId) !== String(peerId)) {
+    autoCaptionCallPeerId = String(peerId);
+    autoCaptionTranslationCount = 0;
+    autoCaptionLastRequestAt = 0;
+    autoCaptionTranslationPending = false;
+  }
+  if (autoCaptionTranslationCount >= 30) {
+    if (captionAutoTranslation) captionAutoTranslation.textContent = "Automatic translation paused after 30 captions in this call. You can continue with manual translation.";
+    return;
+  }
+  const now = Date.now();
+  if (autoCaptionTranslationPending || now - autoCaptionLastRequestAt < 1500) return;
+  autoCaptionTranslationPending = true;
+  autoCaptionLastRequestAt = now;
+  autoCaptionTranslationCount += 1;
+  if (captionAutoTranslation) captionAutoTranslation.textContent = "Translating caller's caption…";
+  try {
+    const result = await api("/api/translation/translate", {
+      method: "POST",
+      body: JSON.stringify({
+        text: String(text).slice(0, 500),
+        sourceLanguage: "Auto-detect",
+        targetLanguage
+      })
+    });
+    if (captionAutoTranslate?.checked &&
+        String(activeCallUserId) === String(peerId) &&
+        captionAutoTranslation) {
+      captionAutoTranslation.textContent = result.translation || "No translation was returned.";
+    }
+  } catch (error) {
+    if (captionAutoTranslate?.checked &&
+        String(activeCallUserId) === String(peerId) &&
+        captionAutoTranslation) {
+      captionAutoTranslation.textContent = error.message || "Automatic translation is temporarily unavailable.";
+    }
+  } finally {
+    autoCaptionTranslationPending = false;
   }
 }
 
@@ -1470,6 +1532,7 @@ function registerCallSocketHandlers(socket) {
   socket.on("call:caption", data => {
     if (!data || String(data.senderId) !== String(activeCallUserId) || typeof data.text !== "string") return;
     appendCallCaption(data.senderUsername || "Caller", data.text.slice(0, 500), false);
+    translateIncomingCallCaption(data.text.slice(0, 500), data.senderId);
   });
 
   socket.on("call:ended", () => {
