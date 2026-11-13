@@ -51,7 +51,7 @@ test("critical communication and call controls remain present in the client", ()
 test("translation endpoint requires authentication, validates input and prevents caching", () => {
   assert.match(server, /app\.post\(["']\/api\/translation\/translate["']/);
   assert.match(server, /scheme !== "Bearer"/);
-  assert.match(server, /jwt\.verify\(accessToken, process\.env\.JWT_SECRET/);
+  assert.match(server, /verifyAccessToken\(accessToken, db\)/);
   assert.match(server, /text\.length > 4000/);
   assert.match(server, /res\.set\("Cache-Control", "no-store"\)/);
 });
