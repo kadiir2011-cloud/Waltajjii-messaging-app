@@ -693,6 +693,15 @@
     body[data-wt-theme="dark"] .wt-ai-label{background:#16443f;color:#b9f2e5}
     @media(max-width:520px){.wt-ai-heading{align-items:flex-start;flex-direction:column}.wt-ai-controls{grid-template-columns:1fr}}
 
+  
+    .wt-audio-ai{margin-top:18px;padding-top:15px;border-top:1px solid #d8e5e9}
+    .wt-audio-ai h3{margin:0 0 8px;font-size:1rem}
+    .wt-audio-ai input[type=file]{display:block;max-width:100%;margin:8px 0}
+    .wt-audio-ai textarea{width:100%;padding:10px;margin:7px 0 12px}
+    .wt-audio-ai .wt-ai-result-text{min-height:42px}
+    .wt-audio-message-button{margin-top:7px;font-size:.78rem;padding:5px 9px}
+    body[data-wt-theme="dark"] .wt-audio-ai{border-color:#ffffff24}
+
   </style>
 </head>
 <body>
@@ -1114,6 +1123,44 @@
       <button type="button" class="secondary" id="wt-ai-copy-result">Copy result</button>
     </div>
   </section>
+
+  <section class="wt-audio-ai" id="wt-audio-ai" aria-labelledby="wt-audio-ai-heading">
+    <h3 id="wt-audio-ai-heading">🎙 Voice transcription and translation</h3>
+    <p class="wt-ai-privacy">Choose an audio file or use “Transcribe voice” on a voice message. Only the audio you select is sent to the configured provider after you consent. Audio and transcripts are not saved by this feature.</p>
+    <label for="wt-audio-file">Audio recording</label>
+    <input id="wt-audio-file" type="file" accept="audio/webm,audio/ogg,audio/mp4,audio/mpeg,audio/wav,audio/flac,video/webm,.m4a,.mp3,.wav,.ogg,.webm" />
+    <span id="wt-audio-file-name" class="muted">No audio selected.</span>
+    <div class="wt-ai-controls">
+      <div>
+        <label for="wt-audio-language">Spoken language (optional)</label>
+        <select id="wt-audio-language">
+          <option value="">Auto-detect</option><option value="om">Afaan Oromo</option><option value="am">Amharic</option>
+          <option value="en">English</option><option value="ti">Tigrinya</option><option value="so">Somali</option><option value="ar">Arabic</option>
+        </select>
+      </div>
+      <div>
+        <label for="wt-audio-translate-language">Translate transcript into</label>
+        <select id="wt-audio-translate-language">
+          <option value="">Do not translate</option><option>Afaan Oromo</option><option>Amharic</option>
+          <option>English</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Arabic</option>
+        </select>
+      </div>
+    </div>
+    <label class="wt-ai-consent"><input type="checkbox" id="wt-audio-consent"> I agree to send this selected audio to the configured AI provider for transcription.</label>
+    <div class="row">
+      <button type="button" id="wt-audio-transcribe">Transcribe audio</button>
+      <span id="wt-audio-status" class="muted" role="status" aria-live="polite">Select audio and confirm consent.</span>
+    </div>
+    <label for="wt-audio-transcript">Transcript — review and edit</label>
+    <textarea id="wt-audio-transcript" rows="4" maxlength="4000" placeholder="Your transcript will appear here." ></textarea>
+    <div class="row">
+      <button type="button" id="wt-audio-translate" class="secondary">Translate transcript</button>
+      <button type="button" id="wt-audio-use" class="secondary">Use in message composer</button>
+      <button type="button" id="wt-audio-copy" class="secondary">Copy transcript</button>
+    </div>
+    <label for="wt-audio-translation">Translation</label>
+    <div id="wt-audio-translation" class="wt-ai-result-text" tabindex="0" aria-live="polite"></div>
+  </section>
 </div>
 
       </section>
@@ -1230,6 +1277,7 @@
   <script src="/dynamic-language.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/ai-assistant.js" defer></script>
+  <script src="/audio-intelligence.js" defer></script>
   <script src="/group-presence.js" defer></script>
 </body>
 </html>
