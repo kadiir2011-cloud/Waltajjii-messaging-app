@@ -1,26 +1,23 @@
-# Phase 77 — Ethiopian language expansion for caption translation
+# Phase 77 — Ethiopian and international language expansion
 
 ## Delivered
-- Expanded the “Translate latest caption into” selector to include Afaan Oromo, Amharic, Tigrinya, Somali, Afar, Sidama, Wolaytta, Gamo, Gofa, Dawro, Hadiyya, Kafa, Gedeo, Kambaata, Silt'e, Sebat Bet Gurage, Bench, Shekkacho, Gumuz, Nuer, Anuak, Berta, Me'en and Konso, in addition to English and Arabic.
-- Applied the same expanded language choices to the message translator, AI answer language, and transcript translation selectors.
-- Expanded the authenticated translation API allowlist so the newly selectable languages are accepted by the server.
-- Updated translation guidance to favor each requested language and its writing system rather than silently substituting a more widely spoken language.
+- Expanded “Translate latest caption into” and all other translation language selectors to 118 languages.
+- Coverage includes 24 Ethiopian languages and 94 additional languages used internationally across Africa, Europe, Asia, the Middle East and the Americas.
+- Extended the authenticated translation API allowlist to match the user interface.
+- Added language categories to make the long lists easier to browse.
+- Updated translation guidance to use the requested language and writing system without silently substituting another language.
 
 ## Privacy and safety
 - Existing consent and opt-in behavior remains unchanged.
 - Caption translation remains a separate user action; automatic incoming-caption translation remains off by default.
-- Translation text is sent to the configured translation provider; output is displayed locally and not broadcast to the caller.
+- Caption text is sent to the configured translation provider; output is displayed locally and not broadcast to the caller.
 - API responses remain marked no-store.
 
-## Important limitations
-- This expands the languages Waltajjii can request from its configured AI translation provider; it does not guarantee equal fluency or availability for every language or dialect.
-- The translation provider must be configured with OPENAI_API_KEY in the target service. No provider key was added or changed in this phase.
-- Browser speech-recognition language availability is controlled by the browser/device and is not changed by this translation-language expansion.
-- Important medical, legal, financial, or official communications should be reviewed by a fluent speaker before use.
-- Test with native/fluent speakers for each language before public launch.
-
-## Verification
-- Automated tests verify the UI choices and server allowlist stay aligned.
-- Real provider-based translation quality checks are still required.
+## Limitations
+- Listing a language means Waltajjii can request that language from its configured AI translation provider; it does not guarantee equal quality, dialect coverage, or provider support for every language.
+- Provider configuration requires OPENAI_API_KEY in the target service. No secret was added or changed.
+- Browser speech-recognition language availability is separate and unchanged.
+- Important medical, legal, financial, or official translations should be reviewed by a fluent speaker.
+- Validate with fluent speakers and native-language test cases before public launch.
 
 Draft review only. No merge, deployment, production database change, or public launch is authorized.
