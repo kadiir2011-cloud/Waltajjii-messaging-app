@@ -322,7 +322,6 @@ io.on("connection", (socket) => {
 
     if (socket.data.typingTo && socket.data.typingTo !== targetUserId) {
       stopSocketTyping(socket);
-    for (const groupId of Array.from(groupCallMembership)) leaveGroupCall(groupId, disconnectedUserId, true);
     }
 
     socket.data.typingTo = targetUserId;
@@ -642,6 +641,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     const disconnectedUserId = String(socket.data.userId);
+    for (const groupId of Array.from(groupCallMembership)) leaveGroupCall(groupId, disconnectedUserId, true);
     const targetUserId = activeCalls.get(disconnectedUserId);
 
     stopSocketTyping(socket);
