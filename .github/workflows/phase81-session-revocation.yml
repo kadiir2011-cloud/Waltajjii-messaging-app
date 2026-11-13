@@ -1,0 +1,41 @@
+name: Phase 81 session revocation security tests
+on:
+  pull_request:
+    paths:
+      - "src/db.js"
+      - "src/server.js"
+      - "src/routes/**"
+      - "src/security/**"
+      - "test/phase81-session-revocation.test.js"
+      - ".github/workflows/phase81-session-revocation.yml"
+      - "PHASE-81-SESSION-REVOCATION.md"
+permissions:
+  contents: read
+jobs:
+  session-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci
+      - name: Check changed server and security module syntax
+        run: |
+          node --check src/db.js
+          node --check src/server.js
+          node --check src/security/access-token.js
+          node --check src/routes/auth.js
+          node --check src/routes/messages.js
+          node --check src/routes/groups.js
+          node --check src/routes/channels.js
+          node --check src/routes/social.js
+          node --check src/routes/moments.js
+          node --check src/routes/uploads.js
+          node --check src/routes/calls.js
+          node --check test/phase81-session-revocation.test.js
+      - name: Run session revocation and regression tests
+        run: node --test test/phase81-session-revocation.test.js test/phase63-final-security-audit.test.js test/phase78-regression-hardening.test.js
