@@ -1099,6 +1099,34 @@ const localVideo = document.getElementById("local-video");
 const remoteVideo = document.getElementById("remote-video");
 const callStatus = document.getElementById("call-status");
 const callQualityStatus = document.getElementById("wt-call-quality");
+const callAdaptiveToggle = document.getElementById("wt-call-adaptive");
+const callAdaptiveStatus = document.getElementById("wt-call-adaptive-status");
+if (callAdaptiveToggle) {
+  callAdaptiveToggle.addEventListener("change", () => {
+    adaptivePoorSamples = 0;
+    adaptiveFairSamples = 0;
+    adaptiveGoodSamples = 0;
+    if (callAdaptiveToggle.checked) {
+      adaptiveVideoProfile = "high";
+      if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation enabled; monitoring this call.";
+      applyAdaptiveVideoQuality("high");
+    } else {
+      if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; restoring standard video quality.";
+      applyAdaptiveVideoQuality("high").then(restored => {
+        if (callAdaptiveStatus) callAdaptiveStatus.textContent = restored
+          ? "Automatic video adaptation is off; standard video quality is restored."
+          : "Automatic video adaptation is off; this browser could not reset video settings automatically.";
+      });
+    }
+  });
+}
+
+let adaptiveVideoProfile = "high";
+let adaptivePoorSamples = 0;
+let adaptiveFairSamples = 0;
+let adaptiveGoodSamples = 0;
+let adaptiveApplyPending = false;
+
 
 const startCallButton = document.getElementById("start-call-button");
 const startVoiceCallButton = document.getElementById("start-voice-call-button");
@@ -1602,6 +1630,77 @@ async function applyPendingIceCandidates() {
   }
 }
 
+
+async function applyAdaptiveVideoQuality(profile) {
+  if (!peerConnection || adaptiveApplyPending) return;
+  const videoSender = peerConnection.getSenders().find(sender => sender.track?.kind === "video");
+  if (!videoSender) {
+    if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic adaptation is available during video calls.";
+    return;
+  }
+  const limits = {
+    high: { maxBitrate: 1500000, maxFramerate: 30, scaleResolutionDownBy: 1 },
+    balanced: { maxBitrate: 700000, maxFramerate: 24, scaleResolutionDownBy: 1.5 },
+    conserve: { maxBitrate: 350000, maxFramerate: 15, scaleResolutionDownBy: 2 }
+  };
+  const selected = limits[profile];
+  if (!selected) return;
+  adaptiveApplyPending = true;
+  try {
+    const parameters = videoSender.getParameters();
+    if (!Array.isArray(parameters.encodings) || !parameters.encodings.length) {
+      parameters.encodings = [{}];
+    }
+    parameters.encodings = parameters.encodings.map(encoding => ({
+      ...encoding,
+      maxBitrate: selected.maxBitrate,
+      maxFramerate: selected.maxFramerate,
+      scaleResolutionDownBy: selected.scaleResolutionDownBy
+    }));
+    parameters.degradationPreference = "balanced";
+    await videoSender.setParameters(parameters);
+    adaptiveVideoProfile = profile;
+    const labels = { high: "Standard quality", balanced: "Balanced quality", conserve: "Data-saving quality" };
+    if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic adaptation: " + labels[profile] + ". Adjusted on this device only.";
+    return true;
+  } catch (error) {
+    if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adjustment is not supported by this browser; call quality remains unchanged.";
+    return false;
+  } finally {
+    adaptiveApplyPending = false;
+  }
+}
+
+function updateAdaptiveVideoQuality(poor, fair) {
+  if (!callAdaptiveToggle?.checked || !peerConnection) return;
+  if (poor) {
+    adaptivePoorSamples += 1;
+    adaptiveFairSamples = 0;
+    adaptiveGoodSamples = 0;
+    if (adaptivePoorSamples >= 2 && adaptiveVideoProfile !== "conserve") {
+      applyAdaptiveVideoQuality("conserve");
+      adaptivePoorSamples = 0;
+    }
+    return;
+  }
+  adaptivePoorSamples = 0;
+  if (fair) {
+    adaptiveFairSamples += 1;
+    adaptiveGoodSamples = 0;
+    if (adaptiveFairSamples >= 2 && adaptiveVideoProfile === "high") {
+      applyAdaptiveVideoQuality("balanced");
+      adaptiveFairSamples = 0;
+    }
+    return;
+  }
+  adaptiveFairSamples = 0;
+  adaptiveGoodSamples += 1;
+  if (adaptiveGoodSamples >= 3 && adaptiveVideoProfile !== "high") {
+    applyAdaptiveVideoQuality("high");
+    adaptiveGoodSamples = 0;
+  }
+}
+
 async function updateCallQuality() {
   if (!peerConnection || !callQualityStatus) return;
   try {
@@ -1625,6 +1724,7 @@ async function updateCallQuality() {
     const poor = (rttMs !== null && rttMs > 400) || (jitterMs !== null && jitterMs > 30) || (lossPercent !== null && lossPercent > 5);
     const fair = !poor && ((rttMs !== null && rttMs > 180) || (jitterMs !== null && jitterMs > 15) || (lossPercent !== null && lossPercent > 2));
     const label = poor ? "Needs attention" : fair ? "Fair" : "Good";
+    updateAdaptiveVideoQuality(poor, fair);
     const metrics = [
       rttMs === null ? "RTT: measuring" : "RTT: " + Math.round(rttMs) + " ms",
       jitterMs === null ? "Jitter: measuring" : "Jitter: " + Math.round(jitterMs) + " ms",
@@ -1792,6 +1892,11 @@ function endVideoCall(notifyRemote = true) {
   if (callQualityTimer) clearInterval(callQualityTimer);
   callQualityTimer = null;
   if (callQualityStatus) callQualityStatus.textContent = "Call quality monitoring stops when the call ends. Metrics are measured on this device only.";
+  adaptivePoorSamples = 0;
+  adaptiveFairSamples = 0;
+  adaptiveGoodSamples = 0;
+  adaptiveVideoProfile = "high";
+  if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is idle until the next call.";
   const otherUserId = activeCallUserId;
   callRecoveryInProgress = false;
   if (callReconnectButton) callReconnectButton.disabled = true;
