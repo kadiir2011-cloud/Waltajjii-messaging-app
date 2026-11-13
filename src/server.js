@@ -557,7 +557,7 @@ io.on("connection", (socket) => {
     if (call.participants.size === 0 || (call.hostId === id && notify)) {
       for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
       activeGroupCalls.delete(String(groupId));
-      for (const waitingUserId of call.waitingRoom?.keys() || []) io.to("user:" + waitingUserId).emit("group-call:denied", { groupId: String(groupId), message: "The group call has ended." });
+      for (const pending of call.waitingRoom?.values() || []) io.to(pending.socketId).emit("group-call:denied", { groupId: String(groupId), message: "The group call has ended." });
       io.to(`group-call:${groupId}`).emit("group-call:ended", {
         groupId: String(groupId), reason: call.hostId === id ? "host-ended" : "empty"
       });
@@ -612,7 +612,7 @@ io.on("connection", (socket) => {
     }
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
     if (!call.waitingRoom) call.waitingRoom = new Map();
-    call.waitingRoom.set(userId, { username: socket.data.username, requestedAt: Date.now() });
+    call.waitingRoom.set(userId, { username: socket.data.username, socketId: socket.id, requestedAt: Date.now() });
     io.to("user:" + call.hostId).emit("group-call:join-requested", {
       groupId, userId, username: socket.data.username
     });
@@ -626,9 +626,10 @@ io.on("connection", (socket) => {
       return acknowledge({ ok: false, error: "Only the active call host can admit a waiting participant." });
     }
     if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+    const pending = call.waitingRoom.get(targetUserId);
     call.waitingRoom.delete(targetUserId);
     call.admitted.add(targetUserId);
-    io.to("user:" + targetUserId).emit("group-call:admitted", { groupId });
+    io.to(pending.socketId).emit("group-call:admitted", { groupId });
     acknowledge({ ok: true });
   });
 
@@ -638,8 +639,9 @@ io.on("connection", (socket) => {
     if (!call || call.hostId !== String(socket.data.userId) || !call.waitingRoom?.has(targetUserId)) {
       return acknowledge({ ok: false, error: "Only the active call host can decline a waiting participant." });
     }
+    const pending = call.waitingRoom.get(targetUserId);
     call.waitingRoom.delete(targetUserId);
-    io.to("user:" + targetUserId).emit("group-call:denied", { groupId, message: "The host did not admit you to this call." });
+    io.to(pending.socketId).emit("group-call:denied", { groupId, message: "The host did not admit you to this call." });
     acknowledge({ ok: true });
   });
 
@@ -762,7 +764,7 @@ io.on("connection", (socket) => {
       return acknowledge({ ok: false, error: "Only the group-call host can end this call for everyone." });
     }
     activeGroupCalls.delete(groupId);
-    for (const waitingUserId of call.waitingRoom?.keys() || []) io.to("user:" + waitingUserId).emit("group-call:denied", { groupId, message: "The group call has ended." });
+    for (const pending of call.waitingRoom?.values() || []) io.to(pending.socketId).emit("group-call:denied", { groupId, message: "The group call has ended." });
     for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
     io.to(`group-call:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
     io.to(`group:${groupId}`).emit("group-call:ended", { groupId, reason: "host-ended" });
