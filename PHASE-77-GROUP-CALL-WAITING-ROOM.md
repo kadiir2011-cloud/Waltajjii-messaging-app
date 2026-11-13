@@ -3,7 +3,8 @@
 ## Delivered
 - Group members request entry to an active group video call before their camera or microphone is activated.
 - The active call host receives a live waiting-room request and can explicitly admit or decline each person.
-- Admission is checked server-side and represented by a one-time authorization; a participant cannot bypass the waiting room by emitting the join event directly.
+- Admission is checked server-side, bound to the exact requesting socket, expires after 60 seconds, and reserves one of the eight participant slots; a participant cannot bypass the waiting room by emitting the join event directly.
+- The waiting queue is capped at 20 pending requests per call.
 - Admission and denial are delivered to the requesting socket only, avoiding media prompts on other logged-in devices for the same account.
 - Pending requests are cleared and the requester is notified if the call ends before a decision.
 - Camera and microphone permission is requested only after the host admits the participant.
