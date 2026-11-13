@@ -16,7 +16,7 @@ Add optional, live captions during one-to-one voice and video calls, with manual
 - No recording is created or saved by Waltajjii.
 - Caption sharing is off by default and sends transcript text only to the authenticated active call peer.
 - The server derives the sender identity from the authenticated socket, validates the active call pair, limits each caption to 500 characters and caps sharing at 20 captions per 10 seconds per socket.
-- Captions and translations are not written to the database. Translation is a separate user-initiated request and remains local to the requesting device.
+- Captions and translations are not written to the database. Translation is a separate user-initiated request that sends the selected caption text to the configured translation service; the returned translation is displayed only on the requesting device and is not broadcast to the caller.
 - No call audio, captions or translations are automatically recorded, persisted or sent as messages.
 
 ## Browser support
