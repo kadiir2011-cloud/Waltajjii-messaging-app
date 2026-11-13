@@ -1098,6 +1098,14 @@ items.forEach(item => {
 const localVideo = document.getElementById("local-video");
 const remoteVideo = document.getElementById("remote-video");
 const callStatus = document.getElementById("call-status");
+const screenShareButton = document.getElementById("wt-screen-share");
+const stopScreenShareButton = document.getElementById("wt-screen-share-stop");
+const screenShareStatus = document.getElementById("wt-screen-share-status");
+const screenSharePreview = document.getElementById("wt-screen-share-preview");
+let screenShareStream = null;
+let screenShareSender = null;
+let screenShareCameraTrack = null;
+
 const callQualityStatus = document.getElementById("wt-call-quality");
 const callAdaptiveToggle = document.getElementById("wt-call-adaptive");
 const callAdaptiveStatus = document.getElementById("wt-call-adaptive-status");
@@ -1743,6 +1751,78 @@ function startCallQualityMonitor() {
   updateCallQuality();
 }
 
+
+async function startScreenSharing() {
+  if (!peerConnection || peerConnection.connectionState !== "connected" || !activeCallUserId) {
+    if (screenShareStatus) screenShareStatus.textContent = "Screen sharing is available after a video call connects.";
+    return;
+  }
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    if (screenShareStatus) screenShareStatus.textContent = "This browser does not support screen sharing.";
+    return;
+  }
+  let capture = null;
+  try {
+    capture = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 15, max: 30 } },
+      audio: false
+    });
+    const screenTrack = capture.getVideoTracks()[0];
+    const sender = peerConnection.getSenders().find(item => item.track?.kind === "video");
+    if (!screenTrack || !sender) {
+      capture.getTracks().forEach(track => track.stop());
+      if (screenShareStatus) screenShareStatus.textContent = "Screen sharing requires an active video call with a camera video track.";
+      return;
+    }
+    const cameraTrack = sender.track;
+    await sender.replaceTrack(screenTrack);
+    screenShareStream = capture;
+    screenShareSender = sender;
+    screenShareCameraTrack = cameraTrack;
+    if (screenSharePreview) {
+      screenSharePreview.srcObject = capture;
+      screenSharePreview.hidden = false;
+      screenSharePreview.play().catch(() => {});
+    }
+    screenTrack.addEventListener("ended", () => { stopScreenSharing(true); }, { once: true });
+    if (screenShareButton) screenShareButton.disabled = true;
+    if (stopScreenShareButton) stopScreenShareButton.disabled = false;
+    if (screenShareStatus) screenShareStatus.textContent = "Your screen is being shared with the other caller. Stop sharing at any time.";
+  } catch (error) {
+    if (capture) capture.getTracks().forEach(track => track.stop());
+    if (screenShareStatus) screenShareStatus.textContent = error?.name === "NotAllowedError"
+      ? "Screen sharing was cancelled or permission was denied."
+      : "Could not start screen sharing: " + (error?.message || "unknown error");
+  }
+}
+
+async function stopScreenSharing(restoreCamera = true) {
+  const capture = screenShareStream;
+  const sender = screenShareSender;
+  const cameraTrack = screenShareCameraTrack;
+  screenShareStream = null;
+  screenShareSender = null;
+  screenShareCameraTrack = null;
+  const screenTrack = capture?.getVideoTracks()[0];
+  if (screenTrack) screenTrack.onended = null;
+  if (capture) capture.getTracks().forEach(track => track.stop());
+  if (restoreCamera && sender && peerConnection) {
+    try {
+      await sender.replaceTrack(cameraTrack?.readyState === "live" ? cameraTrack : null);
+    } catch (error) {
+      if (screenShareStatus) screenShareStatus.textContent = "Screen sharing stopped, but the camera track could not be restored. Restart video if needed.";
+    }
+  }
+  if (screenSharePreview) {
+    screenSharePreview.pause();
+    screenSharePreview.srcObject = null;
+    screenSharePreview.hidden = true;
+  }
+  if (screenShareButton) screenShareButton.disabled = !peerConnection || peerConnection.connectionState !== "connected";
+  if (stopScreenShareButton) stopScreenShareButton.disabled = true;
+  if (screenShareStatus && restoreCamera) screenShareStatus.textContent = "Screen sharing stopped. Your camera video has been restored when available.";
+}
+
 async function prepareMediaConnection(videoEnabled = true) {
   localStream = await navigator.mediaDevices.getUserMedia({
     video: videoEnabled,
@@ -1780,10 +1860,12 @@ peerConnection = new RTCPeerConnection(rtcConfiguration);
       if (callReconnectButton) callReconnectButton.disabled = true;
       setCallStatus(localStream?.getVideoTracks().length ? "Video call connected." : "Voice call connected.");
       updateCaptionAvailability();
+      if (screenShareButton) screenShareButton.disabled = !localStream?.getVideoTracks().length;
     } else if (peerConnection.connectionState === "disconnected" || peerConnection.connectionState === "failed") {
       if (callReconnectButton) callReconnectButton.disabled = false;
       setCallStatus("Call connection interrupted. You can ask the other participant to reconnect.");
       updateCaptionAvailability();
+      if (screenShareButton) screenShareButton.disabled = true;
     }
   };
 }
@@ -1889,6 +1971,10 @@ async function acceptIncomingCall() {
 
 function endVideoCall(notifyRemote = true) {
   stopLiveCallCaptions(true);
+  stopScreenSharing(false);
+  if (screenShareButton) screenShareButton.disabled = true;
+  if (stopScreenShareButton) stopScreenShareButton.disabled = true;
+  if (screenShareStatus) screenShareStatus.textContent = "Screen sharing is idle until a video call connects.";
   if (callQualityTimer) clearInterval(callQualityTimer);
   callQualityTimer = null;
   if (callQualityStatus) callQualityStatus.textContent = "Call quality monitoring stops when the call ends. Metrics are measured on this device only.";
@@ -1959,6 +2045,8 @@ if (rejectCallButton) {
 if (endCallButton) {
   endCallButton.addEventListener("click", () => endVideoCall(true));
 }
+if (screenShareButton) screenShareButton.addEventListener("click", startScreenSharing);
+if (stopScreenShareButton) stopScreenShareButton.addEventListener("click", () => stopScreenSharing(true));
 
 if (callReconnectButton) {
   callReconnectButton.addEventListener("click", () => {
