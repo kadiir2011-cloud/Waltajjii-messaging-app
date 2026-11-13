@@ -20,7 +20,7 @@ Add opt-in, user-initiated transcription of an existing voice message or a local
 
 ## Architecture
 - New route: POST /api/audio/transcribe.
-- Uses OPENAI_API_KEY and OPENAI_TRANSCRIPTION_MODEL (default gpt-4o-mini-transcribe).
+- Uses OPENAI_API_KEY and OPENAI_TRANSCRIPTION_MODEL (default gpt-transcribe).
 - Uses multipart/form-data; do not set Content-Type manually in the browser so the boundary is generated.
 - Translation reuses POST /api/translation/translate.
 - Route is composed only in createPostgresApiRouter, not the production SQLite server.
