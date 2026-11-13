@@ -1111,7 +1111,10 @@ if (callAdaptiveToggle) {
       if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation enabled; monitoring this call.";
       applyAdaptiveVideoQuality("high");
     } else {
-      if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; video settings are no longer adjusted.";
+      if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; restoring standard video quality.";
+      applyAdaptiveVideoQuality("high").then(() => {
+        if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; standard video quality is restored.";
+      });
     }
   });
 }
@@ -1627,7 +1630,7 @@ async function applyPendingIceCandidates() {
 
 
 async function applyAdaptiveVideoQuality(profile) {
-  if (!peerConnection || !callAdaptiveToggle?.checked || adaptiveApplyPending) return;
+  if (!peerConnection || adaptiveApplyPending) return;
   const videoSender = peerConnection.getSenders().find(sender => sender.track?.kind === "video");
   if (!videoSender) {
     if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic adaptation is available during video calls.";
