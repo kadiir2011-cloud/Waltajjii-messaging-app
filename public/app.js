@@ -2180,6 +2180,68 @@ let groupCallIsHost = false;
 let groupCallLocalStream = null;
 const groupPeerConnections = new Map();
 const groupPendingIce = new Map();
+const groupCallMicButton = document.getElementById("wt-group-call-mic");
+const groupCallCameraButton = document.getElementById("wt-group-call-camera");
+const groupCallLayoutButton = document.getElementById("wt-group-call-layout");
+const groupCallRoster = document.getElementById("wt-group-call-roster");
+let groupCallLayout = "grid";
+let groupCallPinnedUserId = null;
+
+function updateGroupCallControls() {
+  const active = Boolean(activeGroupCallId && groupCallLocalStream);
+  const audioTracks = groupCallLocalStream?.getAudioTracks() || [];
+  const videoTracks = groupCallLocalStream?.getVideoTracks() || [];
+  if (groupCallMicButton) {
+    groupCallMicButton.disabled = !active || !audioTracks.length;
+    groupCallMicButton.textContent = audioTracks.length && audioTracks.every(track => !track.enabled) ? "Turn microphone on" : "Mute microphone";
+    groupCallMicButton.setAttribute("aria-pressed", String(Boolean(audioTracks.length && audioTracks.every(track => !track.enabled))));
+  }
+  if (groupCallCameraButton) {
+    groupCallCameraButton.disabled = !active || !videoTracks.length;
+    groupCallCameraButton.textContent = videoTracks.length && videoTracks.every(track => !track.enabled) ? "Turn camera on" : "Turn camera off";
+    groupCallCameraButton.setAttribute("aria-pressed", String(Boolean(videoTracks.length && videoTracks.every(track => !track.enabled))));
+  }
+  if (groupCallLayoutButton) groupCallLayoutButton.disabled = !active;
+  if (groupCallRoster) groupCallRoster.hidden = !active;
+}
+
+function refreshGroupCallRoster() {
+  if (!groupCallRoster || !groupCallGrid) return;
+  groupCallRoster.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = "Participants (" + groupCallGrid.querySelectorAll(".wt-group-call-tile").length + ")";
+  groupCallRoster.appendChild(heading);
+  groupCallGrid.querySelectorAll(".wt-group-call-tile").forEach(tile => {
+    const userId = tile.dataset.groupCallUser || "";
+    const label = tile.querySelector("span")?.textContent || "Group member";
+    const item = document.createElement("div");
+    item.className = "wt-group-call-roster-item";
+    const name = document.createElement("span");
+    name.textContent = label;
+    const focus = document.createElement("button");
+    focus.type = "button";
+    focus.className = "secondary";
+    focus.textContent = groupCallPinnedUserId === userId ? "Unpin" : "Focus";
+    focus.setAttribute("aria-label", (groupCallPinnedUserId === userId ? "Unpin " : "Focus ") + label);
+    focus.addEventListener("click", () => {
+      groupCallPinnedUserId = groupCallPinnedUserId === userId ? null : userId;
+      applyGroupCallLayout();
+      refreshGroupCallRoster();
+    });
+    item.append(name, focus);
+    groupCallRoster.appendChild(item);
+  });
+}
+
+function applyGroupCallLayout() {
+  if (!groupCallGrid) return;
+  groupCallGrid.dataset.layout = groupCallLayout;
+  groupCallGrid.querySelectorAll(".wt-group-call-tile").forEach(tile => {
+    tile.classList.toggle("wt-group-call-pinned", Boolean(groupCallPinnedUserId && tile.dataset.groupCallUser === groupCallPinnedUserId));
+  });
+  if (groupCallLayoutButton) groupCallLayoutButton.textContent = groupCallLayout === "grid" ? "Switch to focus layout" : "Switch to grid layout";
+}
+
 
 async function refreshGroupCallAvailability(groupId = groupSelect?.value) {
   if (!groupId || !callSocket?.connected || activeGroupCallId) return;
@@ -2224,17 +2286,23 @@ function createGroupCallTile(userId, username, stream, local = false) {
     label.textContent = local ? (username || "You") + " (you)" : (username || "Group member");
     tile.append(video, label);
     groupCallGrid.appendChild(tile);
+    refreshGroupCallRoster();
   }
   const video = tile.querySelector("video");
   if (video && video.srcObject !== stream) {
     video.srcObject = stream;
     video.play().catch(() => {});
   }
+  refreshGroupCallRoster();
+  applyGroupCallLayout();
 }
 
 function removeGroupCallTile(userId) {
   const tile = groupCallGrid?.querySelector('[data-group-call-user="' + CSS.escape(String(userId)) + '"]');
   tile?.remove();
+  if (groupCallPinnedUserId === String(userId)) groupCallPinnedUserId = null;
+  refreshGroupCallRoster();
+  applyGroupCallLayout();
 }
 
 async function flushGroupIce(userId, connection) {
@@ -2329,6 +2397,7 @@ async function joinGroupVideoCall() {
     groupCallIsHost = false;
     createGroupCallTile("self", currentUsername || "You", groupCallLocalStream, true);
     if (groupCallLeaveButton) groupCallLeaveButton.disabled = false;
+    updateGroupCallControls();
     if (groupCallStatus) groupCallStatus.textContent = "Joined group video call. Connecting to participants…";
     const peers = (response.participants || []).filter(person => String(person.username) !== String(currentUsername));
     for (const person of peers) await createGroupPeerConnection(person.userId, person.username, true);
@@ -2352,13 +2421,37 @@ function stopGroupVideoCall(sendSignal = true) {
   groupCallLocalStream?.getTracks().forEach(track => track.stop());
   groupCallLocalStream = null;
   groupCallGrid?.replaceChildren();
+  groupCallPinnedUserId = null;
+  groupCallLayout = "grid";
   activeGroupCallId = null;
   groupCallIsHost = false;
   if (groupCallLeaveButton) groupCallLeaveButton.disabled = true;
+  updateGroupCallControls();
+  refreshGroupCallRoster();
   if (groupCallStartButton) groupCallStartButton.disabled = false;
   if (groupCallJoinButton) groupCallJoinButton.disabled = true;
   if (groupCallStatus) groupCallStatus.textContent = "Group call ended. You can start or join another call.";
 }
+
+
+if (groupCallMicButton) groupCallMicButton.addEventListener("click", () => {
+  const tracks = groupCallLocalStream?.getAudioTracks() || [];
+  if (!tracks.length) return;
+  const enable = tracks.some(track => !track.enabled);
+  tracks.forEach(track => { track.enabled = enable; });
+  updateGroupCallControls();
+});
+if (groupCallCameraButton) groupCallCameraButton.addEventListener("click", () => {
+  const tracks = groupCallLocalStream?.getVideoTracks() || [];
+  if (!tracks.length) return;
+  const enable = tracks.some(track => !track.enabled);
+  tracks.forEach(track => { track.enabled = enable; });
+  updateGroupCallControls();
+});
+if (groupCallLayoutButton) groupCallLayoutButton.addEventListener("click", () => {
+  groupCallLayout = groupCallLayout === "grid" ? "focus" : "grid";
+  applyGroupCallLayout();
+});
 
 if (groupCallStartButton) groupCallStartButton.addEventListener("click", startGroupVideoCall);
 if (groupCallJoinButton) groupCallJoinButton.addEventListener("click", joinGroupVideoCall);
