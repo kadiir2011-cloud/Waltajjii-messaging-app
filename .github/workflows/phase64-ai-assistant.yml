@@ -1,0 +1,30 @@
+name: Phase 64 AI assistant foundation
+on:
+  pull_request:
+    paths:
+      - "src/routes/postgres-ai-assistant.js"
+      - "src/postgres/postgres-api-router.js"
+      - "test/phase64-ai-assistant.test.js"
+      - "test/phase56-postgres-api-composition.test.js"
+      - "PHASE-64-AI-ASSISTANT-FOUNDATION.md"
+      - ".github/workflows/phase64-ai-assistant.yml"
+permissions:
+  contents: read
+jobs:
+  ai-assistant-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check syntax
+        run: |
+          node --check src/routes/postgres-ai-assistant.js
+          node --check src/postgres/postgres-api-router.js
+      - name: Run AI assistant and API composition tests
+        run: node --test test/phase64-ai-assistant.test.js test/phase56-postgres-api-composition.test.js
