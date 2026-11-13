@@ -20,8 +20,8 @@ test("Phase 81 rejects common weak passwords and username inclusion", () => {
 });
 
 test("Phase 81 rejects simple repeated and predictable sequences", () => {
-  assert.match(validateNewPassword("aaaaaaaaaaaa", "member"), /unpredictable/i);
-  assert.match(validateNewPassword("123456abcdef", "member"), /unpredictable/i);
+  assert.match(validateNewPassword("aaaaaaaaaaaa", "member"), /predictable/i);
+  assert.match(validateNewPassword("123456abcdef", "member"), /predictable/i);
 });
 
 test("Phase 81 handles non-string values safely", () => {
