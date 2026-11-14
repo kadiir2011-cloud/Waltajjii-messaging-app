@@ -1,0 +1,29 @@
+name: Phase 86 session security foundation
+on:
+  pull_request:
+    paths:
+      - "src/security/session-token-policy.js"
+      - "test/phase86-session-token-policy.test.js"
+      - "test/phase83-auth-rate-limit-verification.test.js"
+      - ".github/workflows/phase86-session-security-foundation.yml"
+      - "PHASE-86-SESSION-SECURITY-FOUNDATION.md"
+permissions:
+  contents: read
+jobs:
+  session-security-foundation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check syntax
+        run: |
+          node --check src/security/session-token-policy.js
+          node --check test/phase86-session-token-policy.test.js
+          node --check test/phase83-auth-rate-limit-verification.test.js
+      - name: Verify session policy and authentication limiter lifecycle
+        run: |
+          node --test test/phase86-session-token-policy.test.js
+          node --test test/phase83-auth-rate-limit-verification.test.js
