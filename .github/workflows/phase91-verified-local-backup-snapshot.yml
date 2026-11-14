@@ -1,0 +1,30 @@
+name: Phase 91 verified local backup snapshot
+on:
+  pull_request:
+    paths:
+      - "scripts/phase91-verified-local-backup-snapshot.js"
+      - "test/phase91-verified-local-backup-snapshot.test.js"
+      - ".github/workflows/phase91-verified-local-backup-snapshot.yml"
+      - "PHASE-91-VERIFIED-LOCAL-BACKUP-SNAPSHOT.md"
+permissions:
+  contents: read
+jobs:
+  verified-local-backup-snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check syntax
+        run: |
+          node --check scripts/phase91-verified-local-backup-snapshot.js
+          node --check test/phase91-verified-local-backup-snapshot.test.js
+      - name: Test backup, integrity and checksum verification
+        run: node --test test/phase91-verified-local-backup-snapshot.test.js
+      - name: Re-run migration preflight and rehearsal tests
+        run: |
+          node --test test/phase57-sqlite-migration-preflight.test.js
