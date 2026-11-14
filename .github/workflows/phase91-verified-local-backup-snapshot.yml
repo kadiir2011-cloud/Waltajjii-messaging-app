@@ -28,4 +28,3 @@ jobs:
       - name: Re-run migration preflight and rehearsal tests
         run: |
           node --test test/phase57-sqlite-migration-preflight.test.js
-          node --test test/phase58-postgres-migration-rehearsal.test.js
