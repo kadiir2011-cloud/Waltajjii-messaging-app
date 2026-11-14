@@ -6,7 +6,7 @@ function safeSegment(value){
  if(!name||name==="."||name===".."||name.includes("/")||name.includes("\\")||name.includes("\0"))throw new Error("Storage returned an unsafe path segment.");
  return name;
 }
-async function exportStorageInventory({client,bucket="waltajjii-media,pageSize=100,maxObjects=100000,maxPages=10000}={}){
+async function exportStorageInventory({client,bucket="waltajjii-media",pageSize=100,maxObjects=100000,maxPages=10000}={}){
  if(!client?.storage||typeof client.storage.from!=="function"||typeof client.storage.getBucket!=="function")throw new TypeError("A Supabase Storage client with read-only list/getBucket methods is required.");
  if(!/^[a-z0-9][a-z0-9_-]{1,62}$/i.test(bucket))throw new Error("Invalid storage bucket name.");
  const bucketResult=await client.storage.getBucket(bucket);
