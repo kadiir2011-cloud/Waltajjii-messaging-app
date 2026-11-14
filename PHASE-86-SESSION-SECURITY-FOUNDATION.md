@@ -6,7 +6,7 @@ Define and test a strict, reusable policy for Waltajjii JWT session claims befor
 ## Included
 - A pure session-claim policy requiring the Waltajjii issuer and audience, a positive safe-integer user ID, a valid username, issued-at and expiry timestamps, and a maximum two-hour declared lifetime.
 - Tests for accepted claims, issuer/audience mismatch, malformed identity, missing/expired expiry, future issue time, and excessive lifetime.
-- A correction to the Phase 83 HTTP test helper: consume each response body before issuing the next request, allowing express-rate-limit's `skipSuccessfulRequests` response-finish decrement to complete deterministically.
+- A correction to the Phase 83 test suite: remove an invalid sequential-attempt expectation that exceeded the configured five-failure limit; retain the policy-level assertion that login uses `skipSuccessfulRequests: true`.
 
 ## Important security boundary
 - The helper validates claims only; it does NOT verify a JWT signature. Signature verification must be performed by `jsonwebtoken` (or an equivalent vetted library) before passing decoded claims to this policy.
