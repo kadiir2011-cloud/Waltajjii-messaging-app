@@ -1,0 +1,25 @@
+name: Phase 84 proxy IP rate-limit verification
+on:
+  pull_request:
+    paths:
+      - "src/security/auth-rate-limiters.js"
+      - "test/phase84-proxy-ip-rate-limit-verification.test.js"
+      - ".github/workflows/phase84-proxy-ip-rate-limit-verification.yml"
+      - "PHASE-84-PROXY-IP-RATE-LIMIT-VERIFICATION.md"
+permissions:
+  contents: read
+jobs:
+  proxy-ip-rate-limit-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check test syntax
+        run: node --check test/phase84-proxy-ip-rate-limit-verification.test.js
+      - name: Run proxy IP rate-limit verification
+        run: node --test test/phase84-proxy-ip-rate-limit-verification.test.js
