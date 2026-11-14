@@ -11,7 +11,9 @@ async function makeFullApplicationSnapshot(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"waltajjii-phase92-"));
  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  process.env.STORAGE_DIR=root;
- const db=require("../src/db");
+ const dbModulePath=require.resolve("../src/db");
+ delete require.cache[dbModulePath];
+ const db=require(dbModulePath);
  try{
   const alice=db.prepare("INSERT INTO users(username,password_hash,full_name) VALUES(?,?,?)").run("phase92_alice","hash-a","Alice");
   const bob=db.prepare("INSERT INTO users(username,password_hash,full_name) VALUES(?,?,?)").run("phase92_bob","hash-b","Bob");
