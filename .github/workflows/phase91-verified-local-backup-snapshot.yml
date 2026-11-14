@@ -27,5 +27,5 @@ jobs:
         run: node --test test/phase91-verified-local-backup-snapshot.test.js
       - name: Re-run migration preflight and rehearsal tests
         run: |
-          node --test test/phase57-sqlite-migration-readiness.test.js
+          node --test test/phase57-sqlite-migration-preflight.test.js
           node --test test/phase58-postgres-migration-rehearsal.test.js
