@@ -1,0 +1,49 @@
+name: Package Waltajjii phases 91-95 source archive
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package-phases-91-95.yml"
+      - "scripts/phase91-*.js"
+      - "scripts/phase92-*.js"
+      - "scripts/phase93-*.js"
+      - "scripts/phase94-*.js"
+      - "scripts/phase95-*.js"
+      - "test/phase91-*.test.js"
+      - "test/phase92-*.test.js"
+      - "test/phase93-*.test.js"
+      - "test/phase94-*.test.js"
+      - "test/phase95-*.test.js"
+      - "PHASE-91-*.md"
+      - "PHASE-92-*.md"
+      - "PHASE-93-*.md"
+      - "PHASE-94-*.md"
+      - "PHASE-95-*.md"
+jobs:
+  package-source:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble source archive
+        run: |
+          set -euo pipefail
+          mkdir -p Waltajjii-Phases-91-95/.github/workflows
+          cp scripts/phase9{1,2,3,4,5}-*.js Waltajjii-Phases-91-95/
+          cp test/phase9{1,2,3,4,5}-*.test.js Waltajjii-Phases-91-95/
+          cp PHASE-9{1,2,3,4,5}-*.md Waltajjii-Phases-91-95/
+          cp .github/workflows/phase9{1,2,3,4,5}-*.yml Waltajjii-Phases-91-95/.github/workflows/
+          cat > Waltajjii-Phases-91-95/README.txt <<'EOF'
+          Waltajjii Phases 91–95 source archive
+          Includes phase scripts, automated tests, workflow definitions and documentation.
+          This is source code only. It does not contain a production database backup, media files, credentials, or a live Supabase export.
+          Review each PHASE-*.md file before running tools. Never commit server-only keys.
+          EOF
+          zip -qr Waltajjii-Phases-91-95.zip Waltajjii-Phases-91-95
+      - name: Upload downloadable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Waltajjii-Phases-91-95
+          path: Waltajjii-Phases-91-95.zip
+          if-no-files-found: error
+          retention-days: 30
