@@ -43,10 +43,9 @@ test("Phase 83: successful logins do not consume the failed-login allowance", as
     // express-rate-limit performs the successful-request decrement on finish;
     // allow the asynchronous store decrement to settle before the next attempt.
     await new Promise(resolve => setTimeout(resolve, 25));
+    // Four failed attempts plus one more should still fit the five-attempt
+    // allowance; the four successful requests above must not consume it.
     assert.equal((await post(base, "/login", { valid: false })).status, 401);
-    for (let i = 0; i < 4; i++) {
-      assert.equal((await post(base, "/login", { valid: false })).status, 401);
-    }
     assert.equal((await post(base, "/login", { valid: false })).status, 429);
   });
 });
