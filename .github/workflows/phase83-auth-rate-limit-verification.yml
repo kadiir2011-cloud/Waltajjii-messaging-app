@@ -1,11 +1,13 @@
-name: Phase 83 authentication rate-limit verification
+name: Phase 83/84 authentication rate-limit verification
 on:
   pull_request:
     paths:
       - "src/security/auth-rate-limiters.js"
       - "test/phase83-auth-rate-limit-verification.test.js"
+      - "test/phase84-proxy-ip-rate-limit-verification.test.js"
       - ".github/workflows/phase83-auth-rate-limit-verification.yml"
       - "PHASE-83-AUTH-RATE-LIMIT-VERIFICATION.md"
+      - "PHASE-84-PROXY-IP-RATE-LIMIT-VERIFICATION.md"
 permissions:
   contents: read
 jobs:
@@ -23,5 +25,8 @@ jobs:
         run: |
           node --check src/security/auth-rate-limiters.js
           node --check test/phase83-auth-rate-limit-verification.test.js
-      - name: Run rate-limit verification tests
-        run: node --test test/phase83-auth-rate-limit-verification.test.js
+          node --check test/phase84-proxy-ip-rate-limit-verification.test.js
+      - name: Run authentication rate-limit verification tests
+        run: |
+          node --test test/phase83-auth-rate-limit-verification.test.js
+          node --test test/phase84-proxy-ip-rate-limit-verification.test.js
