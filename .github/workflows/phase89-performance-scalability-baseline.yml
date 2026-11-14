@@ -1,0 +1,30 @@
+name: Phase 89 performance and scalability baseline
+on:
+  pull_request:
+    paths:
+      - "src/routes/postgres-auth.js"
+      - "src/postgres/postgres-realtime-socket.js"
+      - "test/phase89-performance-scalability.test.js"
+      - ".github/workflows/phase89-performance-scalability-baseline.yml"
+      - "PHASE-89-PERFORMANCE-SCALABILITY-BASELINE.md"
+permissions:
+  contents: read
+jobs:
+  performance-scalability-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check benchmark test syntax
+        run: node --check test/phase89-performance-scalability.test.js
+      - name: Run isolated concurrency baseline
+        run: node --test test/phase89-performance-scalability.test.js
+      - name: Re-run security integration tests
+        run: |
+          node --test test/phase88-end-to-end-security-verification.test.js
+          node --test test/phase44-postgres-realtime-socket.test.js
