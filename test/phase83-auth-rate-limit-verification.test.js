@@ -21,11 +21,15 @@ async function withServer(handler) {
 }
 
 async function post(base, path, body) {
-  return fetch(base + path, {
+  const response = await fetch(base + path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
+  // Consume the body so the response lifecycle (including skipSuccessfulRequests
+  // decrementing its counter on finish) completes before the next attempt.
+  await response.arrayBuffer();
+  return response;
 }
 
 test("Phase 83: successful logins do not consume the failed-login allowance", async () => {
