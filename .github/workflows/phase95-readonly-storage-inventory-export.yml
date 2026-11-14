@@ -1,0 +1,28 @@
+name: Phase 95 read-only Storage inventory export
+on:
+  pull_request:
+    paths:
+      - "scripts/phase95-readonly-storage-inventory-export.js"
+      - "test/phase95-readonly-storage-inventory-export.test.js"
+      - ".github/workflows/phase95-readonly-storage-inventory-export.yml"
+      - "PHASE-95-READONLY-STORAGE-INVENTORY-EXPORT.md"
+permissions:
+  contents: read
+jobs:
+  readonly-storage-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check syntax
+        run: |
+          node --check scripts/phase95-readonly-storage-inventory-export.js
+          node --check test/phase95-readonly-storage-inventory-export.test.js
+      - name: Test read-only paginated inventory export
+        run: node --test test/phase95-readonly-storage-inventory-export.test.js
