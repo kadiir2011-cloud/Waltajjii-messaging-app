@@ -38,7 +38,7 @@ function createPostgresAuthRouter({ authService, jwt, jwtSecret, limiter } = {})
         issuer: "waltajjii",
         audience: "waltajjii-users"
       });
-      if (!req.auth || !req.auth.userId) {
+      if (!req.auth?.userId || !req.auth?.username) {
         return res.status(401).json({ error: "Invalid or expired login token." });
       }
       return next();
