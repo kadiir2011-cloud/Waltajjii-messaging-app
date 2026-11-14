@@ -22,7 +22,7 @@ function extractReferences(sqlitePath){
    if(!mediaColumns.length)continue;
    const primaryKeys=columns.filter(c=>Number(c.pk)>0).sort((a,b)=>a.pk-b.pk).map(c=>c.name);
    if(!primaryKeys.length)throw new Error("Cannot safely identify media reference rows without a primary key: "+table);
-   const ownerColumn=OWNER_COLUMNS.find(name=>columns.some(c=>c.name===name));
+   const ownerColumn=OWNER_COLUMNS.find(name=>columns.some(c=>c.name===name))||(table==="users"&&columns.some(c=>c.name==="id")?"id":null);
    for(const mediaColumn of mediaColumns){
     const selected=[...new Set([...primaryKeys,mediaColumn.name,...(ownerColumn?[ownerColumn]:[])])];
     const rows=db.prepare("SELECT "+selected.map(quote).join(",")+" FROM "+quote(table)+" WHERE "+quote(mediaColumn.name)+" IS NOT NULL AND TRIM(CAST("+quote(mediaColumn.name)+" AS TEXT))<>''").all();
