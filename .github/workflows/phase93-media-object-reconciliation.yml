@@ -1,0 +1,29 @@
+name: Phase 93 media object reconciliation report
+on:
+  pull_request:
+    paths:
+      - "scripts/phase91-verified-local-backup-snapshot.js"
+      - "scripts/phase93-media-object-reconciliation.js"
+      - "test/phase93-media-object-reconciliation.test.js"
+      - ".github/workflows/phase93-media-object-reconciliation.yml"
+      - "PHASE-93-MEDIA-OBJECT-RECONCILIATION.md"
+permissions:
+  contents: read
+jobs:
+  media-object-reconciliation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check syntax
+        run: |
+          node --check scripts/phase93-media-object-reconciliation.js
+          node --check test/phase93-media-object-reconciliation.test.js
+      - name: Run offline media inventory reconciliation tests
+        run: node --test test/phase93-media-object-reconciliation.test.js
