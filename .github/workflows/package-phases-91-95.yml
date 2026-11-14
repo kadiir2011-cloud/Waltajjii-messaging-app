@@ -1,5 +1,8 @@
 name: Package Waltajjii phases 91-95 source archive
 on:
+  push:
+    branches:
+      - waltajjii-phase95-readonly-storage-inventory-export
   pull_request:
     paths:
       - ".github/workflows/package-phases-91-95.yml"
