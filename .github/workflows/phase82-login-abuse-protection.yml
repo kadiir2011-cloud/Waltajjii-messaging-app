@@ -1,0 +1,29 @@
+name: Phase 82 login abuse protection tests
+on:
+  pull_request:
+    paths:
+      - "src/routes/auth.js"
+      - "src/security/auth-rate-limiters.js"
+      - "test/phase82-login-abuse-protection.test.js"
+      - ".github/workflows/phase82-login-abuse-protection.yml"
+      - "PHASE-82-LOGIN-ABUSE-PROTECTION.md"
+permissions:
+  contents: read
+jobs:
+  login-abuse-protection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check syntax
+        run: |
+          node --check src/security/auth-rate-limiters.js
+          node --check src/routes/auth.js
+          node --check test/phase82-login-abuse-protection.test.js
+      - name: Run login protection tests
+        run: node --test test/phase82-login-abuse-protection.test.js

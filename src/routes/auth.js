@@ -1,20 +1,21 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { validateNewPassword } = require("../security/password-policy");
+const { createAuthRateLimiters } = require("../security/auth-rate-limiters");
 
 const router = express.Router();
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: "draft-7",
-  legacyHeaders: false
+router.use((req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  next();
 });
 
-router.post("/register", authLimiter, async (req, res) => {
+const { registrationLimiter, loginLimiter } = createAuthRateLimiters(require("express-rate-limit"));
+
+router.post("/register", registrationLimiter, async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
@@ -50,7 +51,7 @@ router.post("/register", authLimiter, async (req, res) => {
   }
 });
 
-router.post("/login", authLimiter, async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
@@ -80,8 +81,6 @@ router.post("/login", authLimiter, async (req, res) => {
       { expiresIn: "2h", issuer: "waltajjii", audience: "waltajjii-users" }
     );
 
-    res.set("Cache-Control", "no-store");
-    res.set("Pragma", "no-cache");
     return res.json({
       message: "Login successful.",
       token,
