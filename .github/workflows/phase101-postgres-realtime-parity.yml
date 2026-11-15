@@ -1,0 +1,27 @@
+name: Phase 101 PostgreSQL realtime parity
+on:
+  pull_request:
+    paths:
+      - "src/postgres/postgres-realtime-socket.js"
+      - "src/services/postgres-realtime-service.js"
+      - "test/phase101-postgres-realtime-parity.test.js"
+      - "test/phase100-postgres-sqlite-compatibility-audit.test.js"
+      - "PHASE-101-POSTGRES-REALTIME-PARITY.md"
+      - ".github/workflows/phase101-postgres-realtime-parity.yml"
+  push:
+    branches:
+      - waltajjii-phase101-postgres-realtime-parity
+permissions:
+  contents: read
+jobs:
+  phase101-realtime-parity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify realtime parity and prior release gates
+        run: node --test test/phase101-postgres-realtime-parity.test.js test/phase100-postgres-sqlite-compatibility-audit.test.js test/phase99-postgres-staging-bootstrap.test.js test/phase98-postgres-service-composition.test.js test/phase97-postgres-runtime-migration-map.test.js test/phase96-staging-integration-safety.test.js
