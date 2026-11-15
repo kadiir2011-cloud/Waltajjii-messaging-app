@@ -4,9 +4,15 @@ on:
     paths:
       - "src/postgres/postgres-realtime-socket.js"
       - "src/postgres/postgres-realtime-server.js"
+      - "src/postgres/postgres-staging-runtime.js"
       - "src/services/postgres-realtime-service.js"
       - "test/phase55-postgres-realtime-integration.test.js"
+      - "test/phase101-postgres-realtime-parity.test.js"
+      - "test/phase99-postgres-staging-bootstrap.test.js"
+      - "PHASE-103-SHARED-REALTIME-SCALABILITY.md"
       - ".github/workflows/phase55-postgres-realtime-integration.yml"
+      - ".github/workflows/phase102-postgres-staging-integration.yml"
+      - ".github/workflows/phase101-postgres-realtime-parity.yml"
       - "migrations/postgres/**"
       - "src/db/postgres-adapter.js"
 permissions:
@@ -40,5 +46,5 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Install test-only Socket.IO client
         run: npm install --no-save --package-lock=false socket.io-client@4.8.1 @socket.io/postgres-adapter@0.5.0
-      - name: Run real-client PostgreSQL Socket.IO integration
-        run: node --test test/phase55-postgres-realtime-integration.test.js
+      - name: Run realtime unit and real-client PostgreSQL integration
+        run: node --test test/phase101-postgres-realtime-parity.test.js test/phase99-postgres-staging-bootstrap.test.js test/phase55-postgres-realtime-integration.test.js
