@@ -250,6 +250,12 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
         [groupId]
       );
       if (!call || String(call.host_user_id) !== userId) return { ok: false, error: "Only the call host can end this call." };
+      await expireCallLeases(tx, call.id, now());
+      const activeHost = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_participants p WHERE p.call_id=$1 AND p.user_id=$2 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$3)",
+        [call.id,userId,now()]
+      );
+      if (!activeHost) return { ok: false, error: "The call host no longer has an active device session." };
       await tx.execute("UPDATE realtime_call_sessions SET status='ended',ended_at=$2,ended_by=$3 WHERE id=$1",[call.id,now(),userId]);
       await tx.execute("UPDATE realtime_call_participants SET left_at=$2 WHERE call_id=$1 AND left_at IS NULL",[call.id,now()]);
       await tx.execute("UPDATE realtime_call_device_sessions SET disconnected_at=$2 WHERE call_id=$1 AND disconnected_at IS NULL",[call.id,now()]);
@@ -286,13 +292,24 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
     return db.withTransaction(async tx => {
       const call = await tx.one("SELECT id,host_user_id FROM realtime_call_sessions WHERE group_id=$1 AND call_type='group' AND status='active' FOR UPDATE",[groupId]);
       if (!call) return { ok: false, error: "No active group call is available." };
+      await expireCallLeases(tx, call.id, now());
+      const stillActive = await tx.one("SELECT id,host_user_id,status FROM realtime_call_sessions WHERE id=$1",[call.id]);
+      if (!stillActive || stillActive.status !== "active") return { ok: false, error: "No active group call is available." };
       const actor = await tx.one("SELECT role FROM group_members WHERE group_id=$1 AND user_id=$2",[groupId,actorUserId]);
       const target = await tx.one("SELECT username FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=$1 AND gm.user_id=$2",[groupId,targetUserId]);
       if (!actor || !target) return { ok: false, error: "A participant is no longer a group member." };
       if (String(call.host_user_id) !== actorUserId && actor.role !== "admin") {
         return { ok: false, error: "Only the call host or a group admin can moderate participants." };
       }
-      const participant = await tx.one("SELECT 1 AS active FROM realtime_call_participants WHERE call_id=$1 AND user_id=$2 AND left_at IS NULL FOR UPDATE",[call.id,targetUserId]);
+      const actorParticipant = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_participants p WHERE p.call_id=$1 AND p.user_id=$2 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$3) FOR UPDATE",
+        [call.id,actorUserId,now()]
+      );
+      if (!actorParticipant) return { ok: false, error: "Only active call participants can moderate this call." };
+      const participant = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_participants p WHERE p.call_id=$1 AND p.user_id=$2 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$3) FOR UPDATE",
+        [call.id,targetUserId,now()]
+      );
       if (!participant) return { ok: false, error: "The target is not an active call participant." };
       if (action === "remove") {
         if (String(call.host_user_id) === targetUserId) return { ok: false, error: "The call host cannot be removed." };
