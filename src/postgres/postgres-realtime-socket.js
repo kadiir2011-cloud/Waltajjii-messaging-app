@@ -18,6 +18,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
   if (!realtimeService ||
       typeof realtimeService.listGroupIdsForUser !== "function" ||
       typeof realtimeService.isGroupMember !== "function" ||
+      typeof realtimeService.getGroupMemberRole !== "function" ||
       typeof realtimeService.markMessageDelivered !== "function") {
     throw new TypeError("A complete PostgreSQL realtime service is required.");
   }
@@ -385,18 +386,25 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
       });
     }
 
-    socket.on("group-call:hand-raise", (data = {}, acknowledge = () => {}) => {
+    socket.on("group-call:hand-raise", async (data = {}, acknowledge = () => {}) => {
       const groupId = validId(data.groupId);
       const call = groupId && activeGroupCalls.get(groupId);
       if (!call || !call.participants.has(userId) || typeof data.raised !== "boolean") {
         return acknowledge({ ok: false, error: "You are not an active participant in this group call." });
       }
-      if (data.raised) call.handRaised.add(userId);
-      else call.handRaised.delete(userId);
-      io.to("group-call:" + groupId).emit("group-call:hand-raised", {
-        groupId, userId, username: socket.data.username, raised: data.raised
-      });
-      return acknowledge({ ok: true, raised: data.raised });
+      try {
+        if (!await currentGroupMember(groupId)) {
+          return acknowledge({ ok: false, error: "You are no longer a member of this group." });
+        }
+        if (data.raised) call.handRaised.add(userId);
+        else call.handRaised.delete(userId);
+        io.to("group-call:" + groupId).emit("group-call:hand-raised", {
+          groupId, userId, username: socket.data.username, raised: data.raised
+        });
+        return acknowledge({ ok: true, raised: data.raised });
+      } catch {
+        return acknowledge({ ok: false, error: "Could not verify group membership." });
+      }
     });
 
     socket.on("group-call:moderate", async (data = {}, acknowledge = () => {}) => {
@@ -412,6 +420,9 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
         return acknowledge({ ok: false, error: "Unsupported moderation action." });
       }
       try {
+        if (!await currentGroupMember(groupId)) {
+          return acknowledge({ ok: false, error: "You are no longer a member of this group." });
+        }
         const role = await realtimeService.getGroupMemberRole(groupId, userId);
         const canModerate = call.hostId === userId || role === "admin";
         if (!canModerate) return acknowledge({ ok: false, error: "Only the call host or a group admin can moderate participants." });
