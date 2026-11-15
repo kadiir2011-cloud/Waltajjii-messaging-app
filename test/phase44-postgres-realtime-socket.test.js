@@ -124,7 +124,7 @@ test("group typing requires PostgreSQL membership and acknowledges success", asy
   await h.handlers.connection(socket);
   let ack;
   await socket.events["group:typing:start"]({ groupId: "55" }, value => { ack = value; });
-  assert.deepEqual(ack, { ok: true });
+  assert.deepEqual(ack, { ok: true, callId: "1" });
   await socket.events["group:typing:start"]({ groupId: "56" }, value => { ack = value; });
   assert.deepEqual(ack, { ok: false, error: "You are not a member of this group." });
   await socket.events["group:typing:start"]({ groupId: "1e3" }, value => { ack = value; });
