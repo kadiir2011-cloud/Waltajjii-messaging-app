@@ -8,8 +8,8 @@ const { attachPostgresRealtime } = require("./postgres-realtime-socket");
  * database pool, and shutdown lifecycle. This is not imported by src/server.js.
  */
 function createPostgresRealtimeServer(httpServer, {
-  jwt, jwtSecret, realtimeService, socketOptions = {},
-  createSocketAdapter, adapterPool, adapterOptions = {}
+  jwt, jwtSecret, realtimeService, callState, serverId,
+  socketOptions = {}, createSocketAdapter, adapterPool, adapterOptions = {}
 } = {}) {
   if (!httpServer || typeof httpServer.listen !== "function") {
     throw new TypeError("An existing HTTP server is required.");
@@ -24,7 +24,10 @@ function createPostgresRealtimeServer(httpServer, {
   }
   let state;
   try {
-    state = attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService });
+    state = attachPostgresRealtime(io, {
+      jwt, jwtSecret, realtimeService, callState,
+      serverId: serverId || require("node:crypto").randomUUID()
+    });
   } catch (error) {
     io.close();
     throw error;
