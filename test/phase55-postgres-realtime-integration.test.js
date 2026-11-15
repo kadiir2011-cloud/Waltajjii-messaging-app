@@ -7,6 +7,7 @@ const path = require("node:path");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { Pool } = require("pg");
+const { createAdapter } = require("@socket.io/postgres-adapter");
 const { io: createClient } = require("socket.io-client");
 const { createPostgresAdapter } = require("../src/db/postgres-adapter");
 const { createPostgresStagingRuntime } = require("../src/postgres/postgres-staging-runtime");
@@ -19,7 +20,7 @@ const secret = "phase55-disposable-integration-secret-at-least-32-characters";
 const pool = new Pool({ connectionString, max: 5, options: "-c search_path=waltajjii,public" });
 const db = createPostgresAdapter(pool);
 const clients = new Set();
-let server, stagingRuntime;
+let server, stagingRuntime, secondServer, secondStagingRuntime;
 let seededUserIds = [];
 
 function waitFor(socket, event, timeoutMs = 5000) {
@@ -57,7 +58,7 @@ function emitAck(socket, event, payload) {
 
 test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, receipts, direct recovery and group calls", async () => {
   const root = path.join(__dirname, "..");
-  for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql"]) {
+  for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql", "004_media_storage_cleanup.sql", "005_socketio_cluster_adapter.sql"]) {
     await pool.query(fs.readFileSync(path.join(root, "migrations/postgres", migration), "utf8"));
   }
 
@@ -91,7 +92,9 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
           download: async () => ({ data: null, error: new Error("Storage is not used in this integration test.") })
         })
       },
-      poolOptions: { max: 5, options: "-c search_path=waltajjii,public" }
+      poolOptions: { max: 8, options: "-c search_path=waltajjii,public" },
+      createSocketAdapter: createAdapter,
+      socketAdapterOptions: { tableName: "socket_io_attachments", channelPrefix: "waltajjii-phase103" }
     },
     Pool, bcrypt, jwt,
     socketOptions: { cors: { origin: false } }
@@ -100,6 +103,31 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const realtimeState = stagingRuntime.realtime;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const url = "http://127.0.0.1:" + server.address().port;
+
+  secondStagingRuntime = createPostgresStagingRuntime({
+    config: {
+      appEnvironment: "staging",
+      nodeEnvironment: "test",
+      databaseUrl: connectionString,
+      mediaBucket: "waltajjii-media-staging",
+      jwtSecret: secret,
+      storageClient: {
+        from: () => ({
+          upload: async () => ({ error: null }),
+          remove: async () => ({ error: null }),
+          download: async () => ({ data: null, error: new Error("Storage is not used in this integration test.") })
+        })
+      },
+      poolOptions: { max: 8, options: "-c search_path=waltajjii,public" },
+      createSocketAdapter: createAdapter,
+      socketAdapterOptions: { tableName: "socket_io_attachments", channelPrefix: "waltajjii-phase103" }
+    },
+    Pool, bcrypt, jwt,
+    socketOptions: { cors: { origin: false } }
+  });
+  secondServer = secondStagingRuntime.httpServer;
+  await new Promise(resolve => secondServer.listen(0, "127.0.0.1", resolve));
+  const secondUrl = "http://127.0.0.1:" + secondServer.address().port;
 
   const liveHealth = await fetch(url + "/health/live");
   assert.equal(liveHealth.status, 200);
@@ -142,8 +170,18 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const aliceSocket = await connectClient(url, tokenFor(alice));
   const bobSocket = await connectClient(url, tokenFor(bob));
   const outsiderSocket = await connectClient(url, tokenFor(outsider));
+  const remoteOutsiderSocket = await connectClient(secondUrl, tokenFor(outsider));
   assert.ok(realtimeState.getOnlineUserIds().includes(String(alice.id)));
   assert.ok(realtimeState.getOnlineUserIds().includes(String(bob.id)));
+
+  // Broadcasts from one independently booted runtime reach a socket on the other.
+  const clusterProbe = waitFor(remoteOutsiderSocket, "phase103:cluster-probe");
+  stagingRuntime.realtime.io.to("user:" + String(outsider.id)).emit("phase103:cluster-probe", {
+    source: "runtime-one", targetUserId: String(outsider.id)
+  });
+  const [clusterProbePayload] = await clusterProbe;
+  assert.equal(clusterProbePayload.source, "runtime-one");
+  assert.equal(clusterProbePayload.targetUserId, String(outsider.id));
 
   const directTyping = waitFor(bobSocket, "typing:update");
   aliceSocket.emit("typing:start", { targetUserId: String(bob.id) });
@@ -308,7 +346,9 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
 test.after(async () => {
   for (const client of clients) { try { client.disconnect(); } catch {} }
   if (stagingRuntime) await stagingRuntime.close();
+  if (secondStagingRuntime) await secondStagingRuntime.close();
   if (server?.listening) await new Promise(resolve => server.close(resolve));
+  if (secondServer?.listening) await new Promise(resolve => secondServer.close(resolve));
   if (seededUserIds.length) {
     await pool.query("DELETE FROM messages WHERE sender_id = ANY($1::bigint[]) OR receiver_id = ANY($1::bigint[])", [seededUserIds]);
     await pool.query("DELETE FROM groups WHERE created_by = ANY($1::bigint[])", [seededUserIds]);
