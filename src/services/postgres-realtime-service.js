@@ -22,6 +22,13 @@ function createPostgresRealtimeService({ db } = {}) {
   async function isGroupMember(groupId, userId) {
     return Boolean(await db.one("SELECT 1 AS member FROM group_members WHERE group_id = $1 AND user_id = $2", [groupId, userId]));
   }
+  async function getGroupMemberRole(groupId, userId) {
+    const row = await db.one(
+      "SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2",
+      [groupId, userId]
+    );
+    return row?.role || null;
+  }
   async function markMessageDelivered(messageId, recipientId) {
     const updated = await db.one(`
       UPDATE messages SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
@@ -35,6 +42,6 @@ function createPostgresRealtimeService({ db } = {}) {
       WHERE m.id = $1
     `, [messageId]);
   }
-  return Object.freeze({ getOnlineProfiles, listGroupIdsForUser, isGroupMember, markMessageDelivered });
+  return Object.freeze({ getOnlineProfiles, listGroupIdsForUser, isGroupMember, getGroupMemberRole, markMessageDelivered });
 }
 module.exports = { createPostgresRealtimeService };

@@ -44,3 +44,12 @@ This schema is a structural foundation, not a drop-in replacement for SQLite:
 - Prove backup and restore before any public launch.
 
 Do not connect the application to this schema until validation, permissions, backup/restore, and route migration are complete.
+
+
+## Phase 103 — Socket.IO cluster adapter (migration 005)
+
+Migration `005_socketio_cluster_adapter.sql` creates the `waltajjii.socket_io_attachments` table used by the optional `@socket.io/postgres-adapter` package for large or binary Socket.IO packets. It is separate from the application's 29 core tables and remains within the `waltajjii` schema.
+
+The adapter is opt-in and injected into `createPostgresStagingRuntime`; it is not enabled in the live SQLite server. Every server in a cluster must use the same PostgreSQL database, adapter table, and channel prefix. The adapter supports cross-instance broadcasts but does not provide Socket.IO connection-state recovery. Sticky sessions are still needed if HTTP long-polling is enabled.
+
+**Do not run migration 005 against a production Supabase project or connect production services based solely on this phase.** Review permissions, pool sizing, attachment cleanup, backup/restore, adapter failure behavior, and the complete PostgreSQL cutover plan first.

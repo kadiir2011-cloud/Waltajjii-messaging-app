@@ -1,0 +1,35 @@
+name: Phase 66 voice intelligence
+on:
+  pull_request:
+    paths:
+      - "src/routes/postgres-audio-intelligence.js"
+      - "src/postgres/postgres-api-router.js"
+      - "public/app.js"
+      - "public/index.html"
+      - "public/ai-assistant.js"
+      - "test/phase66-audio-intelligence.test.js"
+      - "test/phase66-audio-ui.test.js"
+      - "PHASE-66-VOICE-INTELLIGENCE.md"
+      - ".github/workflows/phase66-voice-intelligence.yml"
+permissions:
+  contents: read
+jobs:
+  voice-intelligence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/routes/postgres-audio-intelligence.js
+          node --check src/postgres/postgres-api-router.js
+          node --check public/app.js
+          node --check public/ai-assistant.js
+      - name: Run voice route, UI and prior AI contracts
+        run: node --test test/phase66-audio-intelligence.test.js test/phase66-audio-ui.test.js test/phase64-ai-assistant.test.js test/phase65-ai-assistant-ui.test.js

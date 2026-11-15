@@ -1,0 +1,27 @@
+name: Phase 100 PostgreSQL SQLite compatibility audit
+on:
+  pull_request:
+    paths:
+      - "test/phase100-postgres-sqlite-compatibility-audit.test.js"
+      - "PHASE-100-POSTGRES-SQLITE-COMPATIBILITY-AUDIT.md"
+      - ".github/workflows/phase100-postgres-sqlite-compatibility-audit.yml"
+      - "src/routes/**"
+      - "src/postgres/**"
+      - "src/server.js"
+  push:
+    branches:
+      - waltajjii-phase100-postgres-sqlite-compatibility-audit
+permissions:
+  contents: read
+jobs:
+  phase100-compatibility-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify compatibility audit and prior safety gates
+        run: node --test test/phase100-postgres-sqlite-compatibility-audit.test.js test/phase99-postgres-staging-bootstrap.test.js test/phase98-postgres-service-composition.test.js test/phase97-postgres-runtime-migration-map.test.js test/phase96-staging-integration-safety.test.js

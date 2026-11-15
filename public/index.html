@@ -499,6 +499,12 @@
     body[data-wt-wallpaper="sky"] #messages { background:linear-gradient(135deg,#e8f2ff,#f4f8ff); }
     body[data-wt-wallpaper="warm"] #messages { background:linear-gradient(135deg,#fff3e6,#fff9f0); }
     body[data-wt-theme="dark"][data-wt-wallpaper="soft"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="sky"] #messages, body[data-wt-theme="dark"][data-wt-wallpaper="warm"] #messages { background:#121e27; }
+    .low-data-setting { grid-column:1/-1; padding:12px; border:1px solid var(--wt-line); border-radius:12px; background:var(--wt-soft,#f7fafb); }
+    .low-data-setting label { display:flex; align-items:center; gap:9px; cursor:pointer; }
+    .low-data-setting input { width:18px; min-height:18px; margin:0; accent-color:var(--wt-teal); }
+    .low-data-setting .profile-help { margin:6px 0 0 27px; }
+    .media-load-button { display:block; margin:8px 0; }
+    body[data-wt-low-data="true"] *, body[data-wt-low-data="true"] *::before, body[data-wt-low-data="true"] *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
     @media(max-width:560px) { .personalization-grid { grid-template-columns:1fr; } }
 
     /* Phase 10: profile-first navigation and click-to-open workspace */
@@ -665,7 +671,73 @@
     .wt-language-bridge .secondary{background:#e8eef2;color:#263e4d}
     .wt-language-bridge-note{font-size:12px;color:#64748b;margin:10px 0 0}
     @media(max-width:520px){.wt-language-bridge-heading{align-items:flex-start;flex-direction:column}.wt-language-bridge-languages{grid-template-columns:1fr}}
-\n  </style>
+\n  
+    /* Phase 65: user-controlled Waltajjii AI assistant */
+    .wt-ai-panel{margin:16px 0 4px;padding:16px;border:1px solid #d8e5e9;border-radius:15px;background:linear-gradient(135deg,#f5fbfa,#f7f8ff)}
+    .wt-ai-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .wt-ai-heading p{margin:4px 0 0}
+    .wt-ai-label{flex:0 0 auto;padding:5px 9px;border-radius:999px;background:#e1f3ee;color:#176b5b;font-size:.75rem;font-weight:700}
+    .wt-ai-privacy{padding:10px 12px;border-left:3px solid #087f78;background:#eaf5f3;border-radius:8px;color:#365b5a;font-size:.84rem}
+    .wt-ai-panel textarea{width:100%;min-height:90px;padding:11px;margin:6px 0 12px;resize:vertical}
+    .wt-ai-controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .wt-ai-controls select{width:100%;margin:6px 0 12px}
+    .wt-ai-consent{display:flex;align-items:flex-start;gap:9px;margin:6px 0 12px;font-size:.86rem}
+    .wt-ai-consent input{width:18px;min-width:18px;height:18px;min-height:18px;margin:2px 0 0}
+    .wt-ai-result{margin-top:14px;padding:13px;border:1px solid #dce5eb;border-radius:12px;background:#fff}
+    .wt-ai-result-text{white-space:pre-wrap;overflow-wrap:anywhere;min-height:50px;padding:11px;margin:8px 0;border-radius:9px;background:#f6f9fa;color:#172b3a}
+    .wt-ai-message-button{font-size:.78rem;padding:4px 8px;background:#e6f3f1;color:#086d67;box-shadow:none}
+    body[data-wt-theme="dark"] .wt-ai-panel{background:#152d37;border-color:#ffffff24}
+    body[data-wt-theme="dark"] .wt-ai-privacy{background:#183b3a;color:#d3f5ed}
+    body[data-wt-theme="dark"] .wt-ai-result{background:#172a36;border-color:#ffffff24}
+    body[data-wt-theme="dark"] .wt-ai-result-text{background:#10212c;color:#edf7fb}
+    body[data-wt-theme="dark"] .wt-ai-label{background:#16443f;color:#b9f2e5}
+    @media(max-width:520px){.wt-ai-heading{align-items:flex-start;flex-direction:column}.wt-ai-controls{grid-template-columns:1fr}}
+
+  
+    .wt-audio-ai{margin-top:18px;padding-top:15px;border-top:1px solid #d8e5e9}
+    .wt-audio-ai h3{margin:0 0 8px;font-size:1rem}
+    .wt-audio-ai input[type=file]{display:block;max-width:100%;margin:8px 0}
+    .wt-audio-ai textarea{width:100%;padding:10px;margin:7px 0 12px}
+    .wt-audio-ai .wt-ai-result-text{min-height:42px}
+    .wt-audio-message-button{margin-top:7px;font-size:.78rem;padding:5px 9px}
+    body[data-wt-theme="dark"] .wt-audio-ai{border-color:#ffffff24}
+
+  
+    #wt-live-captions{margin-top:16px;padding:14px;border:1px solid var(--wt-line,#dce7e3);border-radius:12px;background:var(--wt-surface,#fff)}
+    #wt-live-captions h4{margin:0 0 8px}
+    .wt-caption-privacy,.wt-caption-empty{color:var(--wt-muted,#64748b);font-size:.84rem}
+    .wt-caption-controls,.wt-caption-translate{display:grid;gap:8px;margin:10px 0}
+    .wt-caption-controls select,.wt-caption-translate select{width:100%;max-width:320px}
+    .wt-caption-check{display:flex;gap:8px;align-items:flex-start;font-size:.9rem}
+    .wt-caption-check input{min-height:0;margin-top:4px}
+    .wt-caption-feed{max-height:220px;overflow:auto;display:grid;gap:8px;margin-top:10px}
+    .wt-caption-item{margin:0;padding:9px 11px;border-radius:10px;background:var(--wt-soft,#f4f8fa);overflow-wrap:anywhere}
+    .wt-caption-item strong{display:block;font-size:.8rem;color:var(--wt-muted,#64748b);margin-bottom:3px}
+    #wt-caption-status{font-size:.85rem;color:var(--wt-muted,#64748b)}
+    #wt-caption-translation{white-space:pre-wrap;overflow-wrap:anywhere}
+
+
+    .wt-group-call-panel { margin: 14px 0; padding: 14px; border: 1px solid #cbded8; border-radius: 12px; background: #f7fbf9; }
+    .wt-group-call-panel h3 { margin: 0 0 8px; }
+    .wt-group-call-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px; margin-top: 12px; }
+    .wt-group-call-tile { min-width: 0; padding: 8px; background: #18332e; color: #fff; border-radius: 10px; }
+    .wt-group-call-tile video { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #0b1714; border-radius: 7px; }
+    .wt-group-call-tile span { display: block; padding: 6px 2px 2px; overflow-wrap: anywhere; font-size: .9rem; }
+    .wt-group-call-controls { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+    .wt-group-call-controls button:disabled { opacity:.55; cursor:not-allowed; }
+    .wt-group-call-roster { display:grid; gap:7px; margin:12px 0; padding:12px; border:1px solid #dce5eb; border-radius:10px; background:#fff; }
+    .wt-group-call-roster-item { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .wt-group-call-roster-item button { min-height:36px; padding:6px 10px; }
+    .wt-group-call-moderation-actions { display:flex; flex-wrap:wrap; gap:6px; }
+    .wt-group-call-moderation-actions button { min-height:32px; font-size:.85rem; }
+
+    .wt-group-call-grid[data-layout="focus"] { grid-template-columns:minmax(0,1fr); }
+    .wt-group-call-grid[data-layout="focus"] .wt-group-call-tile:not(.wt-group-call-pinned) { display:none; }
+    .wt-group-call-grid[data-layout="focus"]:not(:has(.wt-group-call-pinned)) .wt-group-call-tile { display:block; }
+    .wt-group-call-tile.wt-group-call-pinned { outline:3px solid #e0a52b; outline-offset:2px; }
+    @media(max-width:640px) { .wt-group-call-controls button { flex:1 1 100%; } }
+
+  </style>
 </head>
 <body>
   <header>
@@ -788,6 +860,7 @@
           <div><label for="wt-theme">Appearance</label><select id="wt-theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">Use device setting</option></select></div>
           <div><label for="wt-accent">Accent colour</label><select id="wt-accent"><option value="teal">Waltajjii teal</option><option value="blue">Ocean blue</option><option value="violet">Violet</option><option value="rose">Rose</option><option value="green">Forest green</option></select></div>
           <div><label for="wt-wallpaper">Chat background</label><select id="wt-wallpaper"><option value="plain">Plain</option><option value="soft">Soft mint</option><option value="sky">Sky</option><option value="warm">Warm sand</option></select></div>
+          <div class="low-data-setting"><label><input id="wt-low-data" type="checkbox"> Enable Low-Bandwidth Mode</label><p class="profile-help">Images, videos, voice messages and documents load only when you choose to open them.</p></div>
         </div>
         <p id="wt-preferences-status" class="profile-help" role="status" aria-live="polite">Your choices are saved automatically on this device.</p>
       </section>
@@ -987,6 +1060,11 @@
     <video id="remote-video" autoplay playsinline
            style="width: 220px; max-width: 100%; background: #222; border-radius: 8px;"></video>
   </div>
+  <div id="wt-screen-share-preview-container" hidden>
+    <p>Screen share preview (visible only on this device)</p>
+    <video id="wt-screen-share-preview" autoplay muted playsinline
+           style="width: min(640px, 100%); background: #222; border-radius: 8px;"></video>
+  </div>
 
   <p id="call-status" role="status" aria-live="polite">
     Choose a recipient to start a call.
@@ -998,7 +1076,52 @@
     <button type="button" id="accept-call-button" disabled>Accept</button>
     <button type="button" id="reject-call-button" disabled>Reject</button>
     <button type="button" id="end-call-button" disabled>End call</button>
+    <button type="button" id="wt-call-reconnect" disabled>Try to reconnect</button>
+    <button type="button" id="wt-screen-share" disabled>Share screen</button>
+    <button type="button" id="wt-screen-share-stop" disabled>Stop screen sharing</button>
   </div>
+  <p class="wt-call-recovery-note">If a call drops temporarily while both participants remain connected to Waltajjii, either person can request an ICE restart. Reconnection is not guaranteed on every network.</p>
+  <p id="wt-screen-share-status" role="status" aria-live="polite">Screen sharing is available during a connected video call. The other caller will see your shared screen.</p>
+  <p id="wt-call-quality" role="status" aria-live="polite">Call quality monitoring starts when a call begins. Metrics are measured on this device only and are not stored.</p>
+  <div class="wt-call-adaptive-controls">
+    <label for="wt-call-adaptive"><input type="checkbox" id="wt-call-adaptive" checked> Automatically adapt video quality to network conditions</label>
+    <p id="wt-call-adaptive-status" role="status" aria-live="polite">Automatic video adaptation is enabled. Adjustments are made on this device only.</p>
+    <p class="wt-call-recovery-note">Adaptive quality changes video bitrate, frame rate and resolution when the connection is repeatedly poor. Voice calls are not changed. You can turn this off at any time.</p>
+  </div>
+  <section id="wt-live-captions" aria-labelledby="wt-live-captions-heading">
+    <h4 id="wt-live-captions-heading">Live call captions</h4>
+    <p class="wt-caption-privacy">Translation is a separate action: the latest caption text is sent to the configured translation service. The menu includes Ethiopian languages and major international languages. Availability and quality vary by language; review important translations. The result is shown only on your device and is not shared with the caller.</p>
+    <div class="wt-caption-controls">
+      <label for="wt-caption-language">Your spoken language</label>
+      <select id="wt-caption-language">
+        <option value="en-US">English</option>
+        <option value="am-ET">Amharic</option>
+        <option value="om-ET">Afaan Oromo</option>
+        <option value="ti-ET">Tigrinya</option>
+        <option value="so-SO">Somali</option>
+        <option value="ar">Arabic</option>
+      </select>
+      <label class="wt-caption-check"><p class="wt-caption-privacy">Live captions use your browser's speech-recognition feature. Audio may be processed by its speech service, depending on your browser and device. Start captions only after reviewing this information.</p>
+      <input type="checkbox" id="wt-caption-consent"> I agree to use browser speech recognition for live captions during this call.</label>
+      <label class="wt-caption-check"><input type="checkbox" id="wt-caption-share"> Share my recognized caption text with the other caller (off by default).</label>
+      <button type="button" id="wt-caption-start" disabled>Start live captions</button>
+      <button type="button" id="wt-caption-stop" disabled>Stop captions</button>
+    </div>
+    <div class="wt-caption-translate">
+      <p class="wt-caption-privacy">Translation is a separate action: the latest caption text is sent to the configured translation service. You can choose from 24 Ethiopian languages plus English and Arabic. Availability and quality can vary by language; review important translations. The result is shown only on your device and is not shared with the caller.</p>
+      <label for="wt-caption-target-language">Translate latest caption into</label>
+      <select id="wt-caption-target-language"><option value="">Choose a language</option><optgroup label="Ethiopian languages"><option>Afaan Oromo</option><option>Amharic</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Sidama</option><option>Wolaytta</option><option>Gamo</option><option>Gofa</option><option>Dawro</option><option>Hadiyya</option><option>Kafa</option><option>Gedeo</option><option>Kambaata</option><option>Silt'e</option><option>Sebat Bet Gurage</option><option>Bench</option><option>Shekkacho</option><option>Gumuz</option><option>Nuer</option><option>Anuak</option><option>Berta</option><option>Me'en</option><option>Konso</option></optgroup><optgroup label="International languages"><option>English</option><option>Arabic</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>German</option><option>Italian</option><option>Dutch</option><option>Russian</option><option>Ukrainian</option><option>Polish</option><option>Turkish</option><option>Persian (Farsi)</option><option>Hebrew</option><option>Urdu</option><option>Hindi</option><option>Bengali</option><option>Punjabi</option><option>Gujarati</option><option>Marathi</option><option>Tamil</option><option>Telugu</option><option>Kannada</option><option>Malayalam</option><option>Sinhala</option><option>Nepali</option><option>Chinese (Simplified)</option><option>Chinese (Traditional)</option><option>Japanese</option><option>Korean</option><option>Thai</option><option>Vietnamese</option><option>Indonesian</option><option>Malay</option><option>Filipino (Tagalog)</option><option>Burmese</option><option>Khmer</option><option>Lao</option><option>Mongolian</option><option>Kazakh</option><option>Uzbek</option><option>Azerbaijani</option><option>Greek</option><option>Swedish</option><option>Norwegian</option><option>Danish</option><option>Finnish</option><option>Romanian</option><option>Hungarian</option><option>Czech</option><option>Slovak</option><option>Croatian</option><option>Serbian</option><option>Bosnian</option><option>Bulgarian</option><option>Albanian</option><option>Armenian</option><option>Georgian</option><option>Pashto</option><option>Kurdish</option><option>Dari</option><option>Swahili</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option><option>Zulu</option><option>Xhosa</option><option>Afrikaans</option><option>Kinyarwanda</option><option>Kirundi</option><option>Lingala</option><option>Shona</option><option>Sesotho</option><option>Setswana</option><option>Malagasy</option><option>Somali (Latin)</option><option>Icelandic</option><option>Irish</option><option>Welsh</option><option>Catalan</option><option>Basque</option><option>Galician</option><option>Estonian</option><option>Latvian</option><option>Lithuanian</option><option>Belarusian</option><option>Macedonian</option><option>Maltese</option><option>Luxembourgish</option><option>Tajik</option><option>Turkmen</option><option>Uyghur</option><option>Javanese</option><option>Sundanese</option></optgroup></select>
+      <button type="button" id="wt-caption-translate" disabled>Translate latest caption</button>
+      <p id="wt-caption-translation" aria-live="polite"></p>
+      <label class="wt-caption-check"><input type="checkbox" id="wt-caption-auto-translate"> Automatically translate captions received from the other caller (off by default).</label>
+      <p class="wt-caption-privacy">When enabled, each eligible incoming caption is sent as text to the configured translation service. Translation is shown only on your device. Automatic translation is limited to 30 captions per call and at most one request every 1.5 seconds; skipped captions are not queued.</p>
+      <p id="wt-caption-auto-translation" aria-live="polite"></p>
+    </div>
+    <p id="wt-caption-status" role="status" aria-live="polite">Start a voice or video call to enable captions.</p>
+    <div id="wt-caption-feed" aria-label="Live call captions" aria-live="polite" aria-relevant="additions text">
+      <p class="wt-caption-empty">Captions will appear here when enabled.</p>
+    </div>
+  </section>
 </div>
       <p id="status" role="status" aria-live="polite">Log in to begin.</p>
       <div id="messages" aria-live="polite">
@@ -1027,12 +1150,8 @@
     <label for="wt-translation-source">Text to translate</label>
     <textarea id="wt-translation-source" maxlength="4000" rows="3" placeholder="Write or paste a message here..."></textarea>
     <div class="wt-language-bridge-languages">
-      <div><label for="wt-translation-from">From</label><select id="wt-translation-from">
-        <option value="Auto-detect">Auto-detect</option><option>Afaan Oromo</option><option>Amharic</option><option>English</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Arabic</option>
-      </select></div>
-      <div><label for="wt-translation-to">Translate into</label><select id="wt-translation-to">
-        <option>Afaan Oromo</option><option>Amharic</option><option selected>English</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Arabic</option>
-      </select></div>
+      <div><label for="wt-translation-from">From</label><select id="wt-translation-from"><option value="Auto-detect">Auto-detect</option><optgroup label="Ethiopian languages"><option>Afaan Oromo</option><option>Amharic</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Sidama</option><option>Wolaytta</option><option>Gamo</option><option>Gofa</option><option>Dawro</option><option>Hadiyya</option><option>Kafa</option><option>Gedeo</option><option>Kambaata</option><option>Silt'e</option><option>Sebat Bet Gurage</option><option>Bench</option><option>Shekkacho</option><option>Gumuz</option><option>Nuer</option><option>Anuak</option><option>Berta</option><option>Me'en</option><option>Konso</option></optgroup><optgroup label="International languages"><option>English</option><option>Arabic</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>German</option><option>Italian</option><option>Dutch</option><option>Russian</option><option>Ukrainian</option><option>Polish</option><option>Turkish</option><option>Persian (Farsi)</option><option>Hebrew</option><option>Urdu</option><option>Hindi</option><option>Bengali</option><option>Punjabi</option><option>Gujarati</option><option>Marathi</option><option>Tamil</option><option>Telugu</option><option>Kannada</option><option>Malayalam</option><option>Sinhala</option><option>Nepali</option><option>Chinese (Simplified)</option><option>Chinese (Traditional)</option><option>Japanese</option><option>Korean</option><option>Thai</option><option>Vietnamese</option><option>Indonesian</option><option>Malay</option><option>Filipino (Tagalog)</option><option>Burmese</option><option>Khmer</option><option>Lao</option><option>Mongolian</option><option>Kazakh</option><option>Uzbek</option><option>Azerbaijani</option><option>Greek</option><option>Swedish</option><option>Norwegian</option><option>Danish</option><option>Finnish</option><option>Romanian</option><option>Hungarian</option><option>Czech</option><option>Slovak</option><option>Croatian</option><option>Serbian</option><option>Bosnian</option><option>Bulgarian</option><option>Albanian</option><option>Armenian</option><option>Georgian</option><option>Pashto</option><option>Kurdish</option><option>Dari</option><option>Swahili</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option><option>Zulu</option><option>Xhosa</option><option>Afrikaans</option><option>Kinyarwanda</option><option>Kirundi</option><option>Lingala</option><option>Shona</option><option>Sesotho</option><option>Setswana</option><option>Malagasy</option><option>Somali (Latin)</option><option>Icelandic</option><option>Irish</option><option>Welsh</option><option>Catalan</option><option>Basque</option><option>Galician</option><option>Estonian</option><option>Latvian</option><option>Lithuanian</option><option>Belarusian</option><option>Macedonian</option><option>Maltese</option><option>Luxembourgish</option><option>Tajik</option><option>Turkmen</option><option>Uyghur</option><option>Javanese</option><option>Sundanese</option></optgroup></select></div>
+      <div><label for="wt-translation-to">Translate into</label><select id="wt-translation-to"><optgroup label="Ethiopian languages"><option>Afaan Oromo</option><option>Amharic</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Sidama</option><option>Wolaytta</option><option>Gamo</option><option>Gofa</option><option>Dawro</option><option>Hadiyya</option><option>Kafa</option><option>Gedeo</option><option>Kambaata</option><option>Silt'e</option><option>Sebat Bet Gurage</option><option>Bench</option><option>Shekkacho</option><option>Gumuz</option><option>Nuer</option><option>Anuak</option><option>Berta</option><option>Me'en</option><option>Konso</option></optgroup><optgroup label="International languages"><option>English</option><option>Arabic</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>German</option><option>Italian</option><option>Dutch</option><option>Russian</option><option>Ukrainian</option><option>Polish</option><option>Turkish</option><option>Persian (Farsi)</option><option>Hebrew</option><option>Urdu</option><option>Hindi</option><option>Bengali</option><option>Punjabi</option><option>Gujarati</option><option>Marathi</option><option>Tamil</option><option>Telugu</option><option>Kannada</option><option>Malayalam</option><option>Sinhala</option><option>Nepali</option><option>Chinese (Simplified)</option><option>Chinese (Traditional)</option><option>Japanese</option><option>Korean</option><option>Thai</option><option>Vietnamese</option><option>Indonesian</option><option>Malay</option><option>Filipino (Tagalog)</option><option>Burmese</option><option>Khmer</option><option>Lao</option><option>Mongolian</option><option>Kazakh</option><option>Uzbek</option><option>Azerbaijani</option><option>Greek</option><option>Swedish</option><option>Norwegian</option><option>Danish</option><option>Finnish</option><option>Romanian</option><option>Hungarian</option><option>Czech</option><option>Slovak</option><option>Croatian</option><option>Serbian</option><option>Bosnian</option><option>Bulgarian</option><option>Albanian</option><option>Armenian</option><option>Georgian</option><option>Pashto</option><option>Kurdish</option><option>Dari</option><option>Swahili</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option><option>Zulu</option><option>Xhosa</option><option>Afrikaans</option><option>Kinyarwanda</option><option>Kirundi</option><option>Lingala</option><option>Shona</option><option>Sesotho</option><option>Setswana</option><option>Malagasy</option><option>Somali (Latin)</option><option>Icelandic</option><option>Irish</option><option>Welsh</option><option>Catalan</option><option>Basque</option><option>Galician</option><option>Estonian</option><option>Latvian</option><option>Lithuanian</option><option>Belarusian</option><option>Macedonian</option><option>Maltese</option><option>Luxembourgish</option><option>Tajik</option><option>Turkmen</option><option>Uyghur</option><option>Javanese</option><option>Sundanese</option></optgroup></select></div>
     </div>
     <div class="row"><button type="button" id="wt-translate-button">Translate text</button><span id="wt-translation-status" class="muted" role="status" aria-live="polite">Translation service setup is required before live translation can run.</span></div>
     <div id="wt-translation-result-wrap" hidden>
@@ -1043,6 +1162,81 @@
     <p class="wt-language-bridge-note">Your message is sent only when you press Send. Do not enter passwords or other highly sensitive information into translation.</p>
   </div>
 </div>
+<div class="wt-ai-panel" id="wt-ai-panel" aria-labelledby="wt-ai-heading">
+  <div class="wt-ai-heading">
+    <div>
+      <strong id="wt-ai-heading">✨ Waltajjii AI Assistant</strong>
+      <p class="muted">Summarize a selected message, draft a reply, or identify action items.</p>
+    </div>
+    <span class="wt-ai-label">You stay in control</span>
+  </div>
+  <p class="wt-ai-privacy">Privacy notice: only the text shown below is sent to the configured AI provider when you press Generate. Waltajjii AI does not automatically read your conversation history, send messages, or create tasks.</p>
+  <label for="wt-ai-context">Selected conversation text</label>
+  <textarea id="wt-ai-context" rows="4" maxlength="8000" placeholder="Use “Ask AI” on a text message above, or paste the text you want help with."></textarea>
+  <div class="wt-ai-controls">
+    <div>
+      <label for="wt-ai-action">What should AI do?</label>
+      <select id="wt-ai-action">
+        <option value="summarize">Summarize</option>
+        <option value="suggest_reply">Suggest a reply</option>
+        <option value="extract_tasks">Extract action items</option>
+      </select>
+    </div>
+    <div>
+      <label for="wt-ai-language">Answer language</label>
+      <select id="wt-ai-language"><option value="">Same as the conversation</option><optgroup label="Ethiopian languages"><option>Afaan Oromo</option><option>Amharic</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Sidama</option><option>Wolaytta</option><option>Gamo</option><option>Gofa</option><option>Dawro</option><option>Hadiyya</option><option>Kafa</option><option>Gedeo</option><option>Kambaata</option><option>Silt'e</option><option>Sebat Bet Gurage</option><option>Bench</option><option>Shekkacho</option><option>Gumuz</option><option>Nuer</option><option>Anuak</option><option>Berta</option><option>Me'en</option><option>Konso</option></optgroup><optgroup label="International languages"><option>English</option><option>Arabic</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>German</option><option>Italian</option><option>Dutch</option><option>Russian</option><option>Ukrainian</option><option>Polish</option><option>Turkish</option><option>Persian (Farsi)</option><option>Hebrew</option><option>Urdu</option><option>Hindi</option><option>Bengali</option><option>Punjabi</option><option>Gujarati</option><option>Marathi</option><option>Tamil</option><option>Telugu</option><option>Kannada</option><option>Malayalam</option><option>Sinhala</option><option>Nepali</option><option>Chinese (Simplified)</option><option>Chinese (Traditional)</option><option>Japanese</option><option>Korean</option><option>Thai</option><option>Vietnamese</option><option>Indonesian</option><option>Malay</option><option>Filipino (Tagalog)</option><option>Burmese</option><option>Khmer</option><option>Lao</option><option>Mongolian</option><option>Kazakh</option><option>Uzbek</option><option>Azerbaijani</option><option>Greek</option><option>Swedish</option><option>Norwegian</option><option>Danish</option><option>Finnish</option><option>Romanian</option><option>Hungarian</option><option>Czech</option><option>Slovak</option><option>Croatian</option><option>Serbian</option><option>Bosnian</option><option>Bulgarian</option><option>Albanian</option><option>Armenian</option><option>Georgian</option><option>Pashto</option><option>Kurdish</option><option>Dari</option><option>Swahili</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option><option>Zulu</option><option>Xhosa</option><option>Afrikaans</option><option>Kinyarwanda</option><option>Kirundi</option><option>Lingala</option><option>Shona</option><option>Sesotho</option><option>Setswana</option><option>Malagasy</option><option>Somali (Latin)</option><option>Icelandic</option><option>Irish</option><option>Welsh</option><option>Catalan</option><option>Basque</option><option>Galician</option><option>Estonian</option><option>Latvian</option><option>Lithuanian</option><option>Belarusian</option><option>Macedonian</option><option>Maltese</option><option>Luxembourgish</option><option>Tajik</option><option>Turkmen</option><option>Uyghur</option><option>Javanese</option><option>Sundanese</option></optgroup></select>
+    </div>
+  </div>
+  <label class="wt-ai-consent"><input type="checkbox" id="wt-ai-consent"> I understand that the selected text will be sent to the AI provider for this request.</label>
+  <div class="row">
+    <button type="button" id="wt-ai-generate">Generate with AI</button>
+    <span id="wt-ai-status" class="muted" role="status" aria-live="polite">Select text and review the privacy notice before continuing.</span>
+  </div>
+  <section id="wt-ai-result-wrap" class="wt-ai-result" hidden aria-label="AI result">
+    <label for="wt-ai-result">AI result — review before using</label>
+    <div id="wt-ai-result" class="wt-ai-result-text" tabindex="0"></div>
+    <div class="row">
+      <button type="button" id="wt-ai-use-result">Use in message composer</button>
+      <button type="button" class="secondary" id="wt-ai-copy-result">Copy result</button>
+    </div>
+  </section>
+
+  <section class="wt-audio-ai" id="wt-audio-ai" aria-labelledby="wt-audio-ai-heading">
+    <h3 id="wt-audio-ai-heading">🎙 Voice transcription and translation</h3>
+    <p class="wt-ai-privacy">Choose an audio file or use “Transcribe voice” on a voice message. Only the audio you select is sent to the configured provider after you consent. Audio and transcripts are not saved by this feature.</p>
+    <label for="wt-audio-file">Audio recording</label>
+    <input id="wt-audio-file" type="file" accept="audio/webm,audio/ogg,audio/mp4,audio/mpeg,audio/wav,audio/flac,video/webm,.m4a,.mp3,.wav,.ogg,.webm" />
+    <span id="wt-audio-file-name" class="muted">No audio selected.</span>
+    <div class="wt-ai-controls">
+      <div>
+        <label for="wt-audio-language">Spoken language (optional)</label>
+        <select id="wt-audio-language">
+          <option value="">Auto-detect</option><option value="om">Afaan Oromo</option><option value="am">Amharic</option>
+          <option value="en">English</option><option value="ti">Tigrinya</option><option value="so">Somali</option><option value="ar">Arabic</option>
+        </select>
+      </div>
+      <div>
+        <label for="wt-audio-translate-language">Translate transcript into</label>
+        <select id="wt-audio-translate-language"><option value="">Do not translate</option><optgroup label="Ethiopian languages"><option>Afaan Oromo</option><option>Amharic</option><option>Tigrinya</option><option>Somali</option><option>Afar</option><option>Sidama</option><option>Wolaytta</option><option>Gamo</option><option>Gofa</option><option>Dawro</option><option>Hadiyya</option><option>Kafa</option><option>Gedeo</option><option>Kambaata</option><option>Silt'e</option><option>Sebat Bet Gurage</option><option>Bench</option><option>Shekkacho</option><option>Gumuz</option><option>Nuer</option><option>Anuak</option><option>Berta</option><option>Me'en</option><option>Konso</option></optgroup><optgroup label="International languages"><option>English</option><option>Arabic</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>German</option><option>Italian</option><option>Dutch</option><option>Russian</option><option>Ukrainian</option><option>Polish</option><option>Turkish</option><option>Persian (Farsi)</option><option>Hebrew</option><option>Urdu</option><option>Hindi</option><option>Bengali</option><option>Punjabi</option><option>Gujarati</option><option>Marathi</option><option>Tamil</option><option>Telugu</option><option>Kannada</option><option>Malayalam</option><option>Sinhala</option><option>Nepali</option><option>Chinese (Simplified)</option><option>Chinese (Traditional)</option><option>Japanese</option><option>Korean</option><option>Thai</option><option>Vietnamese</option><option>Indonesian</option><option>Malay</option><option>Filipino (Tagalog)</option><option>Burmese</option><option>Khmer</option><option>Lao</option><option>Mongolian</option><option>Kazakh</option><option>Uzbek</option><option>Azerbaijani</option><option>Greek</option><option>Swedish</option><option>Norwegian</option><option>Danish</option><option>Finnish</option><option>Romanian</option><option>Hungarian</option><option>Czech</option><option>Slovak</option><option>Croatian</option><option>Serbian</option><option>Bosnian</option><option>Bulgarian</option><option>Albanian</option><option>Armenian</option><option>Georgian</option><option>Pashto</option><option>Kurdish</option><option>Dari</option><option>Swahili</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option><option>Zulu</option><option>Xhosa</option><option>Afrikaans</option><option>Kinyarwanda</option><option>Kirundi</option><option>Lingala</option><option>Shona</option><option>Sesotho</option><option>Setswana</option><option>Malagasy</option><option>Somali (Latin)</option><option>Icelandic</option><option>Irish</option><option>Welsh</option><option>Catalan</option><option>Basque</option><option>Galician</option><option>Estonian</option><option>Latvian</option><option>Lithuanian</option><option>Belarusian</option><option>Macedonian</option><option>Maltese</option><option>Luxembourgish</option><option>Tajik</option><option>Turkmen</option><option>Uyghur</option><option>Javanese</option><option>Sundanese</option></optgroup></select>
+      </div>
+    </div>
+    <label class="wt-ai-consent"><input type="checkbox" id="wt-audio-consent"> I agree to send this selected audio to the configured AI provider for transcription.</label>
+    <div class="row">
+      <button type="button" id="wt-audio-transcribe">Transcribe audio</button>
+      <span id="wt-audio-status" class="muted" role="status" aria-live="polite">Select audio and confirm consent.</span>
+    </div>
+    <label for="wt-audio-transcript">Transcript — review and edit</label>
+    <textarea id="wt-audio-transcript" rows="4" maxlength="4000" placeholder="Your transcript will appear here." ></textarea>
+    <div class="row">
+      <button type="button" id="wt-audio-translate" class="secondary">Translate transcript</button>
+      <button type="button" id="wt-audio-use" class="secondary">Use in message composer</button>
+      <button type="button" id="wt-audio-copy" class="secondary">Copy transcript</button>
+    </div>
+    <label for="wt-audio-translation">Translation</label>
+    <div id="wt-audio-translation" class="wt-ai-result-text" tabindex="0" aria-live="polite"></div>
+  </section>
+</div>
+
       </section>
       <section class="wt-content-section" id="wt-groups-section" aria-label="Groups">
       <section class="group-panel" aria-labelledby="groups-heading">
@@ -1066,6 +1260,27 @@
         </div>
         <p id="group-status" role="status" aria-live="polite" class="muted">Log in to view your groups.</p>
         <div id="group-members" class="group-members" aria-live="polite"></div>
+        <section id="wt-group-call-panel" class="wt-group-call-panel" aria-label="Group video conference">
+          <h3>Group video conference</h3>
+          <p id="wt-group-call-status" role="status" aria-live="polite">Open a group to start or join a video conference.</p>
+          <div class="row">
+            <button type="button" id="wt-group-call-start">Start group video call</button>
+            <button type="button" id="wt-group-call-join" disabled>Join active call</button>
+            <button type="button" id="wt-group-call-leave" disabled>Leave / end call</button>
+          </div>
+
+          <div class="wt-group-call-controls" role="group" aria-label="Your group call controls">
+            <button type="button" id="wt-group-call-mic" disabled aria-pressed="false">Mute microphone</button>
+            <button type="button" id="wt-group-call-camera" disabled aria-pressed="false">Turn camera off</button>
+            <button type="button" id="wt-group-call-layout" class="secondary" disabled>Switch to focus layout</button>
+            <button type="button" id="wt-group-call-hand" class="secondary" disabled aria-pressed="false">Raise hand</button>
+          </div>
+          <div id="wt-group-call-roster" class="wt-group-call-roster" aria-label="Group call participants" aria-live="polite" hidden></div>
+
+          <p class="muted">Up to 8 participants. Camera and microphone access are requested only when you start or join. Media is exchanged directly between participants; this initial mesh mode may use significant bandwidth.</p>
+          <div id="wt-group-call-grid" class="wt-group-call-grid" aria-live="polite"></div>
+        </section>
+
         <section id="group-invitations-panel" class="group-members" hidden aria-live="polite"></section>
         <section id="group-governance-panel" class="group-members" hidden aria-live="polite">
           <div id="group-settings-fields">
@@ -1156,6 +1371,8 @@
   <script src="/language.js?v=footer-translation-1" defer></script>
   <script src="/dynamic-language.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/ai-assistant.js" defer></script>
+  <script src="/audio-intelligence.js" defer></script>
   <script src="/group-presence.js" defer></script>
 </body>
 </html>

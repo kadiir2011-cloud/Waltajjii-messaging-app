@@ -1,0 +1,37 @@
+name: Phase 49 PostgreSQL migration chain audit
+on:
+  pull_request:
+    paths:
+      - "migrations/postgres/**"
+      - "test/phase49-postgres-migration-chain.test.js"
+      - ".github/workflows/phase49-postgres-migration-chain.yml"
+permissions:
+  contents: read
+jobs:
+  migration-chain:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase49_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase49_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase49_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify additive migration chain
+        run: node --test test/phase49-postgres-migration-chain.test.js

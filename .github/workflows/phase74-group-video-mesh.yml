@@ -1,0 +1,30 @@
+name: Phase 74 group video mesh
+on:
+  pull_request:
+    paths:
+      - "src/server.js"
+      - "public/app.js"
+      - "public/index.html"
+      - "test/phase74-group-video-mesh.test.js"
+      - "PHASE-74-GROUP-VIDEO-MESH.md"
+      - ".github/workflows/phase74-group-video-mesh.yml"
+permissions:
+  contents: read
+jobs:
+  group-video-mesh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check public/app.js
+      - name: Run group video and call regression tests
+        run: node --test test/phase74-group-video-mesh.test.js test/phase73-group-call-signaling.test.js test/phase72-secure-call-screen-sharing.test.js test/phase71-smart-network-adaptation.test.js test/phase70-call-recovery.test.js test/phase69-call-quality-monitor.test.js test/phase68-live-call-interpreter.test.js test/phase67-live-call-captions.test.js test/phase44-postgres-realtime-socket.test.js

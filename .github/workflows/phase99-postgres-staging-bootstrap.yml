@@ -1,0 +1,25 @@
+name: Phase 99 PostgreSQL staging bootstrap
+on:
+  pull_request:
+    paths:
+      - "src/postgres/postgres-staging-runtime.js"
+      - "test/phase99-postgres-staging-bootstrap.test.js"
+      - "PHASE-99-ISOLATED-POSTGRES-STAGING-BOOTSTRAP.md"
+      - ".github/workflows/phase99-postgres-staging-bootstrap.yml"
+  push:
+    branches:
+      - waltajjii-phase99-isolated-postgres-staging-bootstrap
+permissions:
+  contents: read
+jobs:
+  phase99-staging-bootstrap:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify isolated staging bootstrap and prior gates
+        run: node --test test/phase99-postgres-staging-bootstrap.test.js test/phase98-postgres-service-composition.test.js test/phase97-postgres-runtime-migration-map.test.js test/phase96-staging-integration-safety.test.js

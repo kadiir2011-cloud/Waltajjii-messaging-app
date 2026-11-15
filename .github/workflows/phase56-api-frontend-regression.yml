@@ -1,0 +1,41 @@
+name: Phase 56 API and frontend contract regression
+on:
+  pull_request:
+    paths:
+      - "public/app.js"
+      - "src/server.js"
+      - "src/routes/postgres-*.js"
+      - "src/postgres/postgres-api-router.js"
+      - "test/phase56-*.test.js"
+      - "scripts/phase57-sqlite-migration-preflight.js"
+      - "test/phase57-sqlite-migration-preflight.test.js"
+      - "PHASE-57-SQLITE-MIGRATION-READINESS.md"
+      - "PHASE-56-API-FRONTEND-COMPATIBILITY.md"
+      - ".github/workflows/phase56-api-frontend-regression.yml"
+permissions:
+  contents: read
+jobs:
+  api-frontend-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked project dependencies
+        run: npm ci --ignore-scripts
+      - name: Build read-only SQLite preflight dependency
+        run: npm rebuild better-sqlite3
+      - name: Run Phase 57 SQLite migration readiness tests
+        run: node --test test/phase57-sqlite-migration-preflight.test.js
+      - name: Install isolated browser-test dependency
+        run: npm install --prefix /tmp/wt-playwright --no-save playwright@1.55.0
+      - name: Install Chromium browser binary
+        run: /tmp/wt-playwright/node_modules/.bin/playwright install chromium
+      - name: Run Phase 56 desktop and mobile browser E2E tests
+        timeout-minutes: 5
+        run: NODE_PATH=/tmp/wt-playwright/node_modules node --test --test-timeout=90000 test/phase56-browser-e2e.test.js
+      - name: Run Phase 56 API and frontend regression tests
+        timeout-minutes: 5
+        run: node --test --test-timeout=90000 test/phase56-api-frontend-contract.test.js test/phase56-postgres-api-composition.test.js test/phase56-postgres-media-call-routes.test.js test/phase56-postgres-translation.test.js test/phase56-postgres-reminder-worker.test.js

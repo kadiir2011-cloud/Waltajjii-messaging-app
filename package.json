@@ -6,7 +6,9 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "preflight:sqlite": "node scripts/phase57-sqlite-migration-preflight.js",
+    "rehearse:postgres": "node scripts/phase58-postgres-migration-rehearsal.js"
   },
   "engines": {
     "node": "22.x"

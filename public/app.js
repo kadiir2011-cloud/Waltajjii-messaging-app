@@ -1,7 +1,7 @@
 
 // Phase 7: local appearance preferences. These settings are private to this browser.
 (function initWaltajjiiAppearance() {
-  const defaults = { theme: "system", accent: "teal", wallpaper: "plain" };
+  const defaults = { theme: "system", accent: "teal", wallpaper: "plain", lowData: false };
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem("waltajjii-appearance") || "{}"); } catch { saved = {}; }
   const prefs = { ...defaults, ...saved };
@@ -9,29 +9,49 @@
   const themeSelect = document.getElementById("wt-theme");
   const accentSelect = document.getElementById("wt-accent");
   const wallpaperSelect = document.getElementById("wt-wallpaper");
+  const lowDataSelect = document.getElementById("wt-low-data");
   const status = document.getElementById("wt-preferences-status");
-  if (!themeSelect || !accentSelect || !wallpaperSelect) return;
+  if (!themeSelect || !accentSelect || !wallpaperSelect || !lowDataSelect) return;
   themeSelect.value = ["light", "dark", "system"].includes(prefs.theme) ? prefs.theme : "system";
   accentSelect.value = Object.hasOwn(accents, prefs.accent) ? prefs.accent : "teal";
   wallpaperSelect.value = ["plain", "soft", "sky", "warm"].includes(prefs.wallpaper) ? prefs.wallpaper : "plain";
+  lowDataSelect.checked = prefs.lowData === true;
   function apply() {
+    document.body.dataset.wtLowData = lowDataSelect.checked ? "true" : "false";
     const selectedTheme = themeSelect.value;
     const dark = selectedTheme === "dark" || (selectedTheme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
     document.body.dataset.wtTheme = dark ? "dark" : "light";
     document.body.style.setProperty("--wt-teal", accents[accentSelect.value] || accents.teal);
     document.body.dataset.wtWallpaper = wallpaperSelect.value;
     try {
-      localStorage.setItem("waltajjii-appearance", JSON.stringify({ theme: selectedTheme, accent: accentSelect.value, wallpaper: wallpaperSelect.value }));
-      status.textContent = "Your appearance preferences are saved on this device.";
+      localStorage.setItem("waltajjii-appearance", JSON.stringify({ theme: selectedTheme, accent: accentSelect.value, wallpaper: wallpaperSelect.value, lowData: lowDataSelect.checked }));
+      status.textContent = "Your appearance and data preferences are saved on this device.";
     } catch { status.textContent = "Preferences are applied for this session but could not be saved by this browser."; }
   }
-  [themeSelect, accentSelect, wallpaperSelect].forEach(control => control.addEventListener("change", apply));
+  [themeSelect, accentSelect, wallpaperSelect, lowDataSelect].forEach(control => control.addEventListener("change", apply));
   if (window.matchMedia) {
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
     systemTheme.addEventListener?.("change", () => { if (themeSelect.value === "system") apply(); });
   }
   apply();
 })();
+function isLowDataMode() { return document.getElementById("wt-low-data")?.checked === true; }
+function createMediaLoadButton(label, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "secondary media-load-button";
+  button.textContent = label;
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    button.textContent = "Loading…";
+    onClick(() => button.remove(), error => {
+      button.disabled = false;
+      button.textContent = "Retry loading";
+      console.error("Could not load media:", error);
+    });
+  });
+  return button;
+}
 const authPanel = document.getElementById("auth-panel");
     const chatPanel = document.getElementById("chat-panel");
     const loginForm = document.getElementById("login-form");
@@ -519,55 +539,63 @@ items.forEach(item => {
       audio.controls = true;
       audio.preload = "metadata";
       speed.addEventListener("change", () => { audio.playbackRate = Number(speed.value); });
-      fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
-        .then(response => {
-          if (!response.ok) throw new Error("Voice message request failed: " + response.status);
-          return response.blob();
-        })
-        .then(blob => { audio.src = URL.createObjectURL(blob); })
-        .catch(error => {
-          console.error("Could not load voice message:", error);
-          title.textContent = "Voice message unavailable";
-        });
-      player.append(top, waveform, audio);
+      const loadVoiceMedia = (done, fail) => {
+        fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+          .then(response => { if (!response.ok) throw new Error("Voice message request failed: " + response.status); return response.blob(); })
+          .then(blob => { audio.src = URL.createObjectURL(blob); if (done) done(); })
+          .catch(error => { title.textContent = "Voice message unavailable"; if (fail) fail(error); });
+      };
+      const transcribeButton = document.createElement("button");
+      transcribeButton.type = "button";
+      transcribeButton.className = "secondary wt-audio-message-button";
+      transcribeButton.textContent = "Transcribe voice";
+      transcribeButton.addEventListener("click", async () => {
+        transcribeButton.disabled = true;
+        transcribeButton.textContent = "Loading audio…";
+        try {
+          const response = await fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } });
+          if (!response.ok) throw new Error("Voice message could not be loaded.");
+          const blob = await response.blob();
+          document.dispatchEvent(new CustomEvent("waltajjii:audio-context", {
+            detail: { blob, filename: "waltajjii-voice-message." + ((blob.type || "").includes("ogg") ? "ogg" : (blob.type || "").includes("mp4") ? "m4a" : (blob.type || "").includes("mpeg") ? "mp3" : "webm") }
+          }));
+          document.getElementById("wt-audio-ai")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch (error) {
+          title.textContent = error.message || "Voice message unavailable";
+        } finally {
+          transcribeButton.disabled = false;
+          transcribeButton.textContent = "Transcribe voice";
+        }
+      });
+      if (isLowDataMode()) player.appendChild(createMediaLoadButton("Load voice message", loadVoiceMedia));
+      else loadVoiceMedia();
+      player.append(top, waveform, audio, transcribeButton);
       content.appendChild(player);
     } else if (item.mediaType === "image") {
   const image = document.createElement("img");
 
-  fetch(mediaUrl, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Image request failed: " + response.status);
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      const imageUrl = URL.createObjectURL(blob);
-
-      // Display the image
-      image.src = imageUrl;
-
-      // Create a download link
-      const downloadLink = document.createElement("a");
-      downloadLink.href = imageUrl;
-      downloadLink.download = item.mediaPath.split("/").pop();
-      downloadLink.textContent = "⬇ Download image";
-      downloadLink.style.display = "inline-block";
-      downloadLink.style.marginTop = "8px";
-      downloadLink.style.padding = "8px 12px";
-      downloadLink.style.border = "1px solid #888";
-      downloadLink.style.borderRadius = "6px";
-
-      content.appendChild(downloadLink);
-    })
-    .catch(error => {
-      console.error("Could not load shared image:", error);
-      image.alt = "Image could not be loaded";
-    });
+  const loadImageMedia = (done, fail) => {
+    fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+      .then(response => { if (!response.ok) throw new Error("Image request failed: " + response.status); return response.blob(); })
+      .then(blob => {
+        const imageUrl = URL.createObjectURL(blob);
+        image.src = imageUrl;
+        const downloadLink = document.createElement("a");
+        downloadLink.href = imageUrl;
+        downloadLink.download = item.mediaPath.split("/").pop();
+        downloadLink.textContent = "⬇ Download image";
+        downloadLink.style.display = "inline-block";
+        downloadLink.style.marginTop = "8px";
+        downloadLink.style.padding = "8px 12px";
+        downloadLink.style.border = "1px solid #888";
+        downloadLink.style.borderRadius = "6px";
+        content.appendChild(downloadLink);
+        if (done) done();
+      })
+      .catch(error => { image.alt = "Image could not be loaded"; if (fail) fail(error); });
+  };
+  if (isLowDataMode()) content.appendChild(createMediaLoadButton("Load image (uses data)", loadImageMedia));
+  else loadImageMedia();
 
   image.alt = "Image shared in chat";
   image.style.maxWidth = "100%";
@@ -613,28 +641,15 @@ items.forEach(item => {
     durationLabel.textContent = "Video duration unavailable";
   });
 
-  fetch(mediaUrl, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Video request failed: " + response.status);
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      video.src = URL.createObjectURL(blob);
-      video.load();
-    })
-    .catch(error => {
-      console.error("Could not load shared video:", error);
-      video.textContent = "Video could not be loaded.";
-      durationLabel.textContent = "Video duration unavailable";
-    });
-
+  const loadVideoMedia = (done, fail) => {
+    fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+      .then(response => { if (!response.ok) throw new Error("Video request failed: " + response.status); return response.blob(); })
+      .then(blob => { video.src = URL.createObjectURL(blob); video.load(); if (done) done(); })
+      .catch(error => { video.textContent = "Video could not be loaded."; durationLabel.textContent = "Video duration unavailable"; if (fail) fail(error); });
+  };
   content.append(video, durationLabel);
+  if (isLowDataMode()) content.appendChild(createMediaLoadButton("Load video (uses data)", loadVideoMedia));
+  else loadVideoMedia();
 
 } else if (item.mediaType === "document") {
   const link = document.createElement("a");
@@ -646,27 +661,16 @@ items.forEach(item => {
   link.style.border = "1px solid #888";
   link.style.borderRadius = "6px";
 
-  fetch(mediaUrl, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Document request failed: " + response.status);
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      link.href = URL.createObjectURL(blob);
-      link.download = item.mediaPath;
-    })
-    .catch(error => {
-      console.error("Could not load shared document:", error);
-      link.textContent = "Document could not be downloaded.";
-    });
-
-   content.appendChild(link);
+  link.hidden = true;
+  const loadDocumentMedia = (done, fail) => {
+    fetch(mediaUrl, { headers: { Authorization: "Bearer " + token } })
+      .then(response => { if (!response.ok) throw new Error("Document request failed: " + response.status); return response.blob(); })
+      .then(blob => { link.href = URL.createObjectURL(blob); link.download = item.mediaPath; link.hidden = false; if (done) done(); })
+      .catch(error => { link.textContent = "Document could not be downloaded."; if (fail) fail(error); });
+  };
+  content.appendChild(link);
+  if (isLowDataMode()) content.appendChild(createMediaLoadButton("Prepare document download", loadDocumentMedia));
+  else loadDocumentMedia();
 }
   } // Closes the outer media condition
 
@@ -695,6 +699,21 @@ items.forEach(item => {
     messageInput.focus();
   });
   messageActions.appendChild(replyButton);
+
+  if (!item.deletedAt && typeof item.body === "string" && item.body.trim()) {
+    const aiButton = document.createElement("button");
+    aiButton.type = "button";
+    aiButton.className = "wt-ai-message-button";
+    aiButton.textContent = "✨ Ask AI";
+    aiButton.setAttribute("aria-label", "Use this selected message with Waltajjii AI");
+    aiButton.addEventListener("click", () => {
+      document.dispatchEvent(new CustomEvent("waltajjii:ai-context", {
+        detail: { context: item.body.slice(0, 8000) }
+      }));
+      document.getElementById("wt-ai-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    messageActions.appendChild(aiButton);
+  }
 
   if (item.sender === currentUsername && !item.deletedAt && !item.mediaPath) {
     const editButton = document.createElement("button");
@@ -1079,14 +1098,280 @@ items.forEach(item => {
 const localVideo = document.getElementById("local-video");
 const remoteVideo = document.getElementById("remote-video");
 const callStatus = document.getElementById("call-status");
+const screenShareButton = document.getElementById("wt-screen-share");
+const stopScreenShareButton = document.getElementById("wt-screen-share-stop");
+const screenShareStatus = document.getElementById("wt-screen-share-status");
+const screenSharePreview = document.getElementById("wt-screen-share-preview");
+const screenSharePreviewContainer = document.getElementById("wt-screen-share-preview-container");
+let screenShareStream = null;
+let screenShareSender = null;
+let screenShareCameraTrack = null;
+
+const callQualityStatus = document.getElementById("wt-call-quality");
+const callAdaptiveToggle = document.getElementById("wt-call-adaptive");
+const callAdaptiveStatus = document.getElementById("wt-call-adaptive-status");
+if (callAdaptiveToggle) {
+  callAdaptiveToggle.addEventListener("change", () => {
+    adaptivePoorSamples = 0;
+    adaptiveFairSamples = 0;
+    adaptiveGoodSamples = 0;
+    if (callAdaptiveToggle.checked) {
+      adaptiveVideoProfile = "high";
+      if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation enabled; monitoring this call.";
+      applyAdaptiveVideoQuality("high");
+    } else {
+      if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is off; restoring standard video quality.";
+      applyAdaptiveVideoQuality("high").then(restored => {
+        if (callAdaptiveStatus) callAdaptiveStatus.textContent = restored
+          ? "Automatic video adaptation is off; standard video quality is restored."
+          : "Automatic video adaptation is off; this browser could not reset video settings automatically.";
+      });
+    }
+  });
+}
+
+let adaptiveVideoProfile = "high";
+let adaptivePoorSamples = 0;
+let adaptiveFairSamples = 0;
+let adaptiveGoodSamples = 0;
+let adaptiveApplyPending = false;
+
 
 const startCallButton = document.getElementById("start-call-button");
 const startVoiceCallButton = document.getElementById("start-voice-call-button");
 const acceptCallButton = document.getElementById("accept-call-button");
 const rejectCallButton = document.getElementById("reject-call-button");
 const endCallButton = document.getElementById("end-call-button");
+const callReconnectButton = document.getElementById("wt-call-reconnect");
+let callRecoveryInProgress = false;
+const captionStartButton = document.getElementById("wt-caption-start");
+const captionStopButton = document.getElementById("wt-caption-stop");
+const captionConsent = document.getElementById("wt-caption-consent");
+const captionShare = document.getElementById("wt-caption-share");
+const captionLanguage = document.getElementById("wt-caption-language");
+const captionTargetLanguage = document.getElementById("wt-caption-target-language");
+const captionTranslateButton = document.getElementById("wt-caption-translate");
+const captionTranslation = document.getElementById("wt-caption-translation");
+const captionFeed = document.getElementById("wt-caption-feed");
+const captionStatus = document.getElementById("wt-caption-status");
+const captionAutoTranslate = document.getElementById("wt-caption-auto-translate");
+const captionAutoTranslation = document.getElementById("wt-caption-auto-translation");
+
+let captionRecognition = null;
+let liveCaptionsActive = false;
+let latestCallCaption = "";
+let autoCaptionCallPeerId = null;
+let autoCaptionTranslationCount = 0;
+let autoCaptionLastRequestAt = 0;
+let autoCaptionTranslationPending = false;
+
+function setCaptionStatus(message) {
+  if (captionStatus) captionStatus.textContent = message;
+}
+
+function updateCaptionAvailability() {
+  const active = Boolean(peerConnection && peerConnection.connectionState === "connected" && activeCallUserId && callSocket?.connected);
+  if (captionStartButton) captionStartButton.disabled = !active || liveCaptionsActive;
+  if (captionStopButton) captionStopButton.disabled = !liveCaptionsActive;
+  if (captionTranslateButton) captionTranslateButton.disabled = !latestCallCaption;
+}
+
+function appendCallCaption(speaker, text) {
+  if (!captionFeed || !text) return;
+  const empty = captionFeed.querySelector(".wt-caption-empty");
+  if (empty) empty.remove();
+  const item = document.createElement("p");
+  item.className = "wt-caption-item";
+  const label = document.createElement("strong");
+  label.textContent = speaker;
+  const content = document.createElement("span");
+  content.textContent = text;
+  item.append(label, content);
+  captionFeed.appendChild(item);
+  while (captionFeed.children.length > 20) captionFeed.firstElementChild.remove();
+  captionFeed.scrollTop = captionFeed.scrollHeight;
+  latestCallCaption = text;
+  updateCaptionAvailability();
+}
+
+function stopLiveCallCaptions(clear = false) {
+  liveCaptionsActive = false;
+  const recognition = captionRecognition;
+  captionRecognition = null;
+  if (recognition) {
+    recognition.onend = null;
+    try { recognition.stop(); } catch {}
+  }
+  if (captionStartButton) captionStartButton.disabled = !Boolean(peerConnection && peerConnection.connectionState === "connected" && activeCallUserId && callSocket?.connected);
+  if (captionStopButton) captionStopButton.disabled = true;
+  if (clear) {
+    if (captionFeed) {
+      captionFeed.replaceChildren();
+      const empty = document.createElement("p");
+      empty.className = "wt-caption-empty";
+      empty.textContent = "Captions will appear here when enabled.";
+      captionFeed.appendChild(empty);
+    }
+    latestCallCaption = "";
+    if (captionTranslation) captionTranslation.textContent = "";
+    if (captionAutoTranslation) captionAutoTranslation.textContent = "";
+    autoCaptionCallPeerId = null;
+    autoCaptionTranslationCount = 0;
+    autoCaptionLastRequestAt = 0;
+    autoCaptionTranslationPending = false;
+    if (captionAutoTranslate) captionAutoTranslate.checked = false;
+    if (captionConsent) captionConsent.checked = false;
+    if (captionShare) captionShare.checked = false;
+    if (captionTranslateButton) captionTranslateButton.disabled = true;
+  }
+}
+
+function startLiveCallCaptions() {
+  if (!peerConnection || peerConnection.connectionState !== "connected" || !activeCallUserId || !callSocket?.connected) {
+    setCaptionStatus("Start or accept a call before enabling captions.");
+    return;
+  }
+  if (!captionConsent?.checked) {
+    setCaptionStatus("Please confirm the browser speech-recognition notice first.");
+    captionConsent?.focus();
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setCaptionStatus("Live captions are not supported by this browser. Try a current Chrome or Edge browser.");
+    return;
+  }
+  if (liveCaptionsActive) return;
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = captionLanguage?.value || "en-US";
+  captionRecognition = recognition;
+  liveCaptionsActive = true;
+  updateCaptionAvailability();
+  setCaptionStatus("Live captions are listening to your microphone. Stop them at any time.");
+
+  recognition.onresult = event => {
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const result = event.results[index];
+      if (!result.isFinal) continue;
+      const text = String(result[0]?.transcript || "").trim().slice(0, 500);
+      if (!text) continue;
+      appendCallCaption("You", text);
+      if (captionShare?.checked && callSocket?.connected && activeCallUserId) {
+        callSocket.emit("call:caption", { targetUserId: activeCallUserId, text }, response => {
+          if (!response?.ok) setCaptionStatus(response?.error || "Could not share this caption.");
+        });
+      }
+    }
+  };
+  recognition.onerror = event => {
+    if (event.error === "no-speech") return;
+    if (["not-allowed", "service-not-allowed", "language-not-supported", "audio-capture", "network"].includes(event.error)) {
+      stopLiveCallCaptions(false);
+      setCaptionStatus("Browser speech recognition permission was denied.");
+    } else {
+      setCaptionStatus("Speech recognition issue: " + String(event.error || "unknown error") + ".");
+    }
+  };
+  recognition.onend = () => {
+    if (!liveCaptionsActive || captionRecognition !== recognition || !peerConnection) return;
+    try {
+      recognition.start();
+    } catch {
+      setCaptionStatus("Live captions paused. Press Start live captions to resume.");
+      stopLiveCallCaptions(false);
+    }
+  };
+  try {
+    recognition.start();
+  } catch (error) {
+    stopLiveCallCaptions(false);
+    setCaptionStatus("Could not start live captions: " + (error.message || "speech recognition unavailable"));
+  }
+}
+
+async function translateLatestCallCaption() {
+  if (!latestCallCaption) return;
+  const targetLanguage = captionTargetLanguage?.value;
+  if (!targetLanguage) {
+    setCaptionStatus("Choose a target language before translating.");
+    captionTargetLanguage?.focus();
+    return;
+  }
+  captionTranslateButton.disabled = true;
+  setCaptionStatus("Translating the latest caption…");
+  try {
+    const result = await api("/api/translation/translate", {
+      method: "POST",
+      body: JSON.stringify({
+        text: latestCallCaption,
+        sourceLanguage: "Auto-detect",
+        targetLanguage
+      })
+    });
+    captionTranslation.textContent = result.translation || "No translation was returned.";
+    setCaptionStatus("Translation ready. It is shown only on this device.");
+  } catch (error) {
+    setCaptionStatus(error.message || "Could not translate this caption.");
+  } finally {
+    updateCaptionAvailability();
+  }
+}
+
+
+async function translateIncomingCallCaption(text, peerId) {
+  if (!captionAutoTranslate?.checked || !text || !peerId) return;
+  const targetLanguage = captionTargetLanguage?.value;
+  if (!targetLanguage) {
+    if (captionAutoTranslation) captionAutoTranslation.textContent = "Choose a translation language to use the live interpreter.";
+    return;
+  }
+  if (String(peerId) !== String(activeCallUserId)) return;
+  if (String(autoCaptionCallPeerId) !== String(peerId)) {
+    autoCaptionCallPeerId = String(peerId);
+    autoCaptionTranslationCount = 0;
+    autoCaptionLastRequestAt = 0;
+    autoCaptionTranslationPending = false;
+  }
+  if (autoCaptionTranslationCount >= 30) {
+    if (captionAutoTranslation) captionAutoTranslation.textContent = "Automatic translation paused after 30 captions in this call. You can continue with manual translation.";
+    return;
+  }
+  const now = Date.now();
+  if (autoCaptionTranslationPending || now - autoCaptionLastRequestAt < 1500) return;
+  autoCaptionTranslationPending = true;
+  autoCaptionLastRequestAt = now;
+  autoCaptionTranslationCount += 1;
+  if (captionAutoTranslation) captionAutoTranslation.textContent = "Translating caller's caption…";
+  try {
+    const result = await api("/api/translation/translate", {
+      method: "POST",
+      body: JSON.stringify({
+        text: String(text).slice(0, 500),
+        sourceLanguage: "Auto-detect",
+        targetLanguage
+      })
+    });
+    if (captionAutoTranslate?.checked &&
+        String(activeCallUserId) === String(peerId) &&
+        captionAutoTranslation) {
+      captionAutoTranslation.textContent = result.translation || "No translation was returned.";
+    }
+  } catch (error) {
+    if (captionAutoTranslate?.checked &&
+        String(activeCallUserId) === String(peerId) &&
+        captionAutoTranslation) {
+      captionAutoTranslation.textContent = error.message || "Automatic translation is temporarily unavailable.";
+    }
+  } finally {
+    autoCaptionTranslationPending = false;
+  }
+}
 
 let peerConnection = null;
+let callQualityTimer = null;
 let localStream = null;
 let activeCallUserId = null;
 let incomingCallOffer = null;
@@ -1271,17 +1556,177 @@ function registerCallSocketHandlers(socket) {
     }
   });
 
+  socket.on("call:recovery-requested", async data => {
+    if (!peerConnection || !activeCallUserId || String(data?.senderId) !== String(activeCallUserId)) return;
+    if (peerConnection.signalingState !== "stable" || callRecoveryInProgress) return;
+    try {
+      callRecoveryInProgress = true;
+      setCallStatus("Your contact requested a connection recovery. Reconnecting…");
+      const offer = await peerConnection.createOffer({ iceRestart: true });
+      await peerConnection.setLocalDescription(offer);
+      socket.emit("call:recovery-offer", { targetUserId: activeCallUserId, offer: peerConnection.localDescription });
+    } catch (error) {
+      callRecoveryInProgress = false;
+      setCallStatus("Could not prepare reconnection. Please try again or end the call.");
+    }
+  });
+
+  socket.on("call:recovery-offer", async data => {
+    if (!peerConnection || String(data?.senderId) !== String(activeCallUserId) || !data.offer) return;
+    try {
+      callRecoveryInProgress = true;
+      await peerConnection.setRemoteDescription(data.offer);
+      await applyPendingIceCandidates();
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit("call:recovery-answer", { targetUserId: activeCallUserId, answer: peerConnection.localDescription });
+      setCallStatus("Reconnection response sent. Restoring call…");
+    } catch (error) {
+      callRecoveryInProgress = false;
+      setCallStatus("Automatic reconnection could not complete. Please try again.");
+    }
+  });
+
+  socket.on("call:recovery-answer", async data => {
+    if (!peerConnection || String(data?.senderId) !== String(activeCallUserId) || !data.answer) return;
+    try {
+      await peerConnection.setRemoteDescription(data.answer);
+      await applyPendingIceCandidates();
+      setCallStatus("Reconnection accepted. Restoring call…");
+    } catch (error) {
+      callRecoveryInProgress = false;
+      setCallStatus("Could not apply the reconnection response. Please try again.");
+    }
+  });
+
   socket.on("call:ice-candidate", async data => {
     if (!data.candidate) return;
 
     try {
-      if (peerConnection?.remoteDescription) {
+      if (peerConnection?.remoteDescription && !callRecoveryInProgress) {
         await peerConnection.addIceCandidate(data.candidate);
       } else {
         pendingIceCandidates.push(data.candidate);
       }
     } catch (error) {
       console.error("Could not add ICE candidate:", error);
+    }
+  });
+
+  socket.on("call:caption", data => {
+    if (!data || String(data.senderId) !== String(activeCallUserId) || typeof data.text !== "string") return;
+    appendCallCaption(data.senderUsername || "Caller", data.text.slice(0, 500), false);
+    translateIncomingCallCaption(data.text.slice(0, 500), data.senderId);
+  });
+
+
+
+  socket.on("group-call:hand-raised", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    const id = String(data.userId);
+    if (data.raised) groupCallRaisedHands.add(id);
+    else groupCallRaisedHands.delete(id);
+    refreshGroupCallRoster();
+    updateGroupCallHandButton();
+    if (groupCallStatus && data.raised) groupCallStatus.textContent = (data.username || "A participant") + " raised a hand.";
+  });
+
+  socket.on("group-call:mute-request", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    const accepted = window.confirm((data.requestedBy || "The moderator") + " asks you to mute your microphone. Mute now?");
+    if (!accepted) {
+      if (groupCallStatus) groupCallStatus.textContent = "You declined the mute request.";
+      return;
+    }
+    const tracks = groupCallLocalStream?.getAudioTracks() || [];
+    tracks.forEach(track => { track.enabled = false; });
+    updateGroupCallControls();
+    if (groupCallStatus) groupCallStatus.textContent = "Your microphone is muted.";
+  });
+
+  socket.on("group-call:removed", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    stopGroupVideoCall(false);
+    if (groupCallStatus) groupCallStatus.textContent = "You were removed from this group call by a moderator.";
+    refreshGroupCallAvailability(data.groupId);
+  });
+
+  socket.on("group-call:available", data => {
+    if (!data || String(data.groupId) !== String(groupSelect?.value || "")) return;
+    if (!activeGroupCallId && groupCallJoinButton) groupCallJoinButton.disabled = false;
+    if (groupCallStatus && !activeGroupCallId) {
+      groupCallStatus.textContent = (data.hostUsername || "A group member") + " started a group video call. You can join now.";
+    }
+  });
+
+  socket.on("group-call:participant-joined", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) ||
+        String(data.userId) === String(userIdsByUsername.get(currentUsername))) return;
+    try { await createGroupPeerConnection(data.userId, data.username, false); }
+    catch (error) {
+      if (groupCallStatus) groupCallStatus.textContent = "Could not connect to " + (data.username || "a participant") + ": " + error.message;
+    }
+  });
+
+  socket.on("group-call:offer", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !data.description) return;
+    try {
+      const connection = await createGroupPeerConnection(data.senderId, data.senderUsername, false);
+      await connection.setRemoteDescription(data.description);
+      await flushGroupIce(data.senderId, connection);
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      await groupCallEmit("group-call:answer", {
+        groupId: activeGroupCallId, targetUserId: String(data.senderId), description: connection.localDescription
+      });
+    } catch (error) {
+      if (groupCallStatus) groupCallStatus.textContent = "Could not answer a group participant: " + error.message;
+    }
+  });
+
+  socket.on("group-call:answer", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !data.description) return;
+    const connection = groupPeerConnections.get(String(data.senderId));
+    if (!connection) return;
+    try {
+      await connection.setRemoteDescription(data.description);
+      await flushGroupIce(data.senderId, connection);
+    } catch (error) {
+      if (groupCallStatus) groupCallStatus.textContent = "Could not complete a participant connection: " + error.message;
+    }
+  });
+
+  socket.on("group-call:ice-candidate", async data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId) || !data.candidate) return;
+    const id = String(data.senderId);
+    const connection = groupPeerConnections.get(id);
+    if (connection?.remoteDescription) {
+      try { await connection.addIceCandidate(data.candidate); }
+      catch (error) { console.warn("Group-call ICE candidate failed:", error.message); }
+    } else {
+      if (!groupPendingIce.has(id)) groupPendingIce.set(id, []);
+      groupPendingIce.get(id).push(data.candidate);
+    }
+  });
+
+  socket.on("group-call:participant-left", data => {
+    if (!data || String(data.groupId) !== String(activeGroupCallId)) return;
+    const id = String(data.userId);
+    groupCallRaisedHands.delete(id);
+    groupPeerConnections.get(id)?.close();
+    groupPeerConnections.delete(id);
+    groupPendingIce.delete(id);
+    removeGroupCallTile(id);
+    if (groupCallStatus) groupCallStatus.textContent = (data.username || "A participant") + " left the group call.";
+  });
+
+  socket.on("group-call:ended", data => {
+    if (!data) return;
+    if (String(data.groupId) === String(activeGroupCallId)) {
+      stopGroupVideoCall(false);
+    } else if (String(data.groupId) === String(groupSelect?.value || "")) {
+      if (groupCallJoinButton) groupCallJoinButton.disabled = true;
+      if (groupCallStatus) groupCallStatus.textContent = "The group video call has ended.";
     }
   });
 
@@ -1305,6 +1750,191 @@ async function applyPendingIceCandidates() {
   }
 }
 
+
+async function applyAdaptiveVideoQuality(profile) {
+  if (!peerConnection || adaptiveApplyPending) return;
+  const videoSender = peerConnection.getSenders().find(sender => sender.track?.kind === "video");
+  if (!videoSender) {
+    if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic adaptation is available during video calls.";
+    return;
+  }
+  const limits = {
+    high: { maxBitrate: 1500000, maxFramerate: 30, scaleResolutionDownBy: 1 },
+    balanced: { maxBitrate: 700000, maxFramerate: 24, scaleResolutionDownBy: 1.5 },
+    conserve: { maxBitrate: 350000, maxFramerate: 15, scaleResolutionDownBy: 2 }
+  };
+  const selected = limits[profile];
+  if (!selected) return;
+  adaptiveApplyPending = true;
+  try {
+    const parameters = videoSender.getParameters();
+    if (!Array.isArray(parameters.encodings) || !parameters.encodings.length) {
+      parameters.encodings = [{}];
+    }
+    parameters.encodings = parameters.encodings.map(encoding => ({
+      ...encoding,
+      maxBitrate: selected.maxBitrate,
+      maxFramerate: selected.maxFramerate,
+      scaleResolutionDownBy: selected.scaleResolutionDownBy
+    }));
+    parameters.degradationPreference = "balanced";
+    await videoSender.setParameters(parameters);
+    adaptiveVideoProfile = profile;
+    const labels = { high: "Standard quality", balanced: "Balanced quality", conserve: "Data-saving quality" };
+    if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic adaptation: " + labels[profile] + ". Adjusted on this device only.";
+    return true;
+  } catch (error) {
+    if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adjustment is not supported by this browser; call quality remains unchanged.";
+    return false;
+  } finally {
+    adaptiveApplyPending = false;
+  }
+}
+
+function updateAdaptiveVideoQuality(poor, fair) {
+  if (!callAdaptiveToggle?.checked || !peerConnection) return;
+  if (poor) {
+    adaptivePoorSamples += 1;
+    adaptiveFairSamples = 0;
+    adaptiveGoodSamples = 0;
+    if (adaptivePoorSamples >= 2 && adaptiveVideoProfile !== "conserve") {
+      applyAdaptiveVideoQuality("conserve");
+      adaptivePoorSamples = 0;
+    }
+    return;
+  }
+  adaptivePoorSamples = 0;
+  if (fair) {
+    adaptiveFairSamples += 1;
+    adaptiveGoodSamples = 0;
+    if (adaptiveFairSamples >= 2 && adaptiveVideoProfile === "high") {
+      applyAdaptiveVideoQuality("balanced");
+      adaptiveFairSamples = 0;
+    }
+    return;
+  }
+  adaptiveFairSamples = 0;
+  adaptiveGoodSamples += 1;
+  if (adaptiveGoodSamples >= 3 && adaptiveVideoProfile !== "high") {
+    applyAdaptiveVideoQuality("high");
+    adaptiveGoodSamples = 0;
+  }
+}
+
+async function updateCallQuality() {
+  if (!peerConnection || !callQualityStatus) return;
+  try {
+    const stats = await peerConnection.getStats();
+    let rttMs = null;
+    let jitterMs = null;
+    let packetsLost = 0;
+    let packetsReceived = 0;
+    stats.forEach(report => {
+      if (report.type === "candidate-pair" &&
+          (report.selected || (report.nominated && report.state === "succeeded")) &&
+          Number.isFinite(report.currentRoundTripTime)) rttMs = report.currentRoundTripTime * 1000;
+      if (report.type === "inbound-rtp" && !report.isRemote) {
+        if (Number.isFinite(report.jitter)) jitterMs = Math.max(jitterMs ?? 0, report.jitter * 1000);
+        packetsLost += Number(report.packetsLost) || 0;
+        packetsReceived += Number(report.packetsReceived) || 0;
+      }
+    });
+    const totalPackets = packetsLost + packetsReceived;
+    const lossPercent = totalPackets > 0 ? packetsLost / totalPackets * 100 : null;
+    const poor = (rttMs !== null && rttMs > 400) || (jitterMs !== null && jitterMs > 30) || (lossPercent !== null && lossPercent > 5);
+    const fair = !poor && ((rttMs !== null && rttMs > 180) || (jitterMs !== null && jitterMs > 15) || (lossPercent !== null && lossPercent > 2));
+    const label = poor ? "Needs attention" : fair ? "Fair" : "Good";
+    updateAdaptiveVideoQuality(poor, fair);
+    const metrics = [
+      rttMs === null ? "RTT: measuring" : "RTT: " + Math.round(rttMs) + " ms",
+      jitterMs === null ? "Jitter: measuring" : "Jitter: " + Math.round(jitterMs) + " ms",
+      lossPercent === null ? "Packet loss: measuring" : "Packet loss: " + lossPercent.toFixed(1) + "%"
+    ];
+    callQualityStatus.textContent = "Connection quality: " + label + " · " + metrics.join(" · ");
+  } catch (error) {
+    callQualityStatus.textContent = "Call quality details are temporarily unavailable.";
+  }
+}
+
+function startCallQualityMonitor() {
+  if (callQualityTimer) clearInterval(callQualityTimer);
+  if (callQualityStatus) callQualityStatus.textContent = "Connection quality: measuring…";
+  callQualityTimer = setInterval(updateCallQuality, 5000);
+  updateCallQuality();
+}
+
+
+async function startScreenSharing() {
+  if (!peerConnection || peerConnection.connectionState !== "connected" || !activeCallUserId) {
+    if (screenShareStatus) screenShareStatus.textContent = "Screen sharing is available after a video call connects.";
+    return;
+  }
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    if (screenShareStatus) screenShareStatus.textContent = "This browser does not support screen sharing.";
+    return;
+  }
+  let capture = null;
+  try {
+    capture = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 15, max: 30 } },
+      audio: false
+    });
+    const screenTrack = capture.getVideoTracks()[0];
+    const sender = peerConnection.getSenders().find(item => item.track?.kind === "video");
+    if (!screenTrack || !sender) {
+      capture.getTracks().forEach(track => track.stop());
+      if (screenShareStatus) screenShareStatus.textContent = "Screen sharing requires an active video call with a camera video track.";
+      return;
+    }
+    const cameraTrack = sender.track;
+    await sender.replaceTrack(screenTrack);
+    screenShareStream = capture;
+    screenShareSender = sender;
+    screenShareCameraTrack = cameraTrack;
+    if (screenSharePreview) {
+      screenSharePreview.srcObject = capture;
+      if (screenSharePreviewContainer) screenSharePreviewContainer.hidden = false;
+      screenSharePreview.play().catch(() => {});
+    }
+    screenTrack.addEventListener("ended", () => { stopScreenSharing(true); }, { once: true });
+    if (screenShareButton) screenShareButton.disabled = true;
+    if (stopScreenShareButton) stopScreenShareButton.disabled = false;
+    if (screenShareStatus) screenShareStatus.textContent = "Your screen is being shared with the other caller. Stop sharing at any time.";
+  } catch (error) {
+    if (capture) capture.getTracks().forEach(track => track.stop());
+    if (screenShareStatus) screenShareStatus.textContent = error?.name === "NotAllowedError"
+      ? "Screen sharing was cancelled or permission was denied."
+      : "Could not start screen sharing: " + (error?.message || "unknown error");
+  }
+}
+
+async function stopScreenSharing(restoreCamera = true) {
+  const capture = screenShareStream;
+  const sender = screenShareSender;
+  const cameraTrack = screenShareCameraTrack;
+  screenShareStream = null;
+  screenShareSender = null;
+  screenShareCameraTrack = null;
+  const screenTrack = capture?.getVideoTracks()[0];
+  if (screenTrack) screenTrack.onended = null;
+  if (capture) capture.getTracks().forEach(track => track.stop());
+  if (restoreCamera && sender && peerConnection) {
+    try {
+      await sender.replaceTrack(cameraTrack?.readyState === "live" ? cameraTrack : null);
+    } catch (error) {
+      if (screenShareStatus) screenShareStatus.textContent = "Screen sharing stopped, but the camera track could not be restored. Restart video if needed.";
+    }
+  }
+  if (screenSharePreview) {
+    screenSharePreview.pause();
+    screenSharePreview.srcObject = null;
+    if (screenSharePreviewContainer) screenSharePreviewContainer.hidden = true;
+  }
+  if (screenShareButton) screenShareButton.disabled = !peerConnection || peerConnection.connectionState !== "connected";
+  if (stopScreenShareButton) stopScreenShareButton.disabled = true;
+  if (screenShareStatus && restoreCamera) screenShareStatus.textContent = "Screen sharing stopped. Your camera video has been restored when available.";
+}
+
 async function prepareMediaConnection(videoEnabled = true) {
   localStream = await navigator.mediaDevices.getUserMedia({
     video: videoEnabled,
@@ -1315,6 +1945,7 @@ async function prepareMediaConnection(videoEnabled = true) {
 
   const rtcConfiguration = await getRtcConfiguration();
 peerConnection = new RTCPeerConnection(rtcConfiguration);
+  startCallQualityMonitor();
 
   localStream.getTracks().forEach(track => {
     peerConnection.addTrack(track, localStream);
@@ -1337,9 +1968,16 @@ peerConnection = new RTCPeerConnection(rtcConfiguration);
     if (!peerConnection) return;
 
     if (peerConnection.connectionState === "connected") {
+      callRecoveryInProgress = false;
+      if (callReconnectButton) callReconnectButton.disabled = true;
       setCallStatus(localStream?.getVideoTracks().length ? "Video call connected." : "Voice call connected.");
-    } else if (peerConnection.connectionState === "failed") {
-      setCallStatus("Connection failed. A TURN server may be needed.");
+      updateCaptionAvailability();
+      if (screenShareButton) screenShareButton.disabled = !localStream?.getVideoTracks().length;
+    } else if (peerConnection.connectionState === "disconnected" || peerConnection.connectionState === "failed") {
+      if (callReconnectButton) callReconnectButton.disabled = false;
+      setCallStatus("Call connection interrupted. You can ask the other participant to reconnect.");
+      updateCaptionAvailability();
+      if (screenShareButton) screenShareButton.disabled = true;
     }
   };
 }
@@ -1444,7 +2082,22 @@ async function acceptIncomingCall() {
 }
 
 function endVideoCall(notifyRemote = true) {
+  stopLiveCallCaptions(true);
+  stopScreenSharing(false);
+  if (screenShareButton) screenShareButton.disabled = true;
+  if (stopScreenShareButton) stopScreenShareButton.disabled = true;
+  if (screenShareStatus) screenShareStatus.textContent = "Screen sharing is idle until a video call connects.";
+  if (callQualityTimer) clearInterval(callQualityTimer);
+  callQualityTimer = null;
+  if (callQualityStatus) callQualityStatus.textContent = "Call quality monitoring stops when the call ends. Metrics are measured on this device only.";
+  adaptivePoorSamples = 0;
+  adaptiveFairSamples = 0;
+  adaptiveGoodSamples = 0;
+  adaptiveVideoProfile = "high";
+  if (callAdaptiveStatus) callAdaptiveStatus.textContent = "Automatic video adaptation is idle until the next call.";
   const otherUserId = activeCallUserId;
+  callRecoveryInProgress = false;
+  if (callReconnectButton) callReconnectButton.disabled = true;
 
   if (notifyRemote && callSocket?.connected && otherUserId) {
     callSocket.emit("call:end", { targetUserId: otherUserId });
@@ -1472,7 +2125,15 @@ function endVideoCall(notifyRemote = true) {
   if (acceptCallButton) acceptCallButton.disabled = true;
   if (rejectCallButton) rejectCallButton.disabled = true;
   if (endCallButton) endCallButton.disabled = true;
+  updateCaptionAvailability();
 }
+
+if (captionStartButton) captionStartButton.addEventListener("click", startLiveCallCaptions);
+if (captionStopButton) captionStopButton.addEventListener("click", () => {
+  stopLiveCallCaptions(false);
+  setCaptionStatus("Live captions stopped.");
+});
+if (captionTranslateButton) captionTranslateButton.addEventListener("click", translateLatestCallCaption);
 
 if (startCallButton) {
   startCallButton.addEventListener("click", startVideoCall);
@@ -1495,6 +2156,27 @@ if (rejectCallButton) {
 
 if (endCallButton) {
   endCallButton.addEventListener("click", () => endVideoCall(true));
+}
+if (screenShareButton) screenShareButton.addEventListener("click", startScreenSharing);
+if (stopScreenShareButton) stopScreenShareButton.addEventListener("click", () => stopScreenSharing(true));
+
+if (callReconnectButton) {
+  callReconnectButton.addEventListener("click", () => {
+    if (!peerConnection || !activeCallUserId || !callSocket?.connected || callRecoveryInProgress) {
+      setCallStatus("Reconnection is unavailable. Check that the call and messaging connection are still active.");
+      return;
+    }
+    callRecoveryInProgress = true;
+    callReconnectButton.disabled = true;
+    setCallStatus("Asking the other participant to restore the connection…");
+    callSocket.emit("call:recovery-request", { targetUserId: activeCallUserId }, response => {
+      if (!response?.ok) {
+        callRecoveryInProgress = false;
+        callReconnectButton.disabled = false;
+        setCallStatus(response?.error || "Could not request reconnection.");
+      }
+    });
+  });
 }
 
 
@@ -1519,6 +2201,373 @@ let groupVoicePreviewUrl = null;
 let activeGroupId = null;
 let activeGroupCanManage = false;
 let cachedGroups = [];
+
+const groupCallStartButton = document.getElementById("wt-group-call-start");
+const groupCallJoinButton = document.getElementById("wt-group-call-join");
+const groupCallLeaveButton = document.getElementById("wt-group-call-leave");
+const groupCallStatus = document.getElementById("wt-group-call-status");
+const groupCallGrid = document.getElementById("wt-group-call-grid");
+let activeGroupCallId = null;
+let groupCallIsHost = false;
+let groupCallLocalStream = null;
+const groupPeerConnections = new Map();
+const groupPendingIce = new Map();
+const groupCallMicButton = document.getElementById("wt-group-call-mic");
+const groupCallCameraButton = document.getElementById("wt-group-call-camera");
+const groupCallLayoutButton = document.getElementById("wt-group-call-layout");
+const groupCallRoster = document.getElementById("wt-group-call-roster");
+const groupCallHandButton = document.getElementById("wt-group-call-hand");
+const groupCallRaisedHands = new Set();
+
+let groupCallLayout = "grid";
+let groupCallPinnedUserId = null;
+
+function updateGroupCallControls() {
+  const active = Boolean(activeGroupCallId && groupCallLocalStream);
+  const audioTracks = groupCallLocalStream?.getAudioTracks() || [];
+  const videoTracks = groupCallLocalStream?.getVideoTracks() || [];
+  if (groupCallMicButton) {
+    groupCallMicButton.disabled = !active || !audioTracks.length;
+    groupCallMicButton.textContent = audioTracks.length && audioTracks.every(track => !track.enabled) ? "Turn microphone on" : "Mute microphone";
+    groupCallMicButton.setAttribute("aria-pressed", String(Boolean(audioTracks.length && audioTracks.every(track => !track.enabled))));
+  }
+  if (groupCallCameraButton) {
+    groupCallCameraButton.disabled = !active || !videoTracks.length;
+    groupCallCameraButton.textContent = videoTracks.length && videoTracks.every(track => !track.enabled) ? "Turn camera on" : "Turn camera off";
+    groupCallCameraButton.setAttribute("aria-pressed", String(Boolean(videoTracks.length && videoTracks.every(track => !track.enabled))));
+  }
+  if (groupCallLayoutButton) groupCallLayoutButton.disabled = !active;
+  if (groupCallRoster) groupCallRoster.hidden = !active;
+  updateGroupCallHandButton();
+}
+
+
+function groupCallCanModerate() {
+  const selected = String(groupSelect?.value || "");
+  const group = cachedGroups.find(item => String(item.id) === selected);
+  return groupCallIsHost || group?.myRole === "admin";
+}
+
+function updateGroupCallHandButton() {
+  if (!groupCallHandButton) return;
+  const selfId = String(userIdsByUsername.get(currentUsername) || "");
+  const raised = Boolean(selfId && groupCallRaisedHands.has(selfId));
+  groupCallHandButton.disabled = !activeGroupCallId;
+  groupCallHandButton.textContent = raised ? "Lower hand" : "Raise hand";
+  groupCallHandButton.setAttribute("aria-pressed", String(raised));
+}
+
+function refreshGroupCallRoster() {
+  if (!groupCallRoster || !groupCallGrid) return;
+  groupCallRoster.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = "Participants (" + groupCallGrid.querySelectorAll(".wt-group-call-tile").length + ")";
+  groupCallRoster.appendChild(heading);
+  groupCallGrid.querySelectorAll(".wt-group-call-tile").forEach(tile => {
+    const userId = tile.dataset.groupCallUser || "";
+    const label = tile.querySelector("span")?.textContent || "Group member";
+    const item = document.createElement("div");
+    item.className = "wt-group-call-roster-item";
+    const name = document.createElement("span");
+    name.textContent = label;
+    const focus = document.createElement("button");
+    focus.type = "button";
+    focus.className = "secondary";
+    focus.textContent = groupCallPinnedUserId === userId ? "Unpin" : "Focus";
+    focus.setAttribute("aria-label", (groupCallPinnedUserId === userId ? "Unpin " : "Focus ") + label);
+    focus.addEventListener("click", () => {
+      groupCallPinnedUserId = groupCallPinnedUserId === userId ? null : userId;
+      applyGroupCallLayout();
+      refreshGroupCallRoster();
+    });
+
+    if (groupCallRaisedHands.has(userId)) {
+      const raised = document.createElement("span");
+      raised.textContent = "✋ Hand raised";
+      raised.setAttribute("aria-label", "Hand raised");
+      item.appendChild(raised);
+    }
+    if (groupCallCanModerate() && userId && userId !== String(userIdsByUsername.get(currentUsername) || "")) {
+      const actions = document.createElement("div");
+      actions.className = "wt-group-call-moderation-actions";
+      const mute = document.createElement("button");
+      mute.type = "button";
+      mute.className = "secondary";
+      mute.textContent = "Request mute";
+      mute.addEventListener("click", async () => {
+        try {
+          await groupCallEmit("group-call:moderate", { groupId: activeGroupCallId, targetUserId: userId, action: "request-mute" });
+          if (groupCallStatus) groupCallStatus.textContent = "Mute request sent to " + label + ". They can accept or decline.";
+        } catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+      });
+      actions.appendChild(mute);
+      if (groupCallRaisedHands.has(userId)) {
+        const lower = document.createElement("button");
+        lower.type = "button";
+        lower.className = "secondary";
+        lower.textContent = "Lower hand";
+        lower.addEventListener("click", async () => {
+          try { await groupCallEmit("group-call:moderate", { groupId: activeGroupCallId, targetUserId: userId, action: "lower-hand" }); }
+          catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+        });
+        actions.appendChild(lower);
+      }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm("Remove " + label + " from this call? They may rejoin while the call remains active.")) return;
+        try {
+          await groupCallEmit("group-call:moderate", { groupId: activeGroupCallId, targetUserId: userId, action: "remove" });
+          if (groupCallStatus) groupCallStatus.textContent = label + " was removed from the call.";
+        } catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+      });
+      actions.appendChild(remove);
+      item.appendChild(actions);
+    }
+
+    item.append(name, focus);
+    groupCallRoster.appendChild(item);
+  });
+}
+
+function applyGroupCallLayout() {
+  if (!groupCallGrid) return;
+  groupCallGrid.dataset.layout = groupCallLayout;
+  groupCallGrid.querySelectorAll(".wt-group-call-tile").forEach(tile => {
+    tile.classList.toggle("wt-group-call-pinned", Boolean(groupCallPinnedUserId && tile.dataset.groupCallUser === groupCallPinnedUserId));
+  });
+  if (groupCallLayoutButton) groupCallLayoutButton.textContent = groupCallLayout === "grid" ? "Switch to focus layout" : "Switch to grid layout";
+}
+
+
+async function refreshGroupCallAvailability(groupId = groupSelect?.value) {
+  if (!groupId || !callSocket?.connected || activeGroupCallId) return;
+  try {
+    const status = await groupCallEmit("group-call:status", { groupId: String(groupId) });
+    const selected = String(groupSelect?.value || "") === String(groupId);
+    if (!selected) return;
+    if (groupCallJoinButton) groupCallJoinButton.disabled = !status.active;
+    if (groupCallStartButton) groupCallStartButton.disabled = Boolean(status.active);
+    if (groupCallStatus) {
+      groupCallStatus.textContent = status.active
+        ? (status.hostUsername || "A group member") + " has an active group video call (" + status.participantCount + "/8)."
+        : "No active group video call. You can start one.";
+    }
+  } catch (error) {
+    if (groupCallStatus) groupCallStatus.textContent = error.message;
+  }
+}
+
+function groupCallEmit(eventName, payload) {
+  return new Promise((resolve, reject) => {
+    if (!callSocket?.connected) return reject(new Error("Call connection is not ready. Please log in again."));
+    callSocket.emit(eventName, payload, response => {
+      if (!response?.ok) return reject(new Error(response?.error || "The group-call request failed."));
+      resolve(response);
+    });
+  });
+}
+
+function createGroupCallTile(userId, username, stream, local = false) {
+  if (!groupCallGrid) return;
+  let tile = groupCallGrid.querySelector('[data-group-call-user="' + CSS.escape(String(userId)) + '"]');
+  if (!tile) {
+    tile = document.createElement("div");
+    tile.className = "wt-group-call-tile";
+    tile.dataset.groupCallUser = String(userId);
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = Boolean(local);
+    const label = document.createElement("span");
+    label.textContent = local ? (username || "You") + " (you)" : (username || "Group member");
+    tile.append(video, label);
+    groupCallGrid.appendChild(tile);
+    refreshGroupCallRoster();
+  }
+  const video = tile.querySelector("video");
+  if (video && video.srcObject !== stream) {
+    video.srcObject = stream;
+    video.play().catch(() => {});
+  }
+  refreshGroupCallRoster();
+  applyGroupCallLayout();
+}
+
+function removeGroupCallTile(userId) {
+  const tile = groupCallGrid?.querySelector('[data-group-call-user="' + CSS.escape(String(userId)) + '"]');
+  tile?.remove();
+  if (groupCallPinnedUserId === String(userId)) groupCallPinnedUserId = null;
+  refreshGroupCallRoster();
+  applyGroupCallLayout();
+}
+
+async function flushGroupIce(userId, connection) {
+  const queued = groupPendingIce.get(String(userId)) || [];
+  groupPendingIce.delete(String(userId));
+  for (const candidate of queued) {
+    try { await connection.addIceCandidate(candidate); }
+    catch (error) { console.warn("Group-call ICE candidate could not be applied:", error.message); }
+  }
+}
+
+async function createGroupPeerConnection(userId, username, initiator) {
+  const id = String(userId);
+  if (groupPeerConnections.has(id)) return groupPeerConnections.get(id);
+  if (!activeGroupCallId || !groupCallLocalStream) throw new Error("Join a group call before connecting participants.");
+  const config = await getRtcConfiguration();
+  const connection = new RTCPeerConnection(config);
+  groupPeerConnections.set(id, connection);
+  groupCallLocalStream.getTracks().forEach(track => connection.addTrack(track, groupCallLocalStream));
+  connection.onicecandidate = event => {
+    if (event.candidate && activeGroupCallId && callSocket?.connected) {
+      callSocket.emit("group-call:ice-candidate", {
+        groupId: activeGroupCallId, targetUserId: id, candidate: event.candidate
+      });
+    }
+  };
+  connection.ontrack = event => {
+    const stream = event.streams?.[0] || new MediaStream([event.track]);
+    createGroupCallTile(id, username, stream, false);
+  };
+  connection.onconnectionstatechange = () => {
+    if (connection.connectionState === "failed" || connection.connectionState === "closed") {
+      if (groupPeerConnections.get(id) === connection) {
+        groupPeerConnections.delete(id);
+        removeGroupCallTile(id);
+      }
+    }
+  };
+  if (initiator) {
+    const offer = await connection.createOffer();
+    await connection.setLocalDescription(offer);
+    await groupCallEmit("group-call:offer", {
+      groupId: activeGroupCallId, targetUserId: id, description: connection.localDescription
+    });
+  }
+  return connection;
+}
+
+async function startGroupVideoCall() {
+  const groupId = String(groupSelect?.value || "");
+  if (!groupId || !callSocket?.connected) {
+    if (groupCallStatus) groupCallStatus.textContent = "Select a group and ensure you are logged in before starting a call.";
+    return;
+  }
+  if (peerConnection || incomingCallOffer || activeCallUserId || activeGroupCallId) {
+    if (groupCallStatus) groupCallStatus.textContent = "End your current call before starting a group conference.";
+    return;
+  }
+  try {
+    if (groupCallStartButton) groupCallStartButton.disabled = true;
+    if (groupCallStatus) groupCallStatus.textContent = "Requesting camera and microphone permission…";
+    groupCallLocalStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const response = await groupCallEmit("group-call:start", { groupId });
+    activeGroupCallId = groupId;
+    groupCallIsHost = true;
+    createGroupCallTile("self", currentUsername || "You", groupCallLocalStream, true);
+    if (groupCallStatus) groupCallStatus.textContent = "Group video call started. Invite group members to join.";
+    if (groupCallJoinButton) groupCallJoinButton.disabled = true;
+    if (groupCallLeaveButton) groupCallLeaveButton.disabled = false;
+  } catch (error) {
+    groupCallLocalStream?.getTracks().forEach(track => track.stop());
+    groupCallLocalStream = null;
+    if (groupCallStatus) groupCallStatus.textContent = error.message || "Could not start the group call.";
+  } finally {
+    if (groupCallStartButton) groupCallStartButton.disabled = false;
+  }
+}
+
+async function joinGroupVideoCall() {
+  const groupId = String(groupSelect?.value || "");
+  if (!groupId || !callSocket?.connected || activeGroupCallId) return;
+  if (peerConnection || incomingCallOffer || activeCallUserId) {
+    if (groupCallStatus) groupCallStatus.textContent = "End your current one-to-one call before joining a group conference.";
+    return;
+  }
+  try {
+    if (groupCallJoinButton) groupCallJoinButton.disabled = true;
+    if (groupCallStatus) groupCallStatus.textContent = "Requesting camera and microphone permission…";
+    groupCallLocalStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const response = await groupCallEmit("group-call:join", { groupId });
+    activeGroupCallId = groupId;
+    groupCallIsHost = false;
+    createGroupCallTile("self", currentUsername || "You", groupCallLocalStream, true);
+    if (groupCallLeaveButton) groupCallLeaveButton.disabled = false;
+    updateGroupCallControls();
+    if (groupCallStatus) groupCallStatus.textContent = "Joined group video call. Connecting to participants…";
+    const peers = (response.participants || []).filter(person => String(person.username) !== String(currentUsername));
+    for (const person of peers) await createGroupPeerConnection(person.userId, person.username, true);
+  } catch (error) {
+    groupCallLocalStream?.getTracks().forEach(track => track.stop());
+    groupCallLocalStream = null;
+    activeGroupCallId = null;
+    if (groupCallStatus) groupCallStatus.textContent = error.message || "Could not join the group call.";
+    if (groupCallJoinButton) groupCallJoinButton.disabled = false;
+  }
+}
+
+function stopGroupVideoCall(sendSignal = true) {
+  const groupId = activeGroupCallId;
+  if (sendSignal && groupId && callSocket?.connected) {
+    callSocket.emit(groupCallIsHost ? "group-call:end" : "group-call:leave", { groupId });
+  }
+  groupPeerConnections.forEach(connection => connection.close());
+  groupPeerConnections.clear();
+  groupPendingIce.clear();
+  groupCallLocalStream?.getTracks().forEach(track => track.stop());
+  groupCallLocalStream = null;
+  groupCallGrid?.replaceChildren();
+  groupCallRaisedHands.clear();
+  groupCallPinnedUserId = null;
+  groupCallLayout = "grid";
+  activeGroupCallId = null;
+  groupCallIsHost = false;
+  if (groupCallLeaveButton) groupCallLeaveButton.disabled = true;
+  updateGroupCallControls();
+  refreshGroupCallRoster();
+  if (groupCallStartButton) groupCallStartButton.disabled = false;
+  if (groupCallJoinButton) groupCallJoinButton.disabled = true;
+  if (groupCallStatus) groupCallStatus.textContent = "Group call ended. You can start or join another call.";
+}
+
+
+if (groupCallMicButton) groupCallMicButton.addEventListener("click", () => {
+  const tracks = groupCallLocalStream?.getAudioTracks() || [];
+  if (!tracks.length) return;
+  const enable = tracks.some(track => !track.enabled);
+  tracks.forEach(track => { track.enabled = enable; });
+  updateGroupCallControls();
+});
+if (groupCallCameraButton) groupCallCameraButton.addEventListener("click", () => {
+  const tracks = groupCallLocalStream?.getVideoTracks() || [];
+  if (!tracks.length) return;
+  const enable = tracks.some(track => !track.enabled);
+  tracks.forEach(track => { track.enabled = enable; });
+  updateGroupCallControls();
+});
+if (groupCallLayoutButton) groupCallLayoutButton.addEventListener("click", () => {
+  groupCallLayout = groupCallLayout === "grid" ? "focus" : "grid";
+  applyGroupCallLayout();
+});
+
+
+if (groupCallHandButton) groupCallHandButton.addEventListener("click", async () => {
+  if (!activeGroupCallId) return;
+  const selfId = String(userIdsByUsername.get(currentUsername) || "");
+  if (!selfId) return;
+  const raised = !groupCallRaisedHands.has(selfId);
+  try {
+    await groupCallEmit("group-call:hand-raise", { groupId: activeGroupCallId, raised });
+  } catch (error) { if (groupCallStatus) groupCallStatus.textContent = error.message; }
+});
+
+if (groupCallStartButton) groupCallStartButton.addEventListener("click", startGroupVideoCall);
+if (groupCallJoinButton) groupCallJoinButton.addEventListener("click", joinGroupVideoCall);
+if (groupCallLeaveButton) groupCallLeaveButton.addEventListener("click", () => stopGroupVideoCall(true));
+
 
 async function loadGroups() {
   if (!token) return;
@@ -1691,6 +2740,7 @@ async function openSelectedGroup() {
     renderGroupMessages(data.messages || []);
     const group = cachedGroups.find(g => g.id === id);
     groupStatus.textContent = `Opened group: ${group ? group.name : id}`;
+    await refreshGroupCallAvailability(id);
   } catch (error) {
     groupStatus.textContent = error.message;
   }
@@ -1701,6 +2751,7 @@ document.getElementById("load-group-button").addEventListener("click", openSelec
 groupSelect.addEventListener("change", () => {
   activeGroupId = null;
   groupMessagesBox.textContent = "Choose Open group to load messages.";
+  refreshGroupCallAvailability(groupSelect.value);
 });
 
 document.getElementById("create-group-button").addEventListener("click", async () => {
