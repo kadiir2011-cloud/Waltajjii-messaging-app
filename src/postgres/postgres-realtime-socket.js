@@ -5,7 +5,7 @@
  * server. All database access is delegated to the injected async service.
  * This module is intentionally not mounted by the live SQLite server.
  */
-function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
+function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState, serverId = require("node:crypto").randomUUID() } = {}) {
   if (!io || typeof io.use !== "function" || typeof io.on !== "function") {
     throw new TypeError("A Socket.IO server is required.");
   }
@@ -22,10 +22,17 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
     throw new TypeError("A complete PostgreSQL realtime service is required.");
   }
 
+  if (!callState || ![
+    "startGroupCall", "joinGroupCall", "heartbeat", "leaveSession",
+    "getGroupCallStatus", "endGroupCall", "setHandRaised", "moderateGroupCall"
+  ].every(method => typeof callState[method] === "function")) {
+    throw new TypeError("A complete shared PostgreSQL call-state service is required.");
+  }
+  if (typeof serverId !== "string" || !serverId.trim()) {
+    throw new TypeError("A unique realtime server ID is required.");
+  }
   const onlineUsers = new Map();
   const activeCalls = new Map();
-  const activeGroupCalls = new Map();
-  const activeGroupCallByUser = new Map();
 
   function roomHasSockets(room) {
     return Boolean(io.sockets?.adapter?.rooms?.get(room)?.size);
@@ -250,254 +257,187 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
       return acknowledge({ ok: true });
     });
 
-    // Group calls are signaling-only; audio/video media remains peer-to-peer.
-    // Membership is rechecked against PostgreSQL for every privileged action.
+    // Group-call membership and authorization are durable PostgreSQL state.
+    // Socket.IO rooms distribute signaling across instances; media remains P2P.
     const groupCallMembership = new Set();
-
-    async function currentGroupMember(groupId) {
-      return realtimeService.isGroupMember(groupId, userId);
+    let callHeartbeat = null;
+    function startCallHeartbeat() {
+      if (callHeartbeat) return;
+      callHeartbeat = setInterval(() => {
+        callState.heartbeat({ serverId, socketId: socket.id }).catch(error => {
+          console.error("PostgreSQL call heartbeat failed:", error?.message || "Unknown error");
+        });
+      }, 15000);
+      callHeartbeat.unref?.();
     }
-    async function leaveGroupCall(groupId, participantId, notify = true) {
-      const call = activeGroupCalls.get(groupId);
-      if (!call || !call.participants.has(participantId)) return false;
-      const sockets = call.participantSockets?.get(participantId) || new Set();
-      sockets.delete(socket.id);
-      await socket.leave("group-call:" + groupId);
-      groupCallMembership.delete(groupId);
-      if (sockets.size) return true;
-      call.participantSockets?.delete(participantId);
-      const username = call.participants.get(participantId);
-      call.participants.delete(participantId);
-      call.handRaised.delete(participantId);
-      activeGroupCallByUser.delete(participantId);
-      if (notify) {
-        io.to("group-call:" + groupId).emit("group-call:participant-left", {
-          groupId, userId: participantId, username
-        });
-      }
-      if (call.participants.size === 0 || (call.hostId === participantId && notify)) {
-        for (const id of call.participants.keys()) activeGroupCallByUser.delete(id);
-        activeGroupCalls.delete(groupId);
-        io.to("group-call:" + groupId).emit("group-call:ended", {
-          groupId, reason: call.hostId === participantId ? "host-ended" : "empty"
-        });
-        io.to("group:" + groupId).emit("group-call:ended", {
-          groupId, reason: call.hostId === participantId ? "host-ended" : "empty"
-        });
-        io.in("group-call:" + groupId).socketsLeave("group-call:" + groupId);
-      }
-      return true;
+    function stopCallHeartbeatIfIdle() {
+      if (groupCallMembership.size || !callHeartbeat) return;
+      clearInterval(callHeartbeat);
+      callHeartbeat = null;
+    }
+    async function getAuthorizedGroupCall(groupId) {
+      const status = await callState.getGroupCallStatus({ groupId, userId });
+      return status?.ok && status.active ? status : null;
+    }
+    function emitGroupCallEnded(groupId, reason) {
+      io.to("group-call:" + groupId).emit("group-call:ended", { groupId, reason });
+      io.to("group:" + groupId).emit("group-call:ended", { groupId, reason });
+      io.in("group-call:" + groupId).socketsLeave("group-call:" + groupId);
     }
 
     socket.on("group-call:start", async (data = {}, acknowledge = () => {}) => {
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        if (!await currentGroupMember(groupId)) {
-          return acknowledge({ ok: false, error: "Only current group members can start a group call." });
-        }
         if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
-        if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
-        if (activeGroupCalls.has(groupId)) return acknowledge({ ok: false, error: "A group call is already active." });
-        const call = {
-          groupId, hostId: userId,
-          participants: new Map([[userId, socket.data.username]]),
-          participantSockets: new Map([[userId, new Set([socket.id])]]),
-          handRaised: new Set()
-        };
-        activeGroupCalls.set(groupId, call);
-        activeGroupCallByUser.set(userId, groupId);
+        const result = await callState.startGroupCall({
+          groupId, userId, username: socket.data.username, serverId, socketId: socket.id
+        });
+        if (!result.ok) return acknowledge(result);
         groupCallMembership.add(groupId);
+        startCallHeartbeat();
         await socket.join("group-call:" + groupId);
         io.to("group:" + groupId).emit("group-call:available", {
           groupId, hostId: userId, hostUsername: socket.data.username
         });
         return acknowledge({ ok: true, groupId, participants: [{ userId, username: socket.data.username }] });
       } catch {
-        return acknowledge({ ok: false, error: "Could not verify group membership or start the call." });
+        return acknowledge({ ok: false, error: "Could not start the shared PostgreSQL group call." });
       }
     });
 
     socket.on("group-call:status", async (data = {}, acknowledge = () => {}) => {
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
-      try {
-        if (!await currentGroupMember(groupId)) {
-          return acknowledge({ ok: false, error: "You are not a current member of this group." });
-        }
-        const call = activeGroupCalls.get(groupId);
-        return acknowledge({
-          ok: true, groupId, active: Boolean(call),
-          hostUsername: call ? call.participants.get(call.hostId) : null,
-          participantCount: call ? call.participants.size : 0
-        });
-      } catch {
-        return acknowledge({ ok: false, error: "Could not verify group membership." });
-      }
+      try { return acknowledge(await callState.getGroupCallStatus({ groupId, userId })); }
+      catch { return acknowledge({ ok: false, error: "Could not retrieve shared group-call status." }); }
     });
 
     socket.on("group-call:join", async (data = {}, acknowledge = () => {}) => {
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        if (!await currentGroupMember(groupId)) {
-          return acknowledge({ ok: false, error: "No active group call is available to you." });
-        }
-        const call = activeGroupCalls.get(groupId);
-        if (!call) return acknowledge({ ok: false, error: "No active group call is available to you." });
         if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
-        const existingGroupId = activeGroupCallByUser.get(userId);
-        if (existingGroupId && existingGroupId !== groupId) {
-          return acknowledge({ ok: false, error: "You are already in another group call." });
-        }
-        const alreadyParticipating = call.participants.has(userId);
-        if (!alreadyParticipating && call.participants.size >= 8) {
-          return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
-        }
-        if (!alreadyParticipating) {
-          call.participants.set(userId, socket.data.username);
-          activeGroupCallByUser.set(userId, groupId);
-        }
-        call.participantSockets ||= new Map();
-        const participantSockets = call.participantSockets.get(userId) || new Set();
-        participantSockets.add(socket.id);
-        call.participantSockets.set(userId, participantSockets);
+        const result = await callState.joinGroupCall({
+          groupId, userId, username: socket.data.username, serverId, socketId: socket.id
+        });
+        if (!result.ok) return acknowledge(result);
         groupCallMembership.add(groupId);
+        startCallHeartbeat();
         await socket.join("group-call:" + groupId);
-        const participants = Array.from(call.participants, ([id, username]) => ({ userId: id, username }));
-        socket.emit("group-call:participants", { groupId, participants });
-        if (!alreadyParticipating) {
+        const status = await callState.getGroupCallStatus({ groupId, userId });
+        if (!status.ok || !status.active) {
+          await callState.leaveSession({ serverId, socketId: socket.id });
+          groupCallMembership.delete(groupId);
+          stopCallHeartbeatIfIdle();
+          await socket.leave("group-call:" + groupId);
+          return acknowledge({ ok: false, error: "The group call is no longer active." });
+        }
+        if (!result.additionalSession) {
           socket.to("group-call:" + groupId).emit("group-call:participant-joined", {
             groupId, userId, username: socket.data.username
           });
         }
-        return acknowledge({ ok: true, groupId, participants, additionalSession: alreadyParticipating });
-      } catch {
-        return acknowledge({ ok: false, error: "Could not verify group membership or join the call." });
-      }
+        socket.emit("group-call:participants", { groupId, participants: status.participants || [] });
+        return acknowledge({
+          ok: true, groupId, participants: status.participants || [],
+          additionalSession: Boolean(result.additionalSession)
+        });
+      } catch { return acknowledge({ ok: false, error: "Could not join the shared PostgreSQL group call." }); }
     });
 
     for (const eventName of ["group-call:offer", "group-call:answer", "group-call:ice-candidate"]) {
       socket.on(eventName, async (data = {}, acknowledge = () => {}) => {
-        const groupId = validId(data.groupId);
-        const target = validId(data.targetUserId);
-        const call = groupId && activeGroupCalls.get(groupId);
+        const groupId = validId(data.groupId), target = validId(data.targetUserId);
         const payload = eventName === "group-call:ice-candidate" ? data.candidate : data.description;
-        if (!groupId || !target || !call || !call.participants.has(userId) ||
-            !call.participants.has(target) || target === userId ||
+        if (!groupId || !target || target === userId ||
             !payload || typeof payload !== "object" || Array.isArray(payload)) {
           return acknowledge({ ok: false, error: "Group-call signaling is not authorized." });
         }
         try {
-          if (!await currentGroupMember(groupId) || !await realtimeService.isGroupMember(groupId, target)) {
-            return acknowledge({ ok: false, error: "A participant is no longer a group member." });
+          const status = await getAuthorizedGroupCall(groupId);
+          const ids = new Set((status?.participants || []).map(p => String(p.userId)));
+          if (!ids.has(userId) || !ids.has(target)) {
+            return acknowledge({ ok: false, error: "Both users must be active participants in this group call." });
           }
           emitToUser(target, eventName, {
             groupId, senderId: userId, senderUsername: socket.data.username,
             ...(eventName === "group-call:ice-candidate" ? { candidate: payload } : { description: payload })
           });
           return acknowledge({ ok: true });
-        } catch {
-          return acknowledge({ ok: false, error: "Could not verify group-call participants." });
-        }
+        } catch { return acknowledge({ ok: false, error: "Could not verify shared group-call participants." }); }
       });
     }
 
     socket.on("group-call:hand-raise", async (data = {}, acknowledge = () => {}) => {
       const groupId = validId(data.groupId);
-      const call = groupId && activeGroupCalls.get(groupId);
-      if (!call || !call.participants.has(userId) || typeof data.raised !== "boolean") {
-        return acknowledge({ ok: false, error: "You are not an active participant in this group call." });
-      }
+      if (!groupId || typeof data.raised !== "boolean") return acknowledge({ ok: false, error: "Invalid hand-raise request." });
       try {
-        if (!await currentGroupMember(groupId)) {
-          return acknowledge({ ok: false, error: "You are no longer a member of this group." });
-        }
-        if (data.raised) call.handRaised.add(userId);
-        else call.handRaised.delete(userId);
-        io.to("group-call:" + groupId).emit("group-call:hand-raised", {
-          groupId, userId, username: socket.data.username, raised: data.raised
+        const result = await callState.setHandRaised({
+          groupId, userId, serverId, socketId: socket.id, raised: data.raised
         });
-        return acknowledge({ ok: true, raised: data.raised });
-      } catch {
-        return acknowledge({ ok: false, error: "Could not verify group membership." });
-      }
+        if (!result.ok) return acknowledge(result);
+        io.to("group-call:" + groupId).emit("group-call:hand-raised", {
+          groupId, userId, username: socket.data.username, raised: result.raised
+        });
+        return acknowledge({ ok: true, raised: result.raised });
+      } catch { return acknowledge({ ok: false, error: "Could not update shared hand-raise state." }); }
     });
 
     socket.on("group-call:moderate", async (data = {}, acknowledge = () => {}) => {
-      const groupId = validId(data.groupId);
-      const target = validId(data.targetUserId);
+      const groupId = validId(data.groupId), target = validId(data.targetUserId);
       const action = String(data.action || "");
-      const call = groupId && activeGroupCalls.get(groupId);
-      if (!groupId || !target || !call || !call.participants.has(userId) ||
-          !call.participants.has(target) || target === userId) {
+      if (!groupId || !target || target === userId ||
+          !["remove", "lower-hand", "request-mute"].includes(action)) {
         return acknowledge({ ok: false, error: "This moderation action is not available for the current call." });
       }
-      if (!["remove", "lower-hand", "request-mute"].includes(action)) {
-        return acknowledge({ ok: false, error: "Unsupported moderation action." });
-      }
       try {
-        if (!await currentGroupMember(groupId)) {
-          return acknowledge({ ok: false, error: "You are no longer a member of this group." });
-        }
-        const role = await realtimeService.getGroupMemberRole(groupId, userId);
-        const canModerate = call.hostId === userId || role === "admin";
-        if (!canModerate) return acknowledge({ ok: false, error: "Only the call host or a group admin can moderate participants." });
-        if (!await realtimeService.isGroupMember(groupId, target)) {
-          return acknowledge({ ok: false, error: "The target is no longer a group member." });
-        }
+        const result = await callState.moderateGroupCall({ groupId, actorUserId: userId, targetUserId: target, action });
+        if (!result.ok) return acknowledge(result);
         if (action === "remove") {
-          if (target === call.hostId) return acknowledge({ ok: false, error: "The call host cannot be removed." });
-          const targetUsername = call.participants.get(target);
-          call.participants.delete(target);
-          call.handRaised.delete(target);
-          activeGroupCallByUser.delete(target);
           emitToUser(target, "group-call:removed", { groupId, reason: "removed-by-moderator" });
           io.in("user:" + target).socketsLeave("group-call:" + groupId);
           io.to("group-call:" + groupId).emit("group-call:participant-left", {
-            groupId, userId: target, username: targetUsername, reason: "removed"
+            groupId, userId: target, username: result.targetUsername, reason: "removed"
           });
-          if (call.participants.size === 0) activeGroupCalls.delete(groupId);
         } else if (action === "lower-hand") {
-          call.handRaised.delete(target);
           io.to("group-call:" + groupId).emit("group-call:hand-raised", {
-            groupId, userId: target, username: call.participants.get(target), raised: false
+            groupId, userId: target, username: result.targetUsername, raised: false
           });
         } else {
-          emitToUser(target, "group-call:mute-request", {
-            groupId, requestedBy: socket.data.username
-          });
+          emitToUser(target, "group-call:mute-request", { groupId, requestedBy: socket.data.username });
         }
         return acknowledge({ ok: true, action, targetUserId: target });
-      } catch {
-        return acknowledge({ ok: false, error: "Could not verify group-call moderator permissions." });
-      }
+      } catch { return acknowledge({ ok: false, error: "Could not verify shared group-call moderator permissions." }); }
     });
 
     socket.on("group-call:leave", async (data = {}, acknowledge = () => {}) => {
       const groupId = validId(data.groupId);
+      if (!groupId || !groupCallMembership.has(groupId)) {
+        return acknowledge({ ok: false, error: "This device is not in that group call." });
+      }
+      try {
+        const result = await callState.leaveSession({ serverId, socketId: socket.id });
+        groupCallMembership.delete(groupId);
+        await socket.leave("group-call:" + groupId);
+        stopCallHeartbeatIfIdle();
+        if (result.participantLeft) io.to("group-call:" + groupId).emit("group-call:participant-left", {
+          groupId, userId, username: socket.data.username
+        });
+        if (result.callEnded) emitGroupCallEnded(groupId, "host-disconnected");
+        return acknowledge({ ok: true });
+      } catch { return acknowledge({ ok: false, error: "Could not leave the shared PostgreSQL group call." }); }
+    });
+
+    socket.on("group-call:end", async (data = {}, acknowledge = () => {}) => {
+      const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        return acknowledge({ ok: await leaveGroupCall(groupId, userId, true) });
-      } catch {
-        return acknowledge({ ok: false, error: "Could not leave the group call." });
-      }
-    });
-    socket.on("group-call:end", (data = {}, acknowledge = () => {}) => {
-      const groupId = validId(data.groupId);
-      const call = groupId && activeGroupCalls.get(groupId);
-      if (!call || call.hostId !== userId) {
-        return acknowledge({ ok: false, error: "Only the group-call host can end this call for everyone." });
-      }
-      activeGroupCalls.delete(groupId);
-      for (const participantId of call.participants.keys()) {
-        activeGroupCallByUser.delete(participantId);
-        groupCallMembership.delete(groupId);
-      }
-      io.to("group-call:" + groupId).emit("group-call:ended", { groupId, reason: "host-ended" });
-      io.to("group:" + groupId).emit("group-call:ended", { groupId, reason: "host-ended" });
-      io.in("group-call:" + groupId).socketsLeave("group-call:" + groupId);
-      return acknowledge({ ok: true });
+        const result = await callState.endGroupCall({ groupId, userId });
+        if (!result.ok) return acknowledge(result);
+        emitGroupCallEnded(groupId, "host-ended");
+        return acknowledge({ ok: true });
+      } catch { return acknowledge({ ok: false, error: "Could not end the shared PostgreSQL group call." }); }
     });
 
     try {
@@ -514,6 +454,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
 
     socket.on("disconnect", async () => {
       stopDirectTyping();
+      if (callHeartbeat) { clearInterval(callHeartbeat); callHeartbeat = null; }
       for (const groupId of socket.data.typingGroups) {
         socket.to("group:" + groupId).emit("group:typing:update", {
           groupId, userId, username: socket.data.username, isTyping: false
@@ -523,9 +464,15 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
       const callPeer = activeCalls.get(userId);
       if (callPeer) endCall(userId, callPeer, true);
       for (const groupId of Array.from(groupCallMembership)) {
-        try { await leaveGroupCall(groupId, userId, true); }
-        catch (error) {
-          console.error("PostgreSQL group-call disconnect cleanup failed:", error?.message || "Unknown error");
+        try {
+          const result = await callState.leaveSession({ serverId, socketId: socket.id });
+          groupCallMembership.delete(groupId);
+          if (result.participantLeft) io.to("group-call:" + groupId).emit("group-call:participant-left", {
+            groupId, userId, username: socket.data.username
+          });
+          if (result.callEnded) emitGroupCallEnded(groupId, "host-disconnected");
+        } catch (error) {
+          console.error("PostgreSQL shared call disconnect cleanup failed:", error?.message || "Unknown error");
         }
       }
       if (!roomHasSockets(userRoom)) {
