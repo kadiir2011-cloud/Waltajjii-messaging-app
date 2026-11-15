@@ -1,0 +1,24 @@
+name: Phase 96 staging integration safety
+on:
+  pull_request:
+    paths:
+      - "src/services/postgres-moments-service.js"
+      - "test/phase59-moment-media-ownership.test.js"
+      - "test/phase96-staging-integration-safety.test.js"
+      - "PHASE-96-STAGING-INTEGRATION-AND-RELEASE-SAFETY.md"
+      - ".github/workflows/phase96-staging-integration-safety.yml"
+  push:
+    branches:
+      - waltajjii-phase96-staging-integration-safety
+permissions:
+  contents: read
+jobs:
+  phase96-moment-transaction:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Moment ownership and transaction regression tests
+        run: node --test test/phase59-moment-media-ownership.test.js test/phase96-staging-integration-safety.test.js
