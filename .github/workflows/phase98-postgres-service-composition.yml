@@ -1,0 +1,22 @@
+name: Phase 98 PostgreSQL service composition
+on:
+  pull_request:
+    paths:
+      - "src/postgres/postgres-runtime-services.js"
+      - "test/phase98-postgres-service-composition.test.js"
+      - ".github/workflows/phase98-postgres-service-composition.yml"
+  push:
+    branches:
+      - waltajjii-phase98-postgres-service-composition
+permissions:
+  contents: read
+jobs:
+  phase98-service-graph:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify injected PostgreSQL service composition
+        run: node --test test/phase98-postgres-service-composition.test.js test/phase97-postgres-runtime-migration-map.test.js test/phase96-staging-integration-safety.test.js
