@@ -146,7 +146,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       const target=validId(data.targetUserId), offer=data.offer;
       if(!target||target===userId||!offer||typeof offer!=="object"||Array.isArray(offer)) return acknowledge({ok:false,error:"Invalid call offer."});
       if(!roomHasSockets("user:"+target)) return acknowledge({ok:false,error:"Recipient is not connected."});
-      try { const state=await callState.startDirectCall({callerId:userId,targetId:target,callerUsername:socket.data.username,targetUsername:onlineUsers.get(target)||"User",serverId,socketId:socket.id}); if(!state.ok)return acknowledge(state); startCallHeartbeat(); emitToUser(target,"call:incoming",{callerId:userId,callerUsername:socket.data.username,offer}); return acknowledge({ok:true,callId:state.callId}); }
+      try { const state=await callState.startDirectCall({callerId:userId,targetId:target,callerUsername:socket.data.username,targetUsername:onlineUsers.get(target)||"User",serverId,socketId:socket.id}); if(!state.ok)return acknowledge(state); startCallHeartbeat(); emitToUser(target,"call:incoming",{callerId:userId,callerUsername:socket.data.username,offer}); return acknowledge({ok:true}); }
       catch { return acknowledge({ok:false,error:"Could not start the shared direct call."}); }
     });
     socket.on("call:answer", async (data = {}, acknowledge = () => {}) => {
