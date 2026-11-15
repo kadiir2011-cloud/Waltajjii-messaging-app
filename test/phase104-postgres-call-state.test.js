@@ -10,6 +10,7 @@ function fakeDb() {
     return participants.find(x=>x.callId===String(callId)&&x.userId===String(userId)&&x.leftAt===null) || null;
   }
   function one(sql,p=[]) {
+    if (sql.startsWith("INSERT INTO realtime_call_sessions")) { const c={id:String(nextId),groupId:String(p[0]),host_user_id:String(p[1]),status:"active"};nextId++;calls.push(c);return {id:c.id}; }
     if (sql.includes("FROM groups")) return {id:p[0]};
     if (sql.includes("FROM group_members")) return {member:1};
     if (sql.includes("FROM realtime_call_sessions") && sql.includes("group_id")) return calls.find(c=>c.groupId===String(p[0])&&c.status==="active") || null;
