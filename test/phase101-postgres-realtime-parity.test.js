@@ -80,7 +80,13 @@ function createMockCallState({ isMember = async () => true, getRole = async () =
       if(action==="remove"){if(c.hostId===String(targetUserId))return {ok:false,error:"The call host cannot be removed."};c.participants.delete(String(targetUserId));}
       if(action==="lower-hand")p.handRaised=false;
       return {ok:true,action,targetUserId:String(targetUserId),targetUsername:p.username,hostId:c.hostId};
-    }
+    },
+    async hasActiveCall() { return false; },
+    async startDirectCall() { return {ok:false}; },
+    async acceptDirectCall() { return {ok:false}; },
+    async authorizeDirectCall() { return {ok:false}; },
+    async getDirectCallStatus() { return {ok:false}; },
+    async endDirectCall() { return {ok:true}; }
   };
 }
 
