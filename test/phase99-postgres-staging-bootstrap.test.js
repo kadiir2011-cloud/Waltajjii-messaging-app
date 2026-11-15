@@ -48,6 +48,7 @@ test("builds an un-listened runtime and closes realtime before pool", async () =
   const fakeExpress = () => ({
     disable() {}, get() {}, set() {}, use() {}
   });
+  fakeExpress.json = () => ({ type: "json-parser" });
   class Pool {
     constructor(options) { this.options = options; }
     async query() { return { rows: [{ value: 1 }], rowCount: 1 }; }
