@@ -308,7 +308,7 @@ test("group-call lifecycle enforces membership, relays peer signaling, and restr
     groupId: "5", targetUserId: "22", action: "request-mute"
   }), { ok: true, action: "request-mute", targetUserId: "22" });
   assert.deepEqual(await member.trigger("group-call:end", { groupId: "5" }), {
-    ok: false, error: "Only the group-call host can end this call for everyone."
+    ok: false, error: "Only the call host can end this call."
   });
   assert.deepEqual(await host.trigger("group-call:end", { groupId: "5" }), { ok: true });
   assert.ok(member.outbox.some(item => item.event === "group-call:ended"));
