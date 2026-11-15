@@ -8,6 +8,7 @@ const { createPostgresChannelsService } = require("../services/postgres-channels
 const { createPostgresSocialService } = require("../services/postgres-social-service");
 const { createPostgresMomentsService } = require("../services/postgres-moments-service");
 const { createPostgresRealtimeService } = require("../services/postgres-realtime-service");
+const { createPostgresCallStateService } = require("../services/postgres-call-state-service");
 const { createPostgresMediaStorageService } = require("../services/postgres-media-storage-service");
 
 /**
@@ -44,6 +45,7 @@ function createPostgresRuntimeServices({
     throw new TypeError("clock must be a function when provided.");
   }
 
+  const serviceOptions = clock ? { db, clock } : { db };
   const services = Object.freeze({
     auth: createPostgresAuthService({ db, bcrypt, jwt, jwtSecret }),
     messages: createPostgresMessagesService({ db }),
@@ -52,7 +54,8 @@ function createPostgresRuntimeServices({
     channels: createPostgresChannelsService({ db }),
     social: createPostgresSocialService({ db }),
     moments: createPostgresMomentsService({ db }),
-    realtime: createPostgresRealtimeService({ db })
+    realtime: createPostgresRealtimeService({ db }),
+    callState: createPostgresCallStateService(serviceOptions)
   });
   const mediaStorage = createPostgresMediaStorageService({
     db, storageClient, bucket: mediaBucket
