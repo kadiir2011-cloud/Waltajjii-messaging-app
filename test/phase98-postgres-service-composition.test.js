@@ -22,7 +22,7 @@ function dependencies(overrides = {}) {
 test("builds the complete PostgreSQL service graph from injected dependencies", () => {
   const result = createPostgresRuntimeServices(dependencies());
   assert.deepEqual(Object.keys(result.services).sort(), [
-    "auth", "channels", "governance", "groups", "messages", "moments", "realtime", "social"
+    "auth", "callState", "channels", "governance", "groups", "messages", "moments", "realtime", "social"
   ]);
   for (const [name, methods] of Object.entries({
     auth: ["register", "login", "getProfile", "updateProfile"],
@@ -32,7 +32,8 @@ test("builds the complete PostgreSQL service graph from injected dependencies", 
     channels: ["listChannels", "createChannel", "joinChannel", "listMembers", "addMember", "removeMember", "getMessages", "publishMessage", "markDelivered", "markRead", "toggleReaction", "editMessage", "deleteMessage", "pinMessage", "leaveChannel"],
     social: ["discover", "follow", "unfollow", "connect", "listRequests", "respondRequest", "followers", "following", "feed", "createPost", "toggleLike", "listComments", "createComment", "listNotifications", "markNotificationsRead"],
     moments: ["cleanupExpired", "listVisible", "create", "getVisibleMedia", "deleteOwn"],
-    realtime: ["getOnlineProfiles", "listGroupIdsForUser", "isGroupMember", "markMessageDelivered"]
+    realtime: ["getOnlineProfiles", "listGroupIdsForUser", "isGroupMember", "markMessageDelivered"],
+    callState: ["startGroupCall", "joinGroupCall", "heartbeat", "leaveSession", "getGroupCallStatus", "endGroupCall"]
   })) {
     for (const method of methods) assert.equal(typeof result.services[name][method], "function", name + "." + method);
   }
