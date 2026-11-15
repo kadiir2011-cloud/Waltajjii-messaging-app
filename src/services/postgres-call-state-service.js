@@ -337,12 +337,14 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
     const at=now(), expiry=new Date(at.getTime()+leaseMs);
     try {
       return await db.withTransaction(async tx=>{
-        await tx.many("SELECT id FROM users WHERE id = ANY($1::bigint[]) ORDER BY id FOR UPDATE",[[callerId,targetId]]);
+        const lockedUsers=await tx.many("SELECT id,username FROM users WHERE id = ANY($1::bigint[]) ORDER BY id FOR UPDATE",[[callerId,targetId]]);
+        if(lockedUsers.length!==2) return {ok:false,error:"A call participant account could not be found."};
+        const resolvedTargetUsername=lockedUsers.find(row=>String(row.id)===targetId)?.username || targetUsername;
         await expireUserLeases(tx,callerId,at); await expireUserLeases(tx,targetId,at);
         const occupied=await tx.many("SELECT user_id FROM realtime_call_participants WHERE user_id = ANY($1::bigint[]) AND left_at IS NULL FOR UPDATE",[[callerId,targetId]]);
         if(occupied.length) return {ok:false,error:"One participant is already in a call."};
         const call=await tx.one("INSERT INTO realtime_call_sessions(call_type,group_id,host_user_id,expires_at) VALUES('direct',NULL,$1,$2) RETURNING id",[callerId,expiry]);
-        await tx.execute("INSERT INTO realtime_call_participants(call_id,user_id,username,participant_role,last_seen_at,lease_expires_at) VALUES($1,$2,$3,'host',$4,$5),($1,$6,$7,'member',$4,$5)",[call.id,callerId,callerUsername,at,expiry,targetId,targetUsername]);
+        await tx.execute("INSERT INTO realtime_call_participants(call_id,user_id,username,participant_role,last_seen_at,lease_expires_at) VALUES($1,$2,$3,'host',$4,$5),($1,$6,$7,'member',$4,$5)",[call.id,callerId,callerUsername,at,expiry,targetId,resolvedTargetUsername]);
         await createDeviceSession(tx,call.id,callerId,serverId,socketId,at);
         return {ok:true,callId:String(call.id),callerId,targetId};
       });
