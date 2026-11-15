@@ -260,12 +260,16 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
     async function leaveGroupCall(groupId, participantId, notify = true) {
       const call = activeGroupCalls.get(groupId);
       if (!call || !call.participants.has(participantId)) return false;
+      const sockets = call.participantSockets?.get(participantId) || new Set();
+      sockets.delete(socket.id);
+      await socket.leave("group-call:" + groupId);
+      groupCallMembership.delete(groupId);
+      if (sockets.size) return true;
+      call.participantSockets?.delete(participantId);
       const username = call.participants.get(participantId);
       call.participants.delete(participantId);
       call.handRaised.delete(participantId);
       activeGroupCallByUser.delete(participantId);
-      groupCallMembership.delete(groupId);
-      await socket.leave("group-call:" + groupId);
       if (notify) {
         io.to("group-call:" + groupId).emit("group-call:participant-left", {
           groupId, userId: participantId, username
@@ -298,6 +302,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
         const call = {
           groupId, hostId: userId,
           participants: new Map([[userId, socket.data.username]]),
+          participantSockets: new Map([[userId, new Set([socket.id])]]),
           handRaised: new Set()
         };
         activeGroupCalls.set(groupId, call);
@@ -341,19 +346,32 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
         const call = activeGroupCalls.get(groupId);
         if (!call) return acknowledge({ ok: false, error: "No active group call is available to you." });
         if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
-        if (activeGroupCallByUser.has(userId)) return acknowledge({ ok: false, error: "You are already in another group call." });
-        if (call.participants.has(userId)) return acknowledge({ ok: false, error: "You are already in this group call." });
-        if (call.participants.size >= 8) return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
-        call.participants.set(userId, socket.data.username);
-        activeGroupCallByUser.set(userId, groupId);
+        const existingGroupId = activeGroupCallByUser.get(userId);
+        if (existingGroupId && existingGroupId !== groupId) {
+          return acknowledge({ ok: false, error: "You are already in another group call." });
+        }
+        const alreadyParticipating = call.participants.has(userId);
+        if (!alreadyParticipating && call.participants.size >= 8) {
+          return acknowledge({ ok: false, error: "This group call has reached its 8-person limit." });
+        }
+        if (!alreadyParticipating) {
+          call.participants.set(userId, socket.data.username);
+          activeGroupCallByUser.set(userId, groupId);
+        }
+        call.participantSockets ||= new Map();
+        const participantSockets = call.participantSockets.get(userId) || new Set();
+        participantSockets.add(socket.id);
+        call.participantSockets.set(userId, participantSockets);
         groupCallMembership.add(groupId);
         await socket.join("group-call:" + groupId);
         const participants = Array.from(call.participants, ([id, username]) => ({ userId: id, username }));
         socket.emit("group-call:participants", { groupId, participants });
-        socket.to("group-call:" + groupId).emit("group-call:participant-joined", {
-          groupId, userId, username: socket.data.username
-        });
-        return acknowledge({ ok: true, groupId, participants });
+        if (!alreadyParticipating) {
+          socket.to("group-call:" + groupId).emit("group-call:participant-joined", {
+            groupId, userId, username: socket.data.username
+          });
+        }
+        return acknowledge({ ok: true, groupId, participants, additionalSession: alreadyParticipating });
       } catch {
         return acknowledge({ ok: false, error: "Could not verify group membership or join the call." });
       }
@@ -494,7 +512,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
       console.error("PostgreSQL group room initialization failed:", error?.message || "Unknown error");
     }
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       stopDirectTyping();
       for (const groupId of socket.data.typingGroups) {
         socket.to("group:" + groupId).emit("group:typing:update", {
@@ -505,26 +523,9 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
       const callPeer = activeCalls.get(userId);
       if (callPeer) endCall(userId, callPeer, true);
       for (const groupId of Array.from(groupCallMembership)) {
-        const call = activeGroupCalls.get(groupId);
-        if (!call || !call.participants.has(userId)) continue;
-        const username = call.participants.get(userId);
-        call.participants.delete(userId);
-        call.handRaised.delete(userId);
-        activeGroupCallByUser.delete(userId);
-        groupCallMembership.delete(groupId);
-        io.to("group-call:" + groupId).emit("group-call:participant-left", {
-          groupId, userId, username
-        });
-        if (call.participants.size === 0 || call.hostId === userId) {
-          for (const participantId of call.participants.keys()) activeGroupCallByUser.delete(participantId);
-          activeGroupCalls.delete(groupId);
-          io.to("group-call:" + groupId).emit("group-call:ended", {
-            groupId, reason: call.hostId === userId ? "host-ended" : "empty"
-          });
-          io.to("group:" + groupId).emit("group-call:ended", {
-            groupId, reason: call.hostId === userId ? "host-ended" : "empty"
-          });
-          io.in("group-call:" + groupId).socketsLeave("group-call:" + groupId);
+        try { await leaveGroupCall(groupId, userId, true); }
+        catch (error) {
+          console.error("PostgreSQL group-call disconnect cleanup failed:", error?.message || "Unknown error");
         }
       }
       if (!roomHasSockets(userRoom)) {
