@@ -24,7 +24,7 @@ try {
   if (!["postgres:", "postgresql:"].includes(parsedDatabaseUrl.protocol)) {
     throw new Error("TEST_DATABASE_URL must use PostgreSQL.");
   }
-  disposableDatabaseName = decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\\//, ""));
+  disposableDatabaseName = decodeURIComponent(parsedDatabaseUrl.pathname.slice(1));
 } catch {
   throw new Error("TEST_DATABASE_URL is invalid.");
 }
