@@ -350,7 +350,7 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   });
   assert.equal(statusAfterRemoval.participantCount, 1);
 
-  const groupEnded = waitFor(bobRemoteSocket, "group-call:ended");
+  const groupEnded = waitFor(aliceSocket, "group-call:ended");
   assert.deepEqual(await emitAck(aliceSocket, "group-call:end", {
     groupId: String(group.id)
   }), { ok: true });
