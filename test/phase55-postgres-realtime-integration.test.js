@@ -13,24 +13,10 @@ const { createPostgresAdapter } = require("../src/db/postgres-adapter");
 const { createPostgresRealtimeService } = require("../src/services/postgres-realtime-service");
 const { createPostgresRealtimeServer } = require("../src/postgres/postgres-realtime-server");
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) throw new Error("TEST_DATABASE_URL must point only to disposable CI PostgreSQL.");
-if (process.env.ALLOW_DISPOSABLE_POSTGRES_TESTS !== "1") {
-  throw new Error("Set ALLOW_DISPOSABLE_POSTGRES_TESTS=1 only for a disposable PostgreSQL database.");
-}
-let disposableDatabaseName = "";
-try {
-  const parsedDatabaseUrl = new URL(connectionString);
-  if (!["postgres:", "postgresql:"].includes(parsedDatabaseUrl.protocol)) {
-    throw new Error("TEST_DATABASE_URL must use PostgreSQL.");
-  }
-  disposableDatabaseName = decodeURIComponent(parsedDatabaseUrl.pathname.slice(1));
-} catch {
-  throw new Error("TEST_DATABASE_URL is invalid.");
-}
-if (!/(^|[-_])(staging|stage|test|preview)([-_]|$)/i.test(disposableDatabaseName)) {
-  throw new Error("Refusing to run destructive integration migrations without a staging/test/preview database name.");
-}
+const { assertDisposablePostgresDatabaseUrl } = require("../src/postgres/postgres-test-database-guard");
+const connectionString = assertDisposablePostgresDatabaseUrl(
+  process.env.TEST_DATABASE_URL, process.env.ALLOW_DISPOSABLE_POSTGRES_TESTS
+);
 const secret = "phase55-disposable-integration-secret-at-least-32-characters";
 const pool = new Pool({ connectionString, max: 5, options: "-c search_path=waltajjii,public" });
 const db = createPostgresAdapter(pool);
@@ -71,7 +57,7 @@ function emitAck(socket, event, payload) {
   });
 }
 
-test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, receipts and calls", async () => {
+test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, receipts, direct recovery and group calls", async () => {
   const root = path.join(__dirname, "..");
   for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql"]) {
     await pool.query(fs.readFileSync(path.join(root, "migrations/postgres", migration), "utf8"));
