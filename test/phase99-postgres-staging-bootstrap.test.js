@@ -79,6 +79,7 @@ test("builds an un-listened runtime and closes realtime before pool", async () =
   assert.equal(runtime.pool.options.connectionString, config().databaseUrl);
   assert.equal(capturedRouterOptions.services, runtime.services);
   assert.equal(capturedRouterOptions.mediaStorage, runtime.mediaStorage);
+  assert.equal(capturedRealtimeOptions.callState, runtime.services.callState);
   assert.equal(capturedRealtimeOptions.createSocketAdapter, adapterFactory);
   assert.equal(capturedRealtimeOptions.adapterPool, runtime.pool);
   assert.deepEqual(capturedRealtimeOptions.adapterOptions, { channelPrefix: "test" });

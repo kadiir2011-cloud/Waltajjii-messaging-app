@@ -1,0 +1,53 @@
+name: Phase 105 shared PostgreSQL realtime call state
+on:
+  pull_request:
+    paths:
+      - "src/postgres/postgres-realtime-socket.js"
+      - "src/postgres/postgres-realtime-server.js"
+      - "src/postgres/postgres-staging-runtime.js"
+      - "src/services/postgres-call-state-service.js"
+      - "migrations/postgres/007_realtime_call_hand_raise.sql"
+      - "test/phase101-postgres-realtime-parity.test.js"
+      - "test/phase55-postgres-realtime-integration.test.js"
+      - "test/phase99-postgres-staging-bootstrap.test.js"
+      - "test/phase98-postgres-service-composition.test.js"
+      - "PHASE-105-SHARED-POSTGRES-REALTIME-CALL-STATE.md"
+      - ".github/workflows/phase105-shared-postgres-call-state.yml"
+  push:
+    branches:
+      - waltajjii-phase105-shared-call-state-realtime-handlers
+permissions:
+  contents: read
+jobs:
+  shared-call-state:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase105_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase105_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase105_test
+      ALLOW_DISPOSABLE_POSTGRES_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install test-only realtime clients
+        run: npm install --no-save --package-lock=false socket.io-client@4.8.1 @socket.io/postgres-adapter@0.5.0
+      - name: Verify shared call-state service and realtime unit tests
+        run: node --test test/phase104-postgres-call-state.test.js test/phase101-postgres-realtime-parity.test.js test/phase98-postgres-service-composition.test.js test/phase99-postgres-staging-bootstrap.test.js
+      - name: Verify two-runtime PostgreSQL realtime integration
+        run: node --test test/phase55-postgres-realtime-integration.test.js

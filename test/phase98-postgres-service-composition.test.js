@@ -33,7 +33,7 @@ test("builds the complete PostgreSQL service graph from injected dependencies", 
     social: ["discover", "follow", "unfollow", "connect", "listRequests", "respondRequest", "followers", "following", "feed", "createPost", "toggleLike", "listComments", "createComment", "listNotifications", "markNotificationsRead"],
     moments: ["cleanupExpired", "listVisible", "create", "getVisibleMedia", "deleteOwn"],
     realtime: ["getOnlineProfiles", "listGroupIdsForUser", "isGroupMember", "markMessageDelivered"],
-    callState: ["startGroupCall", "joinGroupCall", "heartbeat", "leaveSession", "getGroupCallStatus", "endGroupCall"]
+    callState: ["startGroupCall", "joinGroupCall", "heartbeat", "leaveSession", "getGroupCallStatus", "endGroupCall", "setHandRaised", "moderateGroupCall"]
   })) {
     for (const method of methods) assert.equal(typeof result.services[name][method], "function", name + "." + method);
   }

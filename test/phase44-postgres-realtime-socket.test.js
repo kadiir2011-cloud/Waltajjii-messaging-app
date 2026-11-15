@@ -25,7 +25,17 @@ function makeHarness(serviceOverrides = {}) {
     },
     ...serviceOverrides
   };
-  const realtime = attachPostgresRealtime(io, { jwt, jwtSecret: secret, realtimeService: service });
+  const callState = {
+    async startGroupCall() { return { ok: false }; },
+    async joinGroupCall() { return { ok: false }; },
+    async heartbeat() { return false; },
+    async leaveSession() { return { ok: true, alreadyLeft: true }; },
+    async getGroupCallStatus() { return { ok: true, active: false, participantCount: 0, participants: [] }; },
+    async endGroupCall() { return { ok: false }; },
+    async setHandRaised() { return { ok: false }; },
+    async moderateGroupCall() { return { ok: false }; }
+  };
+  const realtime = attachPostgresRealtime(io, { jwt, jwtSecret: secret, realtimeService: service, callState });
   function makeSocket(userId, username) {
     const socketEvents = {};
     const socketEmitted = [];

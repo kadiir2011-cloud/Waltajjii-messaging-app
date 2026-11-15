@@ -44,6 +44,14 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
         "UPDATE realtime_call_sessions SET status='ended', ended_at=$2 WHERE id=$1 AND status='active'",
         [callId, at]
       );
+      await tx.execute(
+        "UPDATE realtime_call_participants SET left_at=$2,hand_raised=FALSE WHERE call_id=$1 AND left_at IS NULL",
+        [callId, at]
+      );
+      await tx.execute(
+        "UPDATE realtime_call_device_sessions SET disconnected_at=$2 WHERE call_id=$1 AND disconnected_at IS NULL",
+        [callId, at]
+      );
     }
   }
 
@@ -185,10 +193,14 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
     const at = now();
     return db.withTransaction(async tx => {
       const session = await tx.one(
-        "UPDATE realtime_call_device_sessions SET disconnected_at=$3 WHERE server_id=$1 AND socket_id=$2 AND disconnected_at IS NULL RETURNING call_id,user_id",
-        [serverId,socketId,at]
+        "SELECT d.call_id,d.user_id,c.group_id FROM realtime_call_device_sessions d JOIN realtime_call_sessions c ON c.id=d.call_id WHERE d.server_id=$1 AND d.socket_id=$2 AND d.disconnected_at IS NULL FOR UPDATE OF d",
+        [serverId,socketId]
       );
       if (!session) return { ok: true, alreadyLeft: true };
+      await tx.execute(
+        "UPDATE realtime_call_device_sessions SET disconnected_at=$3 WHERE server_id=$1 AND socket_id=$2 AND disconnected_at IS NULL",
+        [serverId,socketId,at]
+      );
       const remaining = await tx.one(
         "SELECT 1 AS active FROM realtime_call_device_sessions WHERE call_id=$1 AND user_id=$2 AND disconnected_at IS NULL AND lease_expires_at>$3 LIMIT 1",
         [session.call_id,session.user_id,at]
@@ -201,7 +213,7 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
       }
       await expireCallLeases(tx,session.call_id,at);
       const call = await tx.one("SELECT status FROM realtime_call_sessions WHERE id=$1",[session.call_id]);
-      return { ok: true, participantLeft: !remaining, callEnded: call?.status === "ended" };
+      return { ok: true, callId: String(session.call_id), groupId: session.group_id == null ? null : String(session.group_id), userId: String(session.user_id), participantLeft: !remaining, callEnded: call?.status === "ended" };
     });
   }
 
@@ -221,7 +233,11 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
       if (!current || current.status !== "active") return { ok: true, groupId, active: false, participantCount: 0 };
       const count = await tx.one("SELECT COUNT(*)::int AS count FROM realtime_call_participants WHERE call_id=$1 AND left_at IS NULL",[call.id]);
       const host = await tx.one("SELECT username FROM realtime_call_participants WHERE call_id=$1 AND user_id=$2 AND left_at IS NULL",[call.id,current.host_user_id]);
-      return { ok: true, groupId, active: true, callId: String(call.id), hostId: String(current.host_user_id), hostUsername: host?.username || null, participantCount: Number(count.count) };
+      const participants = await tx.many(
+        "SELECT p.user_id AS \"userId\",p.username,p.participant_role AS \"participantRole\",p.hand_raised AS \"handRaised\" FROM realtime_call_participants p WHERE p.call_id=$1 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$2) ORDER BY p.joined_at",
+        [call.id,now()]
+      );
+      return { ok: true, groupId, active: true, callId: String(call.id), hostId: String(current.host_user_id), hostUsername: host?.username || null, participantCount: Number(count.count), participants: participants.map(p => ({ userId: String(p.userId), username: p.username, participantRole: p.participantRole, handRaised: Boolean(p.handRaised) })) };
     });
   }
 
@@ -234,13 +250,82 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
         [groupId]
       );
       if (!call || String(call.host_user_id) !== userId) return { ok: false, error: "Only the call host can end this call." };
+      await expireCallLeases(tx, call.id, now());
+      const activeHost = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_participants p WHERE p.call_id=$1 AND p.user_id=$2 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$3)",
+        [call.id,userId,now()]
+      );
+      if (!activeHost) return { ok: false, error: "The call host no longer has an active device session." };
       await tx.execute("UPDATE realtime_call_sessions SET status='ended',ended_at=$2,ended_by=$3 WHERE id=$1",[call.id,now(),userId]);
       await tx.execute("UPDATE realtime_call_participants SET left_at=$2 WHERE call_id=$1 AND left_at IS NULL",[call.id,now()]);
       await tx.execute("UPDATE realtime_call_device_sessions SET disconnected_at=$2 WHERE call_id=$1 AND disconnected_at IS NULL",[call.id,now()]);
-      return { ok: true, callId: String(call.id) };
+      return { ok: true, callId: String(call.id), groupId: String(groupId) };
     });
   }
 
-  return Object.freeze({ startGroupCall, joinGroupCall, heartbeat, leaveSession, getGroupCallStatus, endGroupCall });
+  async function setHandRaised({ groupId, userId, serverId, socketId, raised }) {
+    groupId = validId(groupId); userId = validId(userId);
+    if (!groupId || !userId || !serverId || !socketId || typeof raised !== "boolean") {
+      return { ok: false, error: "Invalid hand-raise request." };
+    }
+    return db.withTransaction(async tx => {
+      const call = await tx.one("SELECT id FROM realtime_call_sessions WHERE group_id=$1 AND call_type='group' AND status='active' FOR UPDATE",[groupId]);
+      if (!call) return { ok: false, error: "No active group call is available." };
+      const member = await tx.one("SELECT 1 AS member FROM group_members WHERE group_id=$1 AND user_id=$2",[groupId,userId]);
+      if (!member) return { ok: false, error: "You are no longer a member of this group." };
+      const session = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_device_sessions WHERE call_id=$1 AND user_id=$2 AND server_id=$3 AND socket_id=$4 AND disconnected_at IS NULL AND lease_expires_at>$5",
+        [call.id,userId,serverId,socketId,now()]
+      );
+      if (!session) return { ok: false, error: "This device is not an active call participant." };
+      await tx.execute("UPDATE realtime_call_participants SET hand_raised=$3 WHERE call_id=$1 AND user_id=$2 AND left_at IS NULL",[call.id,userId,raised]);
+      return { ok: true, raised };
+    });
+  }
+
+  async function moderateGroupCall({ groupId, actorUserId, targetUserId, action }) {
+    groupId = validId(groupId); actorUserId = validId(actorUserId); targetUserId = validId(targetUserId);
+    if (!groupId || !actorUserId || !targetUserId || actorUserId === targetUserId ||
+        !["remove","lower-hand","request-mute"].includes(action)) {
+      return { ok: false, error: "Invalid moderation request." };
+    }
+    return db.withTransaction(async tx => {
+      const call = await tx.one("SELECT id,host_user_id FROM realtime_call_sessions WHERE group_id=$1 AND call_type='group' AND status='active' FOR UPDATE",[groupId]);
+      if (!call) return { ok: false, error: "No active group call is available." };
+      await expireCallLeases(tx, call.id, now());
+      const stillActive = await tx.one("SELECT id,host_user_id,status FROM realtime_call_sessions WHERE id=$1",[call.id]);
+      if (!stillActive || stillActive.status !== "active") return { ok: false, error: "No active group call is available." };
+      const actor = await tx.one("SELECT role FROM group_members WHERE group_id=$1 AND user_id=$2",[groupId,actorUserId]);
+      const target = await tx.one("SELECT username FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=$1 AND gm.user_id=$2",[groupId,targetUserId]);
+      if (!actor || !target) return { ok: false, error: "A participant is no longer a group member." };
+      if (String(call.host_user_id) !== actorUserId && actor.role !== "admin") {
+        return { ok: false, error: "Only the call host or a group admin can moderate participants." };
+      }
+      const actorParticipant = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_participants p WHERE p.call_id=$1 AND p.user_id=$2 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$3) FOR UPDATE",
+        [call.id,actorUserId,now()]
+      );
+      if (!actorParticipant) return { ok: false, error: "Only active call participants can moderate this call." };
+      const participant = await tx.one(
+        "SELECT 1 AS active FROM realtime_call_participants p WHERE p.call_id=$1 AND p.user_id=$2 AND p.left_at IS NULL AND EXISTS (SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=p.call_id AND d.user_id=p.user_id AND d.disconnected_at IS NULL AND d.lease_expires_at>$3) FOR UPDATE",
+        [call.id,targetUserId,now()]
+      );
+      if (!participant) return { ok: false, error: "The target is not an active call participant." };
+      if (action === "remove") {
+        if (String(call.host_user_id) === targetUserId) return { ok: false, error: "The call host cannot be removed." };
+        const at = now();
+        await tx.execute("UPDATE realtime_call_participants SET left_at=$3,hand_raised=FALSE WHERE call_id=$1 AND user_id=$2",[call.id,targetUserId,at]);
+        await tx.execute("UPDATE realtime_call_device_sessions SET disconnected_at=$3 WHERE call_id=$1 AND user_id=$2 AND disconnected_at IS NULL",[call.id,targetUserId,at]);
+      } else if (action === "lower-hand") {
+        await tx.execute("UPDATE realtime_call_participants SET hand_raised=FALSE WHERE call_id=$1 AND user_id=$2",[call.id,targetUserId]);
+      }
+      return { ok: true, action, targetUserId, targetUsername: target.username, hostId: String(call.host_user_id) };
+    });
+  }
+
+  return Object.freeze({
+    startGroupCall, joinGroupCall, heartbeat, leaveSession, getGroupCallStatus,
+    endGroupCall, setHandRaised, moderateGroupCall
+  });
 }
 module.exports = { createPostgresCallStateService };
