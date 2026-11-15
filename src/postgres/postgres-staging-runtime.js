@@ -98,7 +98,10 @@ function createPostgresStagingRuntime({
     realtime = createRealtimeServer(httpServer, {
       jwt, jwtSecret: config.jwtSecret,
       realtimeService: runtime.services.realtime,
-      socketOptions
+      socketOptions,
+      createSocketAdapter: config.createSocketAdapter,
+      adapterPool: config.createSocketAdapter ? pool : undefined,
+      adapterOptions: config.socketAdapterOptions || {}
     });
     app.set("io", realtime.io);
     const router = createApiRouter({

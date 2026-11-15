@@ -90,6 +90,7 @@ class MockIO {
     this.connectionHandler = null;
     this.clients = new Map();
     this.rooms = new Map();
+    this.nextSocketId = 0;
     this.sockets = { adapter: { rooms: this.rooms } };
   }
   use(fn) { this.middleware = fn; }
@@ -132,7 +133,7 @@ class MockIO {
 class MockSocket {
   constructor(io, userId, username) {
     this.io = io;
-    this.id = "socket-" + userId;
+    this.id = "socket-" + userId + "-" + (++io.nextSocketId);
     this.data = { userId, username };
     this.handshake = { auth: { token: userId } };
     this.handlers = new Map();
@@ -157,6 +158,11 @@ class MockSocket {
     let acknowledgement;
     await handler(payload, value => { acknowledgement = value; });
     return acknowledgement;
+  }
+  async disconnect() {
+    const handler = this.handlers.get("disconnect");
+    if (handler) await handler("client namespace disconnect");
+    for (const room of Array.from(this.io.rooms.keys())) this.io.removeFromRoom(this, room);
   }
 }
 
@@ -255,4 +261,36 @@ test("a non-admin participant cannot moderate another group-call participant", a
   }), {
     ok: false, error: "Only the call host or a group admin can moderate participants."
   });
+});
+
+
+test("multiple sessions for one account share one group-call participant slot", async () => {
+  const io = new MockIO();
+  attachPostgresRealtime(io, {
+    jwt: { verify: token => ({ userId: token, username: "user" + token }) },
+    jwtSecret: "s".repeat(40),
+    realtimeService: {
+      listGroupIdsForUser: async () => ["77"],
+      isGroupMember: async () => true,
+      getGroupMemberRole: async () => "member",
+      markMessageDelivered: async () => null
+    }
+  });
+  const host = await io.connect("101", "host");
+  const memberTabOne = await io.connect("202", "member");
+  const memberTabTwo = await io.connect("202", "member");
+  assert.equal((await host.trigger("group-call:start", { groupId: "77" })).ok, true);
+  assert.equal((await memberTabOne.trigger("group-call:join", { groupId: "77" })).additionalSession, false);
+  const secondJoin = await memberTabTwo.trigger("group-call:join", { groupId: "77" });
+  assert.equal(secondJoin.ok, true);
+  assert.equal(secondJoin.additionalSession, true);
+  assert.equal(secondJoin.participants.length, 2);
+
+  assert.deepEqual(await memberTabTwo.trigger("group-call:leave", { groupId: "77" }), { ok: true });
+  const statusAfterOneTabLeaves = await host.trigger("group-call:status", { groupId: "77" });
+  assert.equal(statusAfterOneTabLeaves.participantCount, 2);
+
+  await memberTabOne.disconnect();
+  const statusAfterRemainingTabDisconnects = await host.trigger("group-call:status", { groupId: "77" });
+  assert.equal(statusAfterRemainingTabDisconnects.participantCount, 1);
 });
