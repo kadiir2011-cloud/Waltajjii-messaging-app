@@ -240,7 +240,7 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.equal(recoveryOfferPayload.offer.sdp, "phase102-recovery-offer");
 
   const recoveryAnswerEvent = waitFor(aliceSocket, "call:recovery-answer");
-  assert.deepEqual(await emitAck(bobSocket, "call:recovery-answer", {
+  assert.deepEqual(await emitAck(bobRemoteSocket, "call:recovery-answer", {
     targetUserId: String(alice.id),
     answer: { type: "answer", sdp: "phase102-recovery-answer" }
   }), { ok: true });
