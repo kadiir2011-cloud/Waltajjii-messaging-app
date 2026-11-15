@@ -36,6 +36,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/waltajjii_test
       PGSSL: "false"
       WALTAJJII_ALLOW_DISPOSABLE_TARGET: "1"
+      ALLOW_DISPOSABLE_POSTGRES_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
