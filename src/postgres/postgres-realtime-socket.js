@@ -24,6 +24,8 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
 
   const onlineUsers = new Map();
   const activeCalls = new Map();
+  const activeGroupCalls = new Map();
+  const activeGroupCallByUser = new Map();
 
   function roomHasSockets(room) {
     return Boolean(io.sockets?.adapter?.rooms?.get(room)?.size);
@@ -251,8 +253,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
     // Group calls are signaling-only; audio/video media remains peer-to-peer.
     // Membership is rechecked against PostgreSQL for every privileged action.
     const groupCallMembership = new Set();
-    const activeGroupCalls = new Map();
-    const activeGroupCallByUser = new Map();
 
     async function currentGroupMember(groupId) {
       return realtimeService.isGroupMember(groupId, userId);
