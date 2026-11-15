@@ -125,7 +125,7 @@ test("moderation requires host or current group admin and validates action", () 
 test("group-call start and join verify current membership and enforce participant limit", () => {
   assert.match(postgresSocket, /callState\.startGroupCall/);
   assert.match(postgresSocket, /callState\.joinGroupCall/);
-  assert.match(postgresSocket, /callState\.hasActiveCall/);
+  assert.match(read("src/services/postgres-call-state-service.js"), /SELECT call_id FROM realtime_call_participants/);
 });
 
 test("group-call disconnect cleanup and host termination release call state", () => {
