@@ -41,7 +41,7 @@ test("moderation requires host or current group admin and validates action", () 
   assert.match(postgresSocket, /realtimeService\.getGroupMemberRole\(groupId, userId\)/);
   assert.match(postgresSocket, /call\.hostId === userId \|\| role === "admin"/);
   assert.match(postgresSocket, /\["remove", "lower-hand", "request-mute"\]/);
-  assert.match(postgresSocket, /call\.hostId === target/);
+  assert.match(postgresSocket, /target === call\.hostId/);
 });
 
 test("group-call start and join verify current membership and enforce participant limit", () => {
