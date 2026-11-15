@@ -58,7 +58,7 @@ function emitAck(socket, event, payload) {
 
 test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, receipts, direct recovery and group calls", async () => {
   const root = path.join(__dirname, "..");
-  for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql", "004_media_storage_cleanup.sql", "005_socketio_cluster_adapter.sql"]) {
+  for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql", "004_media_storage_cleanup.sql", "005_socketio_cluster_adapter.sql", "006_realtime_call_state.sql", "007_realtime_call_hand_raise.sql"]) {
     await pool.query(fs.readFileSync(path.join(root, "migrations/postgres", migration), "utf8"));
   }
 
@@ -264,8 +264,9 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.equal(availablePayload.groupId, String(group.id));
   assert.equal(availablePayload.hostId, String(alice.id));
 
+  const bobRemoteSocket = await connectClient(secondUrl, tokenFor(bob));
   const participantJoined = waitFor(aliceSocket, "group-call:participant-joined");
-  const joinedAck = await emitAck(bobSocket, "group-call:join", {
+  const joinedAck = await emitAck(bobRemoteSocket, "group-call:join", {
     groupId: String(group.id)
   });
   assert.equal(joinedAck.ok, true);
@@ -298,7 +299,7 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
     ok: false, error: "You are not a current member of this group."
   });
 
-  const groupOffer = waitFor(bobSocket, "group-call:offer");
+  const groupOffer = waitFor(bobRemoteSocket, "group-call:offer");
   assert.deepEqual(await emitAck(aliceSocket, "group-call:offer", {
     groupId: String(group.id),
     targetUserId: String(bob.id),
@@ -310,14 +311,14 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.equal(groupOfferPayload.description.sdp, "phase102-group-offer");
 
   const handRaised = waitFor(aliceSocket, "group-call:hand-raised");
-  assert.deepEqual(await emitAck(bobSocket, "group-call:hand-raise", {
+  assert.deepEqual(await emitAck(bobRemoteSocket, "group-call:hand-raise", {
     groupId: String(group.id), raised: true
   }), { ok: true, raised: true });
   const [handRaisedPayload] = await handRaised;
   assert.equal(handRaisedPayload.userId, String(bob.id));
   assert.equal(handRaisedPayload.raised, true);
 
-  const muteRequested = waitFor(bobSocket, "group-call:mute-request");
+  const muteRequested = waitFor(bobRemoteSocket, "group-call:mute-request");
   assert.deepEqual(await emitAck(aliceSocket, "group-call:moderate", {
     groupId: String(group.id), targetUserId: String(bob.id), action: "request-mute"
   }), {
@@ -326,14 +327,14 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const [mutePayload] = await muteRequested;
   assert.equal(mutePayload.groupId, String(group.id));
 
-  const unauthorizedModeration = await emitAck(bobSocket, "group-call:moderate", {
+  const unauthorizedModeration = await emitAck(bobRemoteSocket, "group-call:moderate", {
     groupId: String(group.id), targetUserId: String(alice.id), action: "remove"
   });
   assert.deepEqual(unauthorizedModeration, {
     ok: false, error: "Only the call host or a group admin can moderate participants."
   });
 
-  const groupEnded = waitFor(bobSocket, "group-call:ended");
+  const groupEnded = waitFor(bobRemoteSocket, "group-call:ended");
   assert.deepEqual(await emitAck(aliceSocket, "group-call:end", {
     groupId: String(group.id)
   }), { ok: true });
