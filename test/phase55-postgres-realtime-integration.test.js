@@ -133,6 +133,108 @@ test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, re
   const [answerPayload] = await acceptedCall;
   assert.equal(answerPayload.recipientId, String(bob.id));
 
+  // Phase 102: exercise direct-call recovery over real authenticated sockets.
+  const recoveryRequested = waitFor(bobSocket, "call:recovery-requested");
+  assert.deepEqual(await emitAck(aliceSocket, "call:recovery-request", {
+    targetUserId: String(bob.id)
+  }), { ok: true });
+  const [recoveryRequestPayload] = await recoveryRequested;
+  assert.equal(recoveryRequestPayload.senderId, String(alice.id));
+
+  const recoveryOfferEvent = waitFor(bobSocket, "call:recovery-offer");
+  assert.deepEqual(await emitAck(aliceSocket, "call:recovery-offer", {
+    targetUserId: String(bob.id),
+    offer: { type: "offer", sdp: "phase102-recovery-offer" }
+  }), { ok: true });
+  const [recoveryOfferPayload] = await recoveryOfferEvent;
+  assert.equal(recoveryOfferPayload.senderId, String(alice.id));
+  assert.equal(recoveryOfferPayload.offer.sdp, "phase102-recovery-offer");
+
+  const recoveryAnswerEvent = waitFor(aliceSocket, "call:recovery-answer");
+  assert.deepEqual(await emitAck(bobSocket, "call:recovery-answer", {
+    targetUserId: String(alice.id),
+    answer: { type: "answer", sdp: "phase102-recovery-answer" }
+  }), { ok: true });
+  const [recoveryAnswerPayload] = await recoveryAnswerEvent;
+  assert.equal(recoveryAnswerPayload.senderId, String(bob.id));
+  assert.equal(recoveryAnswerPayload.answer.sdp, "phase102-recovery-answer");
+
+  // End the direct call before starting a group call.
+  aliceSocket.emit("call:end", { targetUserId: String(bob.id) });
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // Phase 102: real PostgreSQL membership checks and group-call signaling.
+  const groupAvailable = waitFor(bobSocket, "group-call:available");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:start", {
+    groupId: String(group.id)
+  }), {
+    ok: true,
+    groupId: String(group.id),
+    participants: [{ userId: String(alice.id), username: alice.username }]
+  });
+  const [availablePayload] = await groupAvailable;
+  assert.equal(availablePayload.groupId, String(group.id));
+  assert.equal(availablePayload.hostId, String(alice.id));
+
+  const participantJoined = waitFor(aliceSocket, "group-call:participant-joined");
+  const joinedAck = await emitAck(bobSocket, "group-call:join", {
+    groupId: String(group.id)
+  });
+  assert.equal(joinedAck.ok, true);
+  assert.equal(joinedAck.groupId, String(group.id));
+  const [joinedPayload] = await participantJoined;
+  assert.equal(joinedPayload.userId, String(bob.id));
+
+  const outsiderStatus = await emitAck(outsiderSocket, "group-call:status", {
+    groupId: String(group.id)
+  });
+  assert.deepEqual(outsiderStatus, {
+    ok: false, error: "You are not a current member of this group."
+  });
+
+  const groupOffer = waitFor(bobSocket, "group-call:offer");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:offer", {
+    groupId: String(group.id),
+    targetUserId: String(bob.id),
+    description: { type: "offer", sdp: "phase102-group-offer" }
+  }), { ok: true });
+  const [groupOfferPayload] = await groupOffer;
+  assert.equal(groupOfferPayload.groupId, String(group.id));
+  assert.equal(groupOfferPayload.senderId, String(alice.id));
+  assert.equal(groupOfferPayload.description.sdp, "phase102-group-offer");
+
+  const handRaised = waitFor(aliceSocket, "group-call:hand-raised");
+  assert.deepEqual(await emitAck(bobSocket, "group-call:hand-raise", {
+    groupId: String(group.id), raised: true
+  }), { ok: true, raised: true });
+  const [handRaisedPayload] = await handRaised;
+  assert.equal(handRaisedPayload.userId, String(bob.id));
+  assert.equal(handRaisedPayload.raised, true);
+
+  const muteRequested = waitFor(bobSocket, "group-call:mute-request");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:moderate", {
+    groupId: String(group.id), targetUserId: String(bob.id), action: "request-mute"
+  }), {
+    ok: true, action: "request-mute", targetUserId: String(bob.id)
+  });
+  const [mutePayload] = await muteRequested;
+  assert.equal(mutePayload.groupId, String(group.id));
+
+  const unauthorizedModeration = await emitAck(bobSocket, "group-call:moderate", {
+    groupId: String(group.id), targetUserId: String(alice.id), action: "remove"
+  });
+  assert.deepEqual(unauthorizedModeration, {
+    ok: false, error: "Only the call host or a group admin can moderate participants."
+  });
+
+  const groupEnded = waitFor(bobSocket, "group-call:ended");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:end", {
+    groupId: String(group.id)
+  }), { ok: true });
+  const [groupEndedPayload] = await groupEnded;
+  assert.equal(groupEndedPayload.groupId, String(group.id));
+  assert.equal(groupEndedPayload.reason, "host-ended");
+
   const offlineEvent = waitFor(bobSocket, "presence:update", 7000);
   const aliceSecondSession = await connectClient(url, tokenFor(alice));
   assert.equal(realtimeState.getOnlineUserIds().filter(id => id === String(alice.id)).length, 1);
