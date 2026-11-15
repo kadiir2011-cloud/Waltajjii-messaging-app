@@ -8,6 +8,8 @@ on:
       - "migrations/postgres/**"
       - "test/phase55-postgres-realtime-integration.test.js"
       - "test/phase102-postgres-staging-integration.test.js"
+      - "test/phase101-postgres-realtime-parity.test.js"
+      - "PHASE-103-SHARED-REALTIME-SCALABILITY.md"
       - "test/phase99-postgres-staging-bootstrap.test.js"
       - ".github/workflows/phase102-postgres-staging-integration.yml"
   push:
@@ -46,6 +48,6 @@ jobs:
       - name: Install Socket.IO client for isolated integration test
         run: npm install --no-save --package-lock=false socket.io-client@4.8.1 @socket.io/postgres-adapter@0.5.0
       - name: Verify staging runtime and disposable database safety
-        run: node --test test/phase99-postgres-staging-bootstrap.test.js test/phase102-postgres-staging-integration.test.js
+        run: node --test test/phase99-postgres-staging-bootstrap.test.js test/phase102-postgres-staging-integration.test.js test/phase101-postgres-realtime-parity.test.js
       - name: Run real PostgreSQL and Socket.IO integration
         run: node --test test/phase55-postgres-realtime-integration.test.js
