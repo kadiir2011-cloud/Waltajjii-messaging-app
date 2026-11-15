@@ -18,7 +18,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService } = {}) {
   if (!realtimeService ||
       typeof realtimeService.listGroupIdsForUser !== "function" ||
       typeof realtimeService.isGroupMember !== "function" ||
-      typeof realtimeService.getGroupMemberRole !== "function" ||
       typeof realtimeService.markMessageDelivered !== "function") {
     throw new TypeError("A complete PostgreSQL realtime service is required.");
   }
