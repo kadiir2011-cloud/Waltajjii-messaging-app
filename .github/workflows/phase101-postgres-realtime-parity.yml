@@ -4,6 +4,8 @@ on:
     paths:
       - "src/postgres/postgres-realtime-socket.js"
       - "src/services/postgres-realtime-service.js"
+      - "src/services/postgres-call-state-service.js"
+      - "migrations/postgres/007_realtime_call_hand_raise.sql"
       - "src/postgres/postgres-realtime-server.js"
       - "src/postgres/postgres-staging-runtime.js"
       - "test/phase101-postgres-realtime-parity.test.js"
