@@ -69,7 +69,11 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
     await tx.execute(
       `INSERT INTO realtime_call_device_sessions
        (call_id,user_id,server_id,socket_id,last_seen_at,lease_expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (server_id,socket_id) DO UPDATE SET
+         call_id=EXCLUDED.call_id,user_id=EXCLUDED.user_id,
+         connected_at=CURRENT_TIMESTAMP,last_seen_at=EXCLUDED.last_seen_at,
+         lease_expires_at=EXCLUDED.lease_expires_at,disconnected_at=NULL`,
       [callId, userId, serverId, socketId, at, expiry]
     );
     await tx.execute(
