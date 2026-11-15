@@ -196,7 +196,7 @@ test("group-call lifecycle enforces membership, relays peer signaling, and restr
   const members = new Set(["11", "22"]);
   const io = new MockIO();
   attachPostgresRealtime(io, {
-    jwt: { verify: token => ({ userId: token, username: "user" + token }) },
+    jwt: { verify: token => ({ userId: token, username: token === "11" ? "host" : token === "22" ? "member" : "outsider" }) },
     jwtSecret: "s".repeat(40),
     realtimeService: {
       listGroupIdsForUser: async userId => members.has(userId) ? ["5"] : [],
