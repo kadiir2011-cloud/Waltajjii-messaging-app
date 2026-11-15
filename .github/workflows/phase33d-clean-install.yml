@@ -1,0 +1,46 @@
+name: Phase 33D clean install and readiness checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - waltajjii-production-readiness-phase33
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "src/db/postgres-adapter.js"
+      - "src/db/postgres-pool-config.js"
+      - "src/services/postgres-auth-service.js"
+      - "test/postgres-*.test.js"
+      - ".github/workflows/phase33d-clean-install.yml"
+  push:
+    branches:
+      - waltajjii-postgres-adapter-phase33c
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "src/db/postgres-adapter.js"
+      - "src/db/postgres-pool-config.js"
+      - "src/services/postgres-auth-service.js"
+      - "test/postgres-*.test.js"
+      - ".github/workflows/phase33d-clean-install.yml"
+
+jobs:
+  clean-install-and-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Phase 33C source
+        uses: actions/checkout@v5
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exactly from package-lock.json
+        run: npm ci --no-audit --no-fund
+      - name: Verify PostgreSQL and SQLite drivers load
+        run: node -e "require('pg'); require('better-sqlite3'); console.log('PostgreSQL and SQLite drivers loaded successfully.')"
+      - name: Verify installed dependency tree
+        run: npm ls --depth=0
+      - name: Run PostgreSQL adapter unit tests
+        run: node --test test/postgres-adapter.test.js test/postgres-pool-config.test.js test/postgres-auth-service.test.js

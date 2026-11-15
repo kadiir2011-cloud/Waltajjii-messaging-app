@@ -1,0 +1,53 @@
+name: Phase 78 regression hardening
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "public/**"
+      - "test/**"
+      - ".github/workflows/phase78-regression-hardening.yml"
+      - "PHASE-78-REGRESSION-HARDENING.md"
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check server and browser JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check public/app.js
+          find src public test -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Run feature regression and isolated unit tests
+        run: >-
+          node --test
+          test/phase78-regression-hardening.test.js
+          test/phase77-ethiopian-language-expansion.test.js
+          test/phase76-group-meeting-management.test.js
+          test/phase75-group-call-controls.test.js
+          test/phase74-group-video-mesh.test.js
+          test/phase73-group-call-signaling.test.js
+          test/phase72-secure-call-screen-sharing.test.js
+          test/phase71-smart-network-adaptation.test.js
+          test/phase70-call-recovery.test.js
+          test/phase69-call-quality-monitor.test.js
+          test/phase68-live-call-interpreter.test.js
+          test/phase67-live-call-captions.test.js
+          test/phase66-voice-intelligence.test.js
+          test/phase65-ai-assistant-ui.test.js
+          test/phase63-final-security-audit.test.js
+          test/phase56-api-frontend-regression.test.js
+          test/postgres-adapter.test.js
+          test/postgres-auth-route.test.js
+          test/postgres-auth-service.test.js
+          test/postgres-pool-config.test.js
+          test/postgres-realtime-service.test.js
+          test/postgres-test-app.test.js

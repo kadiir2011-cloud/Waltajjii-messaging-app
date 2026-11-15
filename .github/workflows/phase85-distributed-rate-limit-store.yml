@@ -1,0 +1,25 @@
+name: Phase 85 distributed rate-limit store
+on:
+  pull_request:
+    paths:
+      - "src/security/redis-rest-rate-limit-store.js"
+      - "test/phase85-distributed-rate-limit-store.test.js"
+      - ".github/workflows/phase85-distributed-rate-limit-store.yml"
+      - "PHASE-85-DISTRIBUTED-RATE-LIMIT-STORE.md"
+permissions:
+  contents: read
+jobs:
+  distributed-rate-limit-store:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check syntax
+        run: |
+          node --check src/security/redis-rest-rate-limit-store.js
+          node --check test/phase85-distributed-rate-limit-store.test.js
+      - name: Run mocked store contract tests
+        run: node --test test/phase85-distributed-rate-limit-store.test.js

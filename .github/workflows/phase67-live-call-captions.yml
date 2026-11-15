@@ -1,0 +1,31 @@
+name: Phase 67 live call captions
+on:
+  pull_request:
+    paths:
+      - "src/postgres/postgres-realtime-socket.js"
+      - "public/app.js"
+      - "public/index.html"
+      - "test/phase44-postgres-realtime-socket.test.js"
+      - "test/phase67-live-call-captions.test.js"
+      - "PHASE-67-LIVE-CALL-CAPTIONS.md"
+      - ".github/workflows/phase67-live-call-captions.yml"
+permissions:
+  contents: read
+jobs:
+  live-call-captions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/postgres/postgres-realtime-socket.js
+          node --check public/app.js
+      - name: Run live caption and prior voice AI tests
+        run: node --test test/phase67-live-call-captions.test.js test/phase44-postgres-realtime-socket.test.js test/phase66-audio-intelligence.test.js test/phase66-audio-ui.test.js test/phase64-ai-assistant.test.js test/phase65-ai-assistant-ui.test.js

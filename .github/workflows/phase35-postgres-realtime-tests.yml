@@ -1,0 +1,27 @@
+name: Phase 35 PostgreSQL realtime persistence tests
+on:
+  pull_request:
+    branches: [waltajjii-postgres-auth-phase34]
+    paths:
+      - "src/services/postgres-realtime-service.js"
+      - "test/postgres-realtime-service.test.js"
+      - ".github/workflows/phase35-postgres-realtime-tests.yml"
+  push:
+    branches: [waltajjii-postgres-realtime-phase35]
+    paths:
+      - "src/services/postgres-realtime-service.js"
+      - "test/postgres-realtime-service.test.js"
+      - ".github/workflows/phase35-postgres-realtime-tests.yml"
+jobs:
+  postgres-realtime-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install from committed lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Run realtime and authentication tests
+        run: node --test test/postgres-realtime-service.test.js test/postgres-auth-service.test.js test/postgres-auth-route.test.js

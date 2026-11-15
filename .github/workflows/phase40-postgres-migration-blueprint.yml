@@ -1,0 +1,23 @@
+name: Phase 40 PostgreSQL migration blueprint checks
+
+on:
+  pull_request:
+    paths:
+      - "PHASE-40-POSTGRESQL-MIGRATION-AND-PUBLIC-LAUNCH-BLUEPRINT.md"
+      - "test/phase40-postgres-migration-blueprint.test.js"
+      - ".github/workflows/phase40-postgres-migration-blueprint.yml"
+      - "migrations/postgres/001_initial_schema.sql"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-blueprint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify migration inventory and release gates
+        run: node --test test/phase40-postgres-migration-blueprint.test.js

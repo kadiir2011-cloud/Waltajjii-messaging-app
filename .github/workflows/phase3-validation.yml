@@ -1,0 +1,28 @@
+name: Phase 3 syntax validation
+
+on:
+  push:
+    branches:
+      - groups-channels-phase3
+  pull_request:
+    branches:
+      - social-connections-phase2
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check src/db.js
+          node --check src/routes/channels.js
+          node --check src/routes/groups.js
+          node --check src/routes/social.js
+          node --check public/app.js

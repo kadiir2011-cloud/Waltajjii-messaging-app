@@ -1,0 +1,30 @@
+name: Phase 81 account security tests
+on:
+  pull_request:
+    paths:
+      - "src/routes/auth.js"
+      - "src/security/password-policy.js"
+      - "test/phase81-account-security.test.js"
+      - ".github/workflows/phase81-account-security.yml"
+      - "PHASE-81-ACCOUNT-SECURITY-HARDENING.md"
+permissions:
+  contents: read
+jobs:
+  account-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci
+      - name: Check syntax
+        run: |
+          node --check src/security/password-policy.js
+          node --check src/routes/auth.js
+          node --check test/phase81-account-security.test.js
+      - name: Run account security tests
+        run: node --test test/phase81-account-security.test.js

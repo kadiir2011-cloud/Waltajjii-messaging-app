@@ -1,0 +1,35 @@
+name: Phase 34 PostgreSQL auth route tests
+
+on:
+  pull_request:
+    branches:
+      - waltajjii-postgres-adapter-phase33c
+    paths:
+      - "src/routes/postgres-auth.js"
+      - "src/services/postgres-auth-service.js"
+      - "test/postgres-auth-route.test.js"
+      - ".github/workflows/phase34-postgres-auth-tests.yml"
+  push:
+    branches:
+      - waltajjii-postgres-auth-phase34
+    paths:
+      - "src/routes/postgres-auth.js"
+      - "src/services/postgres-auth-service.js"
+      - "test/postgres-auth-route.test.js"
+      - ".github/workflows/phase34-postgres-auth-tests.yml"
+
+jobs:
+  postgres-auth-route-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install from committed lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Run PostgreSQL authentication service and route tests
+        run: node --test test/postgres-auth-service.test.js test/postgres-auth-route.test.js

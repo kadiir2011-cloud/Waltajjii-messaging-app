@@ -1,0 +1,50 @@
+name: Phase 92 verified snapshot PostgreSQL rehearsal
+on:
+  pull_request:
+    paths:
+      - "scripts/phase91-verified-local-backup-snapshot.js"
+      - "scripts/phase58-postgres-migration-rehearsal.js"
+      - "scripts/phase92-verified-snapshot-postgres-rehearsal.js"
+      - "test/phase92-verified-snapshot-postgres-rehearsal.test.js"
+      - "migrations/postgres/**"
+      - "src/db.js"
+      - ".github/workflows/phase92-verified-snapshot-postgres-rehearsal.yml"
+      - "PHASE-92-VERIFIED-SNAPSHOT-POSTGRES-REHEARSAL.md"
+permissions:
+  contents: read
+jobs:
+  verified-snapshot-rehearsal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase92_rehearsal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase92_rehearsal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/waltajjii_phase92_rehearsal
+      PGSSL: "false"
+      WALTAJJII_ALLOW_DISPOSABLE_TARGET: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check syntax
+        run: |
+          node --check scripts/phase92-verified-snapshot-postgres-rehearsal.js
+          node --check test/phase92-verified-snapshot-postgres-rehearsal.test.js
+      - name: Verify snapshot before disposable PostgreSQL import
+        run: node --test test/phase92-verified-snapshot-postgres-rehearsal.test.js

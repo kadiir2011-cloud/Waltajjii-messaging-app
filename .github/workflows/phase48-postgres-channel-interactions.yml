@@ -1,0 +1,41 @@
+name: Phase 48 PostgreSQL channel interactions
+on:
+  pull_request:
+    paths:
+      - "migrations/postgres/001_initial_schema.sql"
+      - "migrations/postgres/002_channel_message_interactions.sql"
+      - "src/services/postgres-channels-service.js"
+      - "src/routes/postgres-channels.js"
+      - "src/db/postgres-adapter.js"
+      - "test/phase48-postgres-channel-interactions.test.js"
+      - ".github/workflows/phase48-postgres-channel-interactions.yml"
+permissions:
+  contents: read
+jobs:
+  channel-interactions:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase48_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase48_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase48_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Test channel interaction HTTP flows
+        run: node --test test/phase48-postgres-channel-interactions.test.js

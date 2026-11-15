@@ -1,0 +1,51 @@
+name: Phase 61 reminder worker reliability
+
+on:
+  pull_request:
+    branches: [main, waltajjii-gate0-integration, waltajjii-phase60-attachment-lifecycle]
+    paths:
+      - "src/workers/postgres-group-event-reminder-worker.js"
+      - "src/services/postgres-group-governance-service.js"
+      - "test/phase61-reminder-worker.test.js"
+      - "test/phase53-postgres-group-governance.test.js"
+      - ".github/workflows/phase61-reminder-worker-reliability.yml"
+  push:
+    branches: [waltajjii-phase61-reminder-worker-reliability]
+
+permissions:
+  contents: read
+
+jobs:
+  reminder-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase61_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase61_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase61_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check worker syntax
+        run: node --check src/workers/postgres-group-event-reminder-worker.js
+      - name: Test worker lifecycle, monitoring and retries
+        run: node --test test/phase61-reminder-worker.test.js
+      - name: Test PostgreSQL reminder concurrency and idempotency
+        run: node --test test/phase53-postgres-group-governance.test.js

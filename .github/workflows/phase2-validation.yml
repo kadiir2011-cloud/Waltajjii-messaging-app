@@ -1,0 +1,26 @@
+name: Phase 2 syntax validation
+
+on:
+  push:
+    branches:
+      - social-connections-phase2
+  pull_request:
+    branches:
+      - profile-redesign-review
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check src/db.js
+          node --check src/routes/social.js
+          node --check src/routes/auth.js
+          node --check src/routes/messages.js
+          node --check public/app.js
