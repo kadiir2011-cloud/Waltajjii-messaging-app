@@ -120,6 +120,7 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
         await tx.one("SELECT id FROM groups WHERE id=$1 FOR UPDATE", [groupId]);
         const member = await tx.one("SELECT 1 AS member FROM group_members WHERE group_id=$1 AND user_id=$2", [groupId,userId]);
         if (!member) return { ok: false, error: "You are not a current group member." };
+        await expireUserLeases(tx, userId, at);
         const call = await tx.one(
           "SELECT id,host_user_id FROM realtime_call_sessions WHERE group_id=$1 AND call_type='group' AND status='active' FOR UPDATE",
           [groupId]
