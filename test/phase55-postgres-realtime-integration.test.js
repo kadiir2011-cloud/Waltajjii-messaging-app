@@ -273,6 +273,24 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const [joinedPayload] = await participantJoined;
   assert.equal(joinedPayload.userId, String(bob.id));
 
+  // A second device for the same account joins without consuming another
+  // participant slot; leaving that device must not remove the account.
+  const bobSecondSession = await connectClient(url, tokenFor(bob));
+  const secondSessionAck = await emitAck(bobSecondSession, "group-call:join", {
+    groupId: String(group.id)
+  });
+  assert.equal(secondSessionAck.ok, true);
+  assert.equal(secondSessionAck.additionalSession, true);
+  assert.equal(secondSessionAck.participants.length, 2);
+  assert.deepEqual(await emitAck(bobSecondSession, "group-call:leave", {
+    groupId: String(group.id)
+  }), { ok: true });
+  const participantCountAfterSecondDeviceLeaves = await emitAck(aliceSocket, "group-call:status", {
+    groupId: String(group.id)
+  });
+  assert.equal(participantCountAfterSecondDeviceLeaves.participantCount, 2);
+  bobSecondSession.disconnect();
+
   const outsiderStatus = await emitAck(outsiderSocket, "group-call:status", {
     groupId: String(group.id)
   });
