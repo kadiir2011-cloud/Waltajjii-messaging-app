@@ -29,7 +29,7 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
          )`,
       [callId, at]
     );
-    const call = await tx.one("SELECT host_user_id, status FROM realtime_call_sessions WHERE id = $1 FOR UPDATE", [callId]);
+    const call = await tx.one("SELECT call_type, host_user_id, status FROM realtime_call_sessions WHERE id = $1 FOR UPDATE", [callId]);
     if (!call || call.status !== "active") return;
     const host = await tx.one(
       "SELECT 1 AS active FROM realtime_call_participants WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL",
@@ -39,7 +39,7 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
       "SELECT COUNT(*)::int AS count FROM realtime_call_participants WHERE call_id = $1 AND left_at IS NULL",
       [callId]
     );
-    if (!host || Number(count?.count || 0) === 0) {
+    if ((call.call_type === "group" && !host) || Number(count?.count || 0) === 0) {
       await tx.execute(
         "UPDATE realtime_call_sessions SET status='ended', ended_at=$2 WHERE id=$1 AND status='active'",
         [callId, at]
@@ -323,9 +323,80 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
     });
   }
 
+
+  async function hasActiveCall({ userId }) {
+    userId = validId(userId);
+    if (!userId) return false;
+    return Boolean(await db.one("SELECT 1 AS active FROM realtime_call_participants WHERE user_id=$1 AND left_at IS NULL LIMIT 1", [userId]));
+  }
+
+  async function startDirectCall({ callerId, targetId, callerUsername, targetUsername, serverId, socketId }) {
+    callerId=validId(callerId); targetId=validId(targetId);
+    if(!callerId||!targetId||callerId===targetId||!callerUsername||!targetUsername||!serverId||!socketId) return {ok:false,error:"Invalid direct-call identity."};
+    const at=now(), expiry=new Date(at.getTime()+leaseMs);
+    try {
+      return await db.withTransaction(async tx=>{
+        await tx.many("SELECT id FROM users WHERE id = ANY($1::bigint[]) ORDER BY id FOR UPDATE",[[callerId,targetId]]);
+        await expireUserLeases(tx,callerId,at); await expireUserLeases(tx,targetId,at);
+        const occupied=await tx.many("SELECT user_id FROM realtime_call_participants WHERE user_id = ANY($1::bigint[]) AND left_at IS NULL FOR UPDATE",[[callerId,targetId]]);
+        if(occupied.length) return {ok:false,error:"One participant is already in a call."};
+        const call=await tx.one("INSERT INTO realtime_call_sessions(call_type,group_id,host_user_id,expires_at) VALUES('direct',NULL,$1,$2) RETURNING id",[callerId,expiry]);
+        await tx.execute("INSERT INTO realtime_call_participants(call_id,user_id,username,participant_role,last_seen_at,lease_expires_at) VALUES($1,$2,$3,'host',$4,$5),($1,$6,$7,'member',$4,$5)",[call.id,callerId,callerUsername,at,expiry,targetId,targetUsername]);
+        await createDeviceSession(tx,call.id,callerId,serverId,socketId,at);
+        return {ok:true,callId:String(call.id),callerId,targetId};
+      });
+    } catch(error) { if(error?.code==="23505") return {ok:false,error:"One participant is already in an active call."}; throw error; }
+  }
+
+  async function acceptDirectCall({ userId, otherUserId, serverId, socketId }) {
+    userId=validId(userId); otherUserId=validId(otherUserId);
+    if(!userId||!otherUserId||userId===otherUserId||!serverId||!socketId) return {ok:false,error:"Invalid direct-call identity."};
+    const at=now();
+    return db.withTransaction(async tx=>{
+      const call=await tx.one("SELECT c.id,c.host_user_id FROM realtime_call_sessions c JOIN realtime_call_participants p ON p.call_id=c.id WHERE c.call_type='direct' AND c.status='active' AND p.user_id=$1 AND EXISTS(SELECT 1 FROM realtime_call_participants q WHERE q.call_id=c.id AND q.user_id=$2) ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c",[userId,otherUserId]);
+      if(!call) return {ok:false,error:"There is no active direct call to accept or recover."};
+      await expireCallLeases(tx,call.id,at);
+      const fresh=await tx.one("SELECT status FROM realtime_call_sessions WHERE id=$1",[call.id]);
+      if(!fresh||fresh.status!=="active") return {ok:false,error:"This call has ended."};
+      const other=await tx.one("SELECT 1 AS active FROM realtime_call_participants WHERE call_id=$1 AND user_id=$2 AND left_at IS NULL",[call.id,otherUserId]);
+      if(!other) return {ok:false,error:"The other participant is no longer in this call."};
+      await tx.execute("UPDATE realtime_call_participants SET left_at=NULL,last_seen_at=$3,lease_expires_at=$4 WHERE call_id=$1 AND user_id=$2",[call.id,userId,at,leaseUntil()]);
+      await createDeviceSession(tx,call.id,userId,serverId,socketId,at);
+      return {ok:true,callId:String(call.id),callerId:String(call.host_user_id),otherUserId};
+    });
+  }
+
+  async function authorizeDirectCall({ userId, targetId, serverId, socketId }) {
+    userId=validId(userId); targetId=validId(targetId);
+    if(!userId||!targetId||!serverId||!socketId||userId===targetId) return {ok:false};
+    const call=await db.one("SELECT c.id FROM realtime_call_sessions c JOIN realtime_call_participants a ON a.call_id=c.id JOIN realtime_call_participants b ON b.call_id=c.id WHERE c.call_type='direct' AND c.status='active' AND a.user_id=$1 AND a.left_at IS NULL AND b.user_id=$2 AND b.left_at IS NULL AND EXISTS(SELECT 1 FROM realtime_call_device_sessions d WHERE d.call_id=c.id AND d.user_id=$1 AND d.server_id=$3 AND d.socket_id=$4 AND d.disconnected_at IS NULL AND d.lease_expires_at>$5) LIMIT 1",[userId,targetId,serverId,socketId,now()]);
+    return call?{ok:true,callId:String(call.id)}:{ok:false};
+  }
+
+  async function getDirectCallStatus({userId}) {
+    userId=validId(userId); if(!userId) return {ok:false,error:"Invalid user."};
+    const call=await db.one("SELECT c.id,c.host_user_id,p.user_id AS other_user_id,p.username AS other_username FROM realtime_call_sessions c JOIN realtime_call_participants p ON p.call_id=c.id WHERE c.call_type='direct' AND c.status='active' AND EXISTS(SELECT 1 FROM realtime_call_participants mine WHERE mine.call_id=c.id AND mine.user_id=$1 AND mine.left_at IS NULL) AND p.user_id<>$1 AND p.left_at IS NULL ORDER BY c.created_at DESC LIMIT 1",[userId]);
+    return call?{ok:true,active:true,callId:String(call.id),otherUserId:String(call.other_user_id),otherUsername:call.other_username,callerId:String(call.host_user_id)}:{ok:true,active:false};
+  }
+
+  async function endDirectCall({userId,targetId}) {
+    userId=validId(userId); targetId=validId(targetId);
+    if(!userId||!targetId||userId===targetId) return {ok:false,error:"Invalid direct-call identity."};
+    return db.withTransaction(async tx=>{
+      const call=await tx.one("SELECT c.id FROM realtime_call_sessions c JOIN realtime_call_participants a ON a.call_id=c.id JOIN realtime_call_participants b ON b.call_id=c.id WHERE c.call_type='direct' AND c.status='active' AND a.user_id=$1 AND b.user_id=$2 FOR UPDATE OF c",[userId,targetId]);
+      if(!call) return {ok:true,alreadyEnded:true};
+      const at=now();
+      await tx.execute("UPDATE realtime_call_sessions SET status='ended',ended_at=$2,ended_by=$3 WHERE id=$1 AND status='active'",[call.id,at,userId]);
+      await tx.execute("UPDATE realtime_call_participants SET left_at=$2,hand_raised=FALSE WHERE call_id=$1 AND left_at IS NULL",[call.id,at]);
+      await tx.execute("UPDATE realtime_call_device_sessions SET disconnected_at=$2 WHERE call_id=$1 AND disconnected_at IS NULL",[call.id,at]);
+      return {ok:true,callId:String(call.id)};
+    });
+  }
+
   return Object.freeze({
     startGroupCall, joinGroupCall, heartbeat, leaveSession, getGroupCallStatus,
-    endGroupCall, setHandRaised, moderateGroupCall
+    endGroupCall, setHandRaised, moderateGroupCall, hasActiveCall, startDirectCall,
+    acceptDirectCall, authorizeDirectCall, getDirectCallStatus, endDirectCall
   });
 }
 module.exports = { createPostgresCallStateService };
