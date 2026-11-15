@@ -40,7 +40,12 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
       "SELECT COUNT(*)::int AS count FROM realtime_call_participants WHERE call_id = $1 AND left_at IS NULL",
       [callId]
     );
-    if ((call.call_type === "group" && !host) || Number(count?.count || 0) === 0) {
+    const activeDevices = await tx.one(
+      "SELECT COUNT(*)::int AS count FROM realtime_call_device_sessions WHERE call_id=$1 AND disconnected_at IS NULL AND lease_expires_at>$2",
+      [callId, at]
+    );
+    if ((call.call_type === "group" && (!host || Number(count?.count || 0) === 0)) ||
+        (call.call_type === "direct" && Number(activeDevices?.count || 0) === 0)) {
       await tx.execute(
         "UPDATE realtime_call_sessions SET status='ended', ended_at=$2 WHERE id=$1 AND status='active'",
         [callId, at]
