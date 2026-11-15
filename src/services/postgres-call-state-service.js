@@ -22,6 +22,7 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
       `UPDATE realtime_call_participants p
        SET left_at = $2
        WHERE p.call_id = $1 AND p.left_at IS NULL
+         AND EXISTS (SELECT 1 FROM realtime_call_sessions s WHERE s.id=p.call_id AND s.call_type='group')
          AND NOT EXISTS (
            SELECT 1 FROM realtime_call_device_sessions d
            WHERE d.call_id = p.call_id AND d.user_id = p.user_id
