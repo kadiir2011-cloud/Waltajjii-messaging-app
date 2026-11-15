@@ -74,22 +74,19 @@ test("PostgreSQL API composition mounts every opt-in route domain", () => {
   ]) assert.ok(api.includes('router.use("' + prefix + '"'), "Missing API mount: " + prefix);
 });
 
-test("realtime parity audit records the exact live events still missing from PostgreSQL", () => {
+test("Phase 101 closes the ten realtime event-registration gaps from Phase 100", () => {
   const liveEvents = events("src/server.js");
   const postgresEvents = events("src/postgres/postgres-realtime-socket.js");
-  const knownGaps = [
-    "call:recovery-request",
-    "call:recovery-offer",
-    "call:recovery-answer",
-    "group-call:start",
-    "group-call:status",
-    "group-call:join",
-    "group-call:hand-raise",
-    "group-call:moderate",
-    "group-call:leave",
-    "group-call:end"
+  const recovered = [
+    "call:recovery-request", "call:recovery-offer", "call:recovery-answer",
+    "group-call:start", "group-call:status", "group-call:join",
+    "group-call:hand-raise", "group-call:moderate", "group-call:leave", "group-call:end"
   ];
-  assert.deepEqual(missing(liveEvents, postgresEvents).sort(), knownGaps.sort());
+  for (const eventName of recovered) {
+    assert.ok(liveEvents.includes(eventName), "SQLite reference event missing: " + eventName);
+    assert.ok(postgresEvents.includes(eventName), "PostgreSQL event not implemented: " + eventName);
+  }
+  assert.deepEqual(missing(liveEvents, postgresEvents), []);
   assert.ok(postgresEvents.includes("call:caption"));
   assert.ok(!liveEvents.includes("call:caption"));
 });
