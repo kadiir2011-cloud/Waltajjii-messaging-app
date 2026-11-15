@@ -11,6 +11,79 @@ const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const postgresSocket = read("src/postgres/postgres-realtime-socket.js");
 
+function createMockCallState({ isMember = async () => true, getRole = async () => "member" } = {}) {
+  const calls = new Map();
+  let nextId = 1;
+  function active(groupId) {
+    const call = calls.get(String(groupId));
+    return call && call.status === "active" ? call : null;
+  }
+  function participant(call,userId) { return call?.participants.get(String(userId)) || null; }
+  function status(call,groupId) {
+    const participants = [...call.participants.entries()].map(([userId,p]) => ({
+      userId, username:p.username, participantRole:userId===call.hostId?"host":"member", handRaised:p.handRaised
+    }));
+    return { ok:true,groupId:String(groupId),active:true,callId:call.id,hostId:call.hostId,
+      hostUsername:participant(call,call.hostId)?.username || null,
+      participantCount:participants.length,participants };
+  }
+  return {
+    async startGroupCall({groupId,userId,username,serverId,socketId}) {
+      if(!await isMember(groupId,userId))return {ok:false,error:"Only current group members can start a call."};
+      if(active(groupId))return {ok:false,error:"A group call is already active."};
+      for(const c of calls.values())if(c.status==="active"&&c.participants.has(String(userId)))return {ok:false,error:"You are already in an active call."};
+      const c={id:String(nextId++),groupId:String(groupId),hostId:String(userId),status:"active",participants:new Map()};
+      c.participants.set(String(userId),{username,handRaised:false,devices:new Map([[serverId+"|"+socketId,true]])});
+      calls.set(String(groupId),c);return {ok:true,callId:c.id,groupId:String(groupId)};
+    },
+    async joinGroupCall({groupId,userId,username,serverId,socketId}) {
+      if(!await isMember(groupId,userId))return {ok:false,error:"You are not a current group member."};
+      const c=active(groupId);if(!c)return {ok:false,error:"No active group call is available."};
+      let p=participant(c,userId);const additionalSession=Boolean(p);
+      if(!p){if(c.participants.size>=8)return {ok:false,error:"This group call has reached its 8-person limit."};
+        for(const other of calls.values())if(other.status==="active"&&other.participants.has(String(userId)))return {ok:false,error:"You are already in another call."};
+        p={username,handRaised:false,devices:new Map()};c.participants.set(String(userId),p);}
+      p.devices.set(serverId+"|"+socketId,true);
+      return {ok:true,callId:c.id,groupId:String(groupId),additionalSession,participantCount:c.participants.size};
+    },
+    async heartbeat(){return true;},
+    async leaveSession({serverId,socketId}) {
+      for(const c of calls.values())for(const [uid,p] of c.participants){
+        if(p.devices.delete(serverId+"|"+socketId)){
+          const participantLeft=p.devices.size===0;
+          if(participantLeft)c.participants.delete(uid);
+          const callEnded=uid===c.hostId&&participantLeft;
+          if(callEnded){c.status="ended";c.participants.clear();}
+          return {ok:true,groupId:c.groupId,userId:uid,participantLeft,callEnded};
+        }
+      }
+      return {ok:true,alreadyLeft:true};
+    },
+    async getGroupCallStatus({groupId,userId}) {
+      if(!await isMember(groupId,userId))return {ok:false,error:"You are not a current member of this group."};
+      const c=active(groupId);return c?status(c,groupId):{ok:true,groupId:String(groupId),active:false,participantCount:0,participants:[]};
+    },
+    async endGroupCall({groupId,userId}) {
+      const c=active(groupId);if(!c||c.hostId!==String(userId))return {ok:false,error:"Only the call host can end this call."};
+      c.status="ended";c.participants.clear();return {ok:true,callId:c.id,groupId:String(groupId)};
+    },
+    async setHandRaised({groupId,userId,serverId,socketId,raised}) {
+      const c=active(groupId),p=participant(c,userId);
+      if(!await isMember(groupId,userId)||!p||!p.devices.has(serverId+"|"+socketId))return {ok:false,error:"This device is not an active call participant."};
+      p.handRaised=raised;return {ok:true,raised};
+    },
+    async moderateGroupCall({groupId,actorUserId,targetUserId,action}) {
+      const c=active(groupId),p=participant(c,targetUserId);
+      if(!c||!p)return {ok:false,error:"The target is not an active call participant."};
+      if(!await isMember(groupId,actorUserId)||!await isMember(groupId,targetUserId))return {ok:false,error:"A participant is no longer a group member."};
+      if(c.hostId!==String(actorUserId)&&await getRole(groupId,actorUserId)!=="admin")return {ok:false,error:"Only the call host or a group admin can moderate participants."};
+      if(action==="remove"){if(c.hostId===String(targetUserId))return {ok:false,error:"The call host cannot be removed."};c.participants.delete(String(targetUserId));}
+      if(action==="lower-hand")p.handRaised=false;
+      return {ok:true,action,targetUserId:String(targetUserId),targetUsername:p.username,hostId:c.hostId};
+    }
+  };
+}
+
 function registeredEvents(source) {
   return [...source.matchAll(/socket\.on\(\s*["'\x60]([^"'\x60]+)["'\x60]/g)].map(match => match[1]);
 }
@@ -26,35 +99,31 @@ test("PostgreSQL realtime registers direct-call recovery and all group-call life
 
 test("group-call peer signaling is registered for offer, answer, and ICE candidate", () => {
   assert.match(postgresSocket, /for \(const eventName of \["group-call:offer", "group-call:answer", "group-call:ice-candidate"\]\)/);
-  assert.match(postgresSocket, /call\.participants\.has\(userId\)/);
-  assert.match(postgresSocket, /call\.participants\.has\(target\)/);
-  assert.match(postgresSocket, /realtimeService\.isGroupMember\(groupId, target\)/);
+  assert.match(postgresSocket, /callState\.getGroupCallStatus/);
+  assert.match(postgresSocket, /ids\.has\(userId\) \|\| !ids\.has\(target\)/);
 });
 
 test("group-call state is shared across socket connections, not allocated per connection", () => {
-  const outerMaps = postgresSocket.indexOf("const activeGroupCalls = new Map();");
-  const connection = postgresSocket.indexOf('io.on("connection"');
-  assert.ok(outerMaps >= 0 && outerMaps < connection);
-  assert.ok(postgresSocket.indexOf("const activeGroupCallByUser = new Map();") < connection);
+  assert.doesNotMatch(postgresSocket, /activeGroupCalls|activeGroupCallByUser/);
+  assert.match(postgresSocket, /callState\.startGroupCall/);
+  assert.match(postgresSocket, /callState\.joinGroupCall/);
 });
 
 test("moderation requires host or current group admin and validates action", () => {
-  assert.match(postgresSocket, /realtimeService\.getGroupMemberRole\(groupId, userId\)/);
-  assert.match(postgresSocket, /call\.hostId === userId \|\| role === "admin"/);
+  assert.match(postgresSocket, /callState\.moderateGroupCall/);
   assert.match(postgresSocket, /\["remove", "lower-hand", "request-mute"\]/);
   assert.match(postgresSocket, /target === call\.hostId/);
 });
 
 test("group-call start and join verify current membership and enforce participant limit", () => {
-  assert.match(postgresSocket, /await currentGroupMember\(groupId\)/);
-  assert.match(postgresSocket, /call\.participants\.size >= 8/);
+  assert.match(postgresSocket, /callState\.startGroupCall/);
+  assert.match(postgresSocket, /callState\.joinGroupCall/);
   assert.match(postgresSocket, /activeCalls\.has\(userId\)/);
-  assert.match(postgresSocket, /activeGroupCallByUser\.has\(userId\)/);
 });
 
 test("group-call disconnect cleanup and host termination release call state", () => {
   assert.match(postgresSocket, /for \(const groupId of Array\.from\(groupCallMembership\)\)/);
-  assert.match(postgresSocket, /activeGroupCalls\.delete\(groupId\)/);
+  assert.match(postgresSocket, /callState\.leaveSession/);
   assert.match(postgresSocket, /socketsLeave\("group-call:" \+ groupId\)/);
 });
 
@@ -176,7 +245,8 @@ test("two authenticated sockets can complete authorized direct-call recovery", a
       isGroupMember: async () => false,
       getGroupMemberRole: async () => null,
       markMessageDelivered: async () => null
-    }
+    },
+    callState: createMockCallState()
   });
   const caller = await io.connect("11", "caller");
   const recipient = await io.connect("22", "recipient");
@@ -209,7 +279,11 @@ test("group-call lifecycle enforces membership, relays peer signaling, and restr
       isGroupMember: async (_groupId, userId) => members.has(userId),
       getGroupMemberRole: async (_groupId, userId) => roles.get(userId) || null,
       markMessageDelivered: async () => null
-    }
+    },
+    callState: createMockCallState({
+      isMember: async (_groupId,userId)=>members.has(String(userId)),
+      getRole: async (_groupId,userId)=>roles.get(String(userId)) || null
+    })
   });
   const host = await io.connect("11", "host");
   const member = await io.connect("22", "member");
@@ -250,7 +324,8 @@ test("a non-admin participant cannot moderate another group-call participant", a
       isGroupMember: async () => true,
       getGroupMemberRole: async () => "member",
       markMessageDelivered: async () => null
-    }
+    },
+    callState: createMockCallState({ getRole: async () => "member" })
   });
   const participantA = await io.connect("41", "a");
   const participantB = await io.connect("42", "b");
@@ -274,7 +349,8 @@ test("multiple sessions for one account share one group-call participant slot", 
       isGroupMember: async () => true,
       getGroupMemberRole: async () => "member",
       markMessageDelivered: async () => null
-    }
+    },
+    callState: createMockCallState()
   });
   const host = await io.connect("101", "host");
   const memberTabOne = await io.connect("202", "member");
