@@ -273,6 +273,11 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.equal(joinedAck.groupId, String(group.id));
   const [joinedPayload] = await participantJoined;
   assert.equal(joinedPayload.userId, String(bob.id));
+  const crossInstanceStatus = await emitAck(aliceSocket, "group-call:status", {
+    groupId: String(group.id)
+  });
+  assert.equal(crossInstanceStatus.active, true);
+  assert.equal(crossInstanceStatus.participantCount, 2);
 
   // A second device for the same account joins without consuming another
   // participant slot; leaving that device must not remove the account.
@@ -333,6 +338,17 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.deepEqual(unauthorizedModeration, {
     ok: false, error: "Only the call host or a group admin can moderate participants."
   });
+
+  const removedEvent = waitFor(bobRemoteSocket, "group-call:removed");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:moderate", {
+    groupId: String(group.id), targetUserId: String(bob.id), action: "remove"
+  }), { ok: true, action: "remove", targetUserId: String(bob.id) });
+  const [removedPayload] = await removedEvent;
+  assert.equal(removedPayload.groupId, String(group.id));
+  const statusAfterRemoval = await emitAck(aliceSocket, "group-call:status", {
+    groupId: String(group.id)
+  });
+  assert.equal(statusAfterRemoval.participantCount, 1);
 
   const groupEnded = waitFor(bobRemoteSocket, "group-call:ended");
   assert.deepEqual(await emitAck(aliceSocket, "group-call:end", {
