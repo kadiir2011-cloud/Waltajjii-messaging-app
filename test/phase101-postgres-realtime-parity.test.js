@@ -112,7 +112,7 @@ test("group-call state is shared across socket connections, not allocated per co
 test("moderation requires host or current group admin and validates action", () => {
   assert.match(postgresSocket, /callState\.moderateGroupCall/);
   assert.match(postgresSocket, /\["remove", "lower-hand", "request-mute"\]/);
-  assert.match(postgresSocket, /target === call\.hostId/);
+  assert.match(read("src/services/postgres-call-state-service.js"), /String\(call\.host_user_id\) === targetUserId/);
 });
 
 test("group-call start and join verify current membership and enforce participant limit", () => {
@@ -295,7 +295,7 @@ test("group-call lifecycle enforces membership, relays peer signaling, and restr
     ok: value.ok, groupId: value.groupId
   })), { ok: true, groupId: "5" });
   assert.deepEqual(await outsider.trigger("group-call:join", { groupId: "5" }), {
-    ok: false, error: "No active group call is available to you."
+    ok: false, error: "You are not a current group member."
   });
   assert.deepEqual(await host.trigger("group-call:offer", {
     groupId: "5", targetUserId: "22", description: { type: "offer", sdp: "group-offer" }
