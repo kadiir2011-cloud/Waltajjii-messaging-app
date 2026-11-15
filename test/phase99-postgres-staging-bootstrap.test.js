@@ -45,9 +45,11 @@ test("validates before constructing a database pool", () => {
 test("builds an un-listened runtime and closes realtime before pool", async () => {
   const order = [];
   let capturedRouterOptions;
+  let appUses = [];
   const fakeExpress = () => ({
-    disable() {}, get() {}, set() {}, use() {}
+    disable() {}, get() {}, set() {}, use(...args) { appUses.push(args); }
   });
+  fakeExpress.json = () => ({ type: "json-parser" });
   class Pool {
     constructor(options) { this.options = options; }
     async query() { return { rows: [{ value: 1 }], rowCount: 1 }; }
@@ -72,6 +74,8 @@ test("builds an un-listened runtime and closes realtime before pool", async () =
   assert.equal(runtime.pool.options.connectionString, config().databaseUrl);
   assert.equal(capturedRouterOptions.services, runtime.services);
   assert.equal(capturedRouterOptions.mediaStorage, runtime.mediaStorage);
+  assert.deepEqual(appUses[0], [{ type: "json-parser" }]);
+  assert.equal(appUses[1][0], "/api");
   assert.equal(typeof runtime.httpServer.listen, "function");
   await runtime.close();
   await runtime.close();

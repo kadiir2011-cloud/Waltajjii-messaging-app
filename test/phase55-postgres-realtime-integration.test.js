@@ -4,22 +4,22 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const http = require("node:http");
-const express = require("express");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const { Pool } = require("pg");
 const { io: createClient } = require("socket.io-client");
 const { createPostgresAdapter } = require("../src/db/postgres-adapter");
-const { createPostgresRealtimeService } = require("../src/services/postgres-realtime-service");
-const { createPostgresRealtimeServer } = require("../src/postgres/postgres-realtime-server");
+const { createPostgresStagingRuntime } = require("../src/postgres/postgres-staging-runtime");
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) throw new Error("TEST_DATABASE_URL must point only to disposable CI PostgreSQL.");
+const { assertDisposablePostgresDatabaseUrl } = require("../src/postgres/postgres-test-database-guard");
+const connectionString = assertDisposablePostgresDatabaseUrl(
+  process.env.TEST_DATABASE_URL, process.env.ALLOW_DISPOSABLE_POSTGRES_TESTS
+);
 const secret = "phase55-disposable-integration-secret-at-least-32-characters";
 const pool = new Pool({ connectionString, max: 5, options: "-c search_path=waltajjii,public" });
 const db = createPostgresAdapter(pool);
 const clients = new Set();
-let server, ioServer;
+let server, stagingRuntime;
 let seededUserIds = [];
 
 function waitFor(socket, event, timeoutMs = 5000) {
@@ -55,7 +55,7 @@ function emitAck(socket, event, payload) {
   });
 }
 
-test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, receipts and calls", async () => {
+test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, receipts, direct recovery and group calls", async () => {
   const root = path.join(__dirname, "..");
   for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql"]) {
     await pool.query(fs.readFileSync(path.join(root, "migrations/postgres", migration), "utf8"));
@@ -77,17 +77,67 @@ test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, re
   const message = await db.one("INSERT INTO messages(sender_id,receiver_id,body) VALUES($1,$2,'Phase 55 receipt test') RETURNING id",
     [String(alice.id), String(bob.id)]);
 
-  const app = express();
-  app.get("/health", (_req, res) => res.json({ status: "ok" }));
-  server = http.createServer(app);
-  const realtimeService = createPostgresRealtimeService({ db });
-  const realtimeServer = createPostgresRealtimeServer(server, {
-    jwt, jwtSecret: secret, realtimeService, socketOptions: { cors: { origin: false } }
+  stagingRuntime = createPostgresStagingRuntime({
+    config: {
+      appEnvironment: "staging",
+      nodeEnvironment: "test",
+      databaseUrl: connectionString,
+      mediaBucket: "waltajjii-media-staging",
+      jwtSecret: secret,
+      storageClient: {
+        from: () => ({
+          upload: async () => ({ error: null }),
+          remove: async () => ({ error: null }),
+          download: async () => ({ data: null, error: new Error("Storage is not used in this integration test.") })
+        })
+      },
+      poolOptions: { max: 5, options: "-c search_path=waltajjii,public" }
+    },
+    Pool, bcrypt, jwt,
+    socketOptions: { cors: { origin: false } }
   });
-  ioServer = realtimeServer.io;
-  const realtimeState = realtimeServer;
+  server = stagingRuntime.httpServer;
+  const realtimeState = stagingRuntime.realtime;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const url = "http://127.0.0.1:" + server.address().port;
+
+  const liveHealth = await fetch(url + "/health/live");
+  assert.equal(liveHealth.status, 200);
+  assert.deepEqual(await liveHealth.json(), { status: "ok", environment: "staging" });
+  const readyHealth = await fetch(url + "/health/ready");
+  assert.equal(readyHealth.status, 200);
+  assert.deepEqual(await readyHealth.json(), { status: "ready", environment: "staging" });
+
+  const apiUsername = "p102_api_" + Date.now();
+  const apiPassword = "phase102-integration-password";
+  const registration = await fetch(url + "/api/auth/register", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: apiUsername, password: apiPassword })
+  });
+  assert.equal(registration.status, 201);
+  const registrationPayload = await registration.json();
+  assert.equal(registrationPayload.user.username, apiUsername);
+  seededUserIds.push(String(registrationPayload.user.id));
+
+  const login = await fetch(url + "/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: apiUsername, password: apiPassword })
+  });
+  assert.equal(login.status, 200);
+  const loginPayload = await login.json();
+  assert.ok(loginPayload.token);
+
+  const profile = await fetch(url + "/api/auth/profile", {
+    headers: { authorization: "Bearer " + loginPayload.token }
+  });
+  assert.equal(profile.status, 200);
+  const profilePayload = await profile.json();
+  assert.equal(profilePayload.user.username, apiUsername);
+
+  const unauthorizedProfile = await fetch(url + "/api/auth/profile");
+  assert.equal(unauthorizedProfile.status, 401);
 
   const aliceSocket = await connectClient(url, tokenFor(alice));
   const bobSocket = await connectClient(url, tokenFor(bob));
@@ -133,6 +183,108 @@ test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, re
   const [answerPayload] = await acceptedCall;
   assert.equal(answerPayload.recipientId, String(bob.id));
 
+  // Phase 102: exercise direct-call recovery over real authenticated sockets.
+  const recoveryRequested = waitFor(bobSocket, "call:recovery-requested");
+  assert.deepEqual(await emitAck(aliceSocket, "call:recovery-request", {
+    targetUserId: String(bob.id)
+  }), { ok: true });
+  const [recoveryRequestPayload] = await recoveryRequested;
+  assert.equal(recoveryRequestPayload.senderId, String(alice.id));
+
+  const recoveryOfferEvent = waitFor(bobSocket, "call:recovery-offer");
+  assert.deepEqual(await emitAck(aliceSocket, "call:recovery-offer", {
+    targetUserId: String(bob.id),
+    offer: { type: "offer", sdp: "phase102-recovery-offer" }
+  }), { ok: true });
+  const [recoveryOfferPayload] = await recoveryOfferEvent;
+  assert.equal(recoveryOfferPayload.senderId, String(alice.id));
+  assert.equal(recoveryOfferPayload.offer.sdp, "phase102-recovery-offer");
+
+  const recoveryAnswerEvent = waitFor(aliceSocket, "call:recovery-answer");
+  assert.deepEqual(await emitAck(bobSocket, "call:recovery-answer", {
+    targetUserId: String(alice.id),
+    answer: { type: "answer", sdp: "phase102-recovery-answer" }
+  }), { ok: true });
+  const [recoveryAnswerPayload] = await recoveryAnswerEvent;
+  assert.equal(recoveryAnswerPayload.senderId, String(bob.id));
+  assert.equal(recoveryAnswerPayload.answer.sdp, "phase102-recovery-answer");
+
+  // End the direct call before starting a group call.
+  aliceSocket.emit("call:end", { targetUserId: String(bob.id) });
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // Phase 102: real PostgreSQL membership checks and group-call signaling.
+  const groupAvailable = waitFor(bobSocket, "group-call:available");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:start", {
+    groupId: String(group.id)
+  }), {
+    ok: true,
+    groupId: String(group.id),
+    participants: [{ userId: String(alice.id), username: alice.username }]
+  });
+  const [availablePayload] = await groupAvailable;
+  assert.equal(availablePayload.groupId, String(group.id));
+  assert.equal(availablePayload.hostId, String(alice.id));
+
+  const participantJoined = waitFor(aliceSocket, "group-call:participant-joined");
+  const joinedAck = await emitAck(bobSocket, "group-call:join", {
+    groupId: String(group.id)
+  });
+  assert.equal(joinedAck.ok, true);
+  assert.equal(joinedAck.groupId, String(group.id));
+  const [joinedPayload] = await participantJoined;
+  assert.equal(joinedPayload.userId, String(bob.id));
+
+  const outsiderStatus = await emitAck(outsiderSocket, "group-call:status", {
+    groupId: String(group.id)
+  });
+  assert.deepEqual(outsiderStatus, {
+    ok: false, error: "You are not a current member of this group."
+  });
+
+  const groupOffer = waitFor(bobSocket, "group-call:offer");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:offer", {
+    groupId: String(group.id),
+    targetUserId: String(bob.id),
+    description: { type: "offer", sdp: "phase102-group-offer" }
+  }), { ok: true });
+  const [groupOfferPayload] = await groupOffer;
+  assert.equal(groupOfferPayload.groupId, String(group.id));
+  assert.equal(groupOfferPayload.senderId, String(alice.id));
+  assert.equal(groupOfferPayload.description.sdp, "phase102-group-offer");
+
+  const handRaised = waitFor(aliceSocket, "group-call:hand-raised");
+  assert.deepEqual(await emitAck(bobSocket, "group-call:hand-raise", {
+    groupId: String(group.id), raised: true
+  }), { ok: true, raised: true });
+  const [handRaisedPayload] = await handRaised;
+  assert.equal(handRaisedPayload.userId, String(bob.id));
+  assert.equal(handRaisedPayload.raised, true);
+
+  const muteRequested = waitFor(bobSocket, "group-call:mute-request");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:moderate", {
+    groupId: String(group.id), targetUserId: String(bob.id), action: "request-mute"
+  }), {
+    ok: true, action: "request-mute", targetUserId: String(bob.id)
+  });
+  const [mutePayload] = await muteRequested;
+  assert.equal(mutePayload.groupId, String(group.id));
+
+  const unauthorizedModeration = await emitAck(bobSocket, "group-call:moderate", {
+    groupId: String(group.id), targetUserId: String(alice.id), action: "remove"
+  });
+  assert.deepEqual(unauthorizedModeration, {
+    ok: false, error: "Only the call host or a group admin can moderate participants."
+  });
+
+  const groupEnded = waitFor(bobSocket, "group-call:ended");
+  assert.deepEqual(await emitAck(aliceSocket, "group-call:end", {
+    groupId: String(group.id)
+  }), { ok: true });
+  const [groupEndedPayload] = await groupEnded;
+  assert.equal(groupEndedPayload.groupId, String(group.id));
+  assert.equal(groupEndedPayload.reason, "host-ended");
+
   const offlineEvent = waitFor(bobSocket, "presence:update", 7000);
   const aliceSecondSession = await connectClient(url, tokenFor(alice));
   assert.equal(realtimeState.getOnlineUserIds().filter(id => id === String(alice.id)).length, 1);
@@ -155,7 +307,7 @@ test("Phase 55: real Socket.IO clients use PostgreSQL-backed presence, rooms, re
 
 test.after(async () => {
   for (const client of clients) { try { client.disconnect(); } catch {} }
-  if (ioServer) await new Promise(resolve => ioServer.close(resolve));
+  if (stagingRuntime) await stagingRuntime.close();
   if (server?.listening) await new Promise(resolve => server.close(resolve));
   if (seededUserIds.length) {
     await pool.query("DELETE FROM messages WHERE sender_id = ANY($1::bigint[]) OR receiver_id = ANY($1::bigint[])", [seededUserIds]);

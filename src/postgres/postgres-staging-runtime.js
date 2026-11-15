@@ -63,6 +63,10 @@ function createPostgresStagingRuntime({
     throw new TypeError("HTTP, API-router, and realtime factories are required.");
   }
 
+  if (typeof expressImpl.json !== "function") {
+    throw new TypeError("Express JSON middleware is required for the staging API.");
+  }
+
   const pool = new Pool({
     connectionString: config.databaseUrl,
     ...(config.poolOptions || {})
@@ -78,6 +82,7 @@ function createPostgresStagingRuntime({
     });
     const app = expressImpl();
     app.disable?.("x-powered-by");
+    app.use(expressImpl.json({ limit: "1mb" }));
     app.get("/health/live", (_req, res) => res.status(200).json({
       status: "ok", environment: "staging"
     }));
