@@ -4,14 +4,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const http = require("node:http");
-const express = require("express");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const { Pool } = require("pg");
 const { io: createClient } = require("socket.io-client");
 const { createPostgresAdapter } = require("../src/db/postgres-adapter");
-const { createPostgresRealtimeService } = require("../src/services/postgres-realtime-service");
-const { createPostgresRealtimeServer } = require("../src/postgres/postgres-realtime-server");
+const { createPostgresStagingRuntime } = require("../src/postgres/postgres-staging-runtime");
 
 const { assertDisposablePostgresDatabaseUrl } = require("../src/postgres/postgres-test-database-guard");
 const connectionString = assertDisposablePostgresDatabaseUrl(
@@ -21,7 +19,7 @@ const secret = "phase55-disposable-integration-secret-at-least-32-characters";
 const pool = new Pool({ connectionString, max: 5, options: "-c search_path=waltajjii,public" });
 const db = createPostgresAdapter(pool);
 const clients = new Set();
-let server, ioServer;
+let server, stagingRuntime;
 let seededUserIds = [];
 
 function waitFor(socket, event, timeoutMs = 5000) {
@@ -79,17 +77,67 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const message = await db.one("INSERT INTO messages(sender_id,receiver_id,body) VALUES($1,$2,'Phase 55 receipt test') RETURNING id",
     [String(alice.id), String(bob.id)]);
 
-  const app = express();
-  app.get("/health", (_req, res) => res.json({ status: "ok" }));
-  server = http.createServer(app);
-  const realtimeService = createPostgresRealtimeService({ db });
-  const realtimeServer = createPostgresRealtimeServer(server, {
-    jwt, jwtSecret: secret, realtimeService, socketOptions: { cors: { origin: false } }
+  stagingRuntime = createPostgresStagingRuntime({
+    config: {
+      appEnvironment: "staging",
+      nodeEnvironment: "test",
+      databaseUrl: connectionString,
+      mediaBucket: "waltajjii-media-staging",
+      jwtSecret: secret,
+      storageClient: {
+        from: () => ({
+          upload: async () => ({ error: null }),
+          remove: async () => ({ error: null }),
+          download: async () => ({ data: null, error: new Error("Storage is not used in this integration test.") })
+        })
+      },
+      poolOptions: { max: 5, options: "-c search_path=waltajjii,public" }
+    },
+    Pool, bcrypt, jwt,
+    socketOptions: { cors: { origin: false } }
   });
-  ioServer = realtimeServer.io;
-  const realtimeState = realtimeServer;
+  server = stagingRuntime.httpServer;
+  const realtimeState = stagingRuntime.realtime;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const url = "http://127.0.0.1:" + server.address().port;
+
+  const liveHealth = await fetch(url + "/health/live");
+  assert.equal(liveHealth.status, 200);
+  assert.deepEqual(await liveHealth.json(), { status: "ok", environment: "staging" });
+  const readyHealth = await fetch(url + "/health/ready");
+  assert.equal(readyHealth.status, 200);
+  assert.deepEqual(await readyHealth.json(), { status: "ready", environment: "staging" });
+
+  const apiUsername = "p102_api_" + Date.now();
+  const apiPassword = "phase102-integration-password";
+  const registration = await fetch(url + "/api/auth/register", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: apiUsername, password: apiPassword })
+  });
+  assert.equal(registration.status, 201);
+  const registrationPayload = await registration.json();
+  assert.equal(registrationPayload.user.username, apiUsername);
+  seededUserIds.push(String(registrationPayload.user.id));
+
+  const login = await fetch(url + "/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: apiUsername, password: apiPassword })
+  });
+  assert.equal(login.status, 200);
+  const loginPayload = await login.json();
+  assert.ok(loginPayload.token);
+
+  const profile = await fetch(url + "/api/auth/profile", {
+    headers: { authorization: "Bearer " + loginPayload.token }
+  });
+  assert.equal(profile.status, 200);
+  const profilePayload = await profile.json();
+  assert.equal(profilePayload.user.username, apiUsername);
+
+  const unauthorizedProfile = await fetch(url + "/api/auth/profile");
+  assert.equal(unauthorizedProfile.status, 401);
 
   const aliceSocket = await connectClient(url, tokenFor(alice));
   const bobSocket = await connectClient(url, tokenFor(bob));
@@ -259,7 +307,7 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
 
 test.after(async () => {
   for (const client of clients) { try { client.disconnect(); } catch {} }
-  if (ioServer) await new Promise(resolve => ioServer.close(resolve));
+  if (stagingRuntime) await stagingRuntime.close();
   if (server?.listening) await new Promise(resolve => server.close(resolve));
   if (seededUserIds.length) {
     await pool.query("DELETE FROM messages WHERE sender_id = ANY($1::bigint[]) OR receiver_id = ANY($1::bigint[])", [seededUserIds]);
