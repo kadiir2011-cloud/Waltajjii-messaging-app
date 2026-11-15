@@ -12,7 +12,7 @@ on:
       - ".github/workflows/phase102-postgres-staging-integration.yml"
   push:
     branches:
-      - waltajjii-phase102-postgres-staging-integration
+      - waltajjii-phase103-shared-realtime-scalability
 permissions:
   contents: read
 jobs:
@@ -44,7 +44,7 @@ jobs:
       - name: Install application dependencies
         run: npm ci
       - name: Install Socket.IO client for isolated integration test
-        run: npm install --no-save --package-lock=false socket.io-client@4.8.1
+        run: npm install --no-save --package-lock=false socket.io-client@4.8.1 @socket.io/postgres-adapter@0.5.0
       - name: Verify staging runtime and disposable database safety
         run: node --test test/phase99-postgres-staging-bootstrap.test.js test/phase102-postgres-staging-integration.test.js
       - name: Run real PostgreSQL and Socket.IO integration
