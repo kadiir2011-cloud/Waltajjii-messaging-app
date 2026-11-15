@@ -192,8 +192,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
     socket.on("call:end", async data => { const target=validId(data?.targetUserId); if(!target)return; try { const ended=await callState.endDirectCall({userId,targetId:target}); if(ended.ok){emitToUser(target,"call:ended",{senderId:userId});socket.emit("call:ended",{senderId:target});} } catch {} });
     socket.on("call:recovery-request", async (data = {}, acknowledge = () => {}) => {
       const target=validId(data.targetUserId); if(!target||target===userId)return acknowledge({ok:false,error:"There is no active call to recover."});
-      if(!roomHasSockets("user:"+target))return acknowledge({ok:false,error:"The other participant is no longer connected."});
-      try { const joined=await callState.acceptDirectCall({userId,otherUserId:target,serverId,socketId:socket.id}); if(!joined.ok)return acknowledge(joined); startCallHeartbeat(); emitToUser(target,"call:recovery-requested",{senderId:userId}); return acknowledge({ok:true}); } catch { return acknowledge({ok:false,error:"Could not recover the shared direct call."}); }
+      try { const joined=await callState.acceptDirectCall({userId,otherUserId:target,serverId,socketId:socket.id}); if(!joined.ok)return acknowledge({ok:false,error:"There is no active call to recover."}); if(!roomHasSockets("user:"+target))return acknowledge({ok:false,error:"The other participant is no longer connected."}); startCallHeartbeat(); emitToUser(target,"call:recovery-requested",{senderId:userId}); return acknowledge({ok:true}); } catch { return acknowledge({ok:false,error:"Could not recover the shared direct call."}); }
     });
     socket.on("call:recovery-offer", async (data = {}, acknowledge = () => {}) => {
       const target=validId(data.targetUserId), offer=data.offer; if(!target||!offer||typeof offer!=="object"||Array.isArray(offer))return acknowledge({ok:false,error:"Call recovery offer is not authorized."});
@@ -241,7 +240,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        if (await callState.hasActiveCall({ userId })) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
         const result = await callState.startGroupCall({
           groupId, userId, username: socket.data.username, serverId, socketId: socket.id
         });
