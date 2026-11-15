@@ -264,7 +264,12 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
     function startCallHeartbeat() {
       if (callHeartbeat) return;
       callHeartbeat = setInterval(() => {
-        callState.heartbeat({ serverId, socketId: socket.id }).catch(error => {
+        callState.heartbeat({ serverId, socketId: socket.id }).then(active => {
+          if (active) return;
+          clearInterval(callHeartbeat);
+          callHeartbeat = null;
+          groupCallMembership.clear();
+        }).catch(error => {
           console.error("PostgreSQL call heartbeat failed:", error?.message || "Unknown error");
         });
       }, 15000);
