@@ -72,7 +72,13 @@ function createSocketMiddleware() {
       async getGroupCallStatus() { return { ok: true, active: false, participantCount: 0, participants: [] }; },
       async endGroupCall() { return { ok: false }; },
       async setHandRaised() { return { ok: false }; },
-      async moderateGroupCall() { return { ok: false }; }
+      async moderateGroupCall() { return { ok: false }; },
+      async hasActiveCall() { return false; },
+      async startDirectCall() { return { ok: false }; },
+      async acceptDirectCall() { return { ok: false }; },
+      async authorizeDirectCall() { return { ok: false }; },
+      async getDirectCallStatus() { return { ok: false }; },
+      async endDirectCall() { return { ok: true }; }
     }
   });
   return middleware[0];
