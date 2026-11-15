@@ -24,7 +24,8 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
 
   if (!callState || ![
     "startGroupCall", "joinGroupCall", "heartbeat", "leaveSession",
-    "getGroupCallStatus", "endGroupCall", "setHandRaised", "moderateGroupCall"
+    "getGroupCallStatus", "endGroupCall", "setHandRaised", "moderateGroupCall",
+    "hasActiveCall", "startDirectCall", "acceptDirectCall", "authorizeDirectCall", "getDirectCallStatus", "endDirectCall"
   ].every(method => typeof callState[method] === "function")) {
     throw new TypeError("A complete shared PostgreSQL call-state service is required.");
   }
@@ -32,7 +33,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
     throw new TypeError("A unique realtime server ID is required.");
   }
   const onlineUsers = new Map();
-  const activeCalls = new Map();
 
   function roomHasSockets(room) {
     return Boolean(io.sockets?.adapter?.rooms?.get(room)?.size);
@@ -44,17 +44,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
     const id = String(value ?? "");
     return /^[1-9][0-9]*$/.test(id) ? id : null;
   }
-  function endCall(userId, targetUserId, notify = true) {
-    const user = String(userId);
-    const target = String(targetUserId);
-    if (!user || !target || user === target ||
-        activeCalls.get(user) !== target || activeCalls.get(target) !== user) return false;
-    activeCalls.delete(user);
-    activeCalls.delete(target);
-    if (notify) emitToUser(target, "call:ended", { senderId: user });
-    return true;
-  }
-
   io.use((socket, next) => {
     try {
       const token = socket.handshake?.auth?.token;
@@ -153,50 +142,31 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       }
     });
 
-    socket.on("call:offer", (data = {}, acknowledge = () => {}) => {
-      const target = validId(data.targetUserId);
-      const offer = data.offer;
-      if (!target || target === userId || !offer || typeof offer !== "object" || Array.isArray(offer)) {
-        return acknowledge({ ok: false, error: "Invalid call offer." });
-      }
-      if (!roomHasSockets("user:" + target)) return acknowledge({ ok: false, error: "Recipient is not connected." });
-      if (activeCalls.has(userId) || activeCalls.has(target)) {
-        return acknowledge({ ok: false, error: "One participant is already in a call." });
-      }
-      activeCalls.set(userId, target);
-      activeCalls.set(target, userId);
-      emitToUser(target, "call:incoming", {
-        callerId: userId, callerUsername: socket.data.username, offer
-      });
-      return acknowledge({ ok: true });
+    socket.on("call:offer", async (data = {}, acknowledge = () => {}) => {
+      const target=validId(data.targetUserId), offer=data.offer;
+      if(!target||target===userId||!offer||typeof offer!=="object"||Array.isArray(offer)) return acknowledge({ok:false,error:"Invalid call offer."});
+      if(!roomHasSockets("user:"+target)) return acknowledge({ok:false,error:"Recipient is not connected."});
+      try { const state=await callState.startDirectCall({callerId:userId,targetId:target,callerUsername:socket.data.username,targetUsername:onlineUsers.get(target)||"User",serverId,socketId:socket.id}); if(!state.ok)return acknowledge(state); startCallHeartbeat(); emitToUser(target,"call:incoming",{callerId:userId,callerUsername:socket.data.username,offer}); return acknowledge({ok:true,callId:state.callId}); }
+      catch { return acknowledge({ok:false,error:"Could not start the shared direct call."}); }
     });
-    socket.on("call:answer", (data = {}, acknowledge = () => {}) => {
-      const target = validId(data.targetUserId);
-      const answer = data.answer;
-      if (!target || !answer || typeof answer !== "object" || Array.isArray(answer) ||
-          activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) {
-        return acknowledge({ ok: false, error: "Call answer is not authorized." });
-      }
-      emitToUser(target, "call:accepted", {
-        recipientId: userId, recipientUsername: socket.data.username, answer
-      });
-      return acknowledge({ ok: true });
+    socket.on("call:answer", async (data = {}, acknowledge = () => {}) => {
+      const target=validId(data.targetUserId), answer=data.answer;
+      if(!target||!answer||typeof answer!=="object"||Array.isArray(answer)) return acknowledge({ok:false,error:"Call answer is not authorized."});
+      try { const accepted=await callState.acceptDirectCall({userId,otherUserId:target,serverId,socketId:socket.id}); if(!accepted.ok)return acknowledge(accepted); startCallHeartbeat(); emitToUser(target,"call:accepted",{recipientId:userId,recipientUsername:socket.data.username,answer}); return acknowledge({ok:true}); }
+      catch { return acknowledge({ok:false,error:"Could not accept the shared direct call."}); }
     });
-    socket.on("call:ice-candidate", data => {
-      const target = validId(data?.targetUserId);
-      const candidate = data?.candidate;
-      if (!target || !candidate || typeof candidate !== "object" || Array.isArray(candidate) ||
-          activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) return;
-      emitToUser(target, "call:ice-candidate", { senderId: userId, candidate });
+    socket.on("call:ice-candidate", async data => {
+      const target=validId(data?.targetUserId), candidate=data?.candidate; if(!target||!candidate||typeof candidate!=="object"||Array.isArray(candidate))return;
+      try { const auth=await callState.authorizeDirectCall({userId,targetId:target,serverId,socketId:socket.id}); if(auth.ok)emitToUser(target,"call:ice-candidate",{senderId:userId,candidate}); } catch {}
     });
 
-    socket.on("call:caption", (data = {}, acknowledge = () => {}) => {
+    socket.on("call:caption", async (data = {}, acknowledge = () => {}) => {
       const target = validId(data.targetUserId);
       const caption = typeof data.text === "string" ? data.text.trim() : "";
-      if (!target || target === userId ||
-          activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) {
+      if (!target || target === userId) {
         return acknowledge({ ok: false, error: "Live captions are not authorized for this call." });
       }
+      try { const auth=await callState.authorizeDirectCall({userId,targetId:target,serverId,socketId:socket.id}); if(!auth.ok)return acknowledge({ok:false,error:"Live captions are not authorized for this call."}); } catch { return acknowledge({ok:false,error:"Could not verify the shared direct call."}); }
       if (!caption || caption.length > 500) {
         return acknowledge({ ok: false, error: "Caption must contain between 1 and 500 characters." });
       }
@@ -217,44 +187,21 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       });
       return acknowledge({ ok: true });
     });
-    socket.on("call:end", data => {
-      const target = validId(data?.targetUserId);
-      if (target) endCall(userId, target, true);
-    });
 
 
-    // Phase 101: direct-call recovery is relayed only between the two
-    // authenticated participants of the currently tracked call.
-    socket.on("call:recovery-request", (data = {}, acknowledge = () => {}) => {
-      const target = validId(data.targetUserId);
-      if (!target || activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) {
-        return acknowledge({ ok: false, error: "There is no active call to recover." });
-      }
-      if (!roomHasSockets("user:" + target)) {
-        return acknowledge({ ok: false, error: "The other participant is no longer connected." });
-      }
-      emitToUser(target, "call:recovery-requested", { senderId: userId });
-      return acknowledge({ ok: true });
+    socket.on("call:end", async data => { const target=validId(data?.targetUserId); if(!target)return; try { const ended=await callState.endDirectCall({userId,targetId:target}); if(ended.ok){emitToUser(target,"call:ended",{senderId:userId});socket.emit("call:ended",{senderId:target});} } catch {} });
+    socket.on("call:recovery-request", async (data = {}, acknowledge = () => {}) => {
+      const target=validId(data.targetUserId); if(!target||target===userId)return acknowledge({ok:false,error:"There is no active call to recover."});
+      if(!roomHasSockets("user:"+target))return acknowledge({ok:false,error:"The other participant is no longer connected."});
+      try { const joined=await callState.acceptDirectCall({userId,otherUserId:target,serverId,socketId:socket.id}); if(!joined.ok)return acknowledge(joined); startCallHeartbeat(); emitToUser(target,"call:recovery-requested",{senderId:userId}); return acknowledge({ok:true}); } catch { return acknowledge({ok:false,error:"Could not recover the shared direct call."}); }
     });
-    socket.on("call:recovery-offer", (data = {}, acknowledge = () => {}) => {
-      const target = validId(data.targetUserId);
-      const offer = data.offer;
-      if (!target || !offer || typeof offer !== "object" || Array.isArray(offer) ||
-          activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) {
-        return acknowledge({ ok: false, error: "Call recovery offer is not authorized." });
-      }
-      emitToUser(target, "call:recovery-offer", { senderId: userId, offer });
-      return acknowledge({ ok: true });
+    socket.on("call:recovery-offer", async (data = {}, acknowledge = () => {}) => {
+      const target=validId(data.targetUserId), offer=data.offer; if(!target||!offer||typeof offer!=="object"||Array.isArray(offer))return acknowledge({ok:false,error:"Call recovery offer is not authorized."});
+      try { const auth=await callState.authorizeDirectCall({userId,targetId:target,serverId,socketId:socket.id}); if(!auth.ok)return acknowledge({ok:false,error:"Call recovery offer is not authorized."}); emitToUser(target,"call:recovery-offer",{senderId:userId,offer}); return acknowledge({ok:true}); } catch { return acknowledge({ok:false,error:"Could not verify the shared direct call."}); }
     });
-    socket.on("call:recovery-answer", (data = {}, acknowledge = () => {}) => {
-      const target = validId(data.targetUserId);
-      const answer = data.answer;
-      if (!target || !answer || typeof answer !== "object" || Array.isArray(answer) ||
-          activeCalls.get(userId) !== target || activeCalls.get(target) !== userId) {
-        return acknowledge({ ok: false, error: "Call recovery answer is not authorized." });
-      }
-      emitToUser(target, "call:recovery-answer", { senderId: userId, answer });
-      return acknowledge({ ok: true });
+    socket.on("call:recovery-answer", async (data = {}, acknowledge = () => {}) => {
+      const target=validId(data.targetUserId), answer=data.answer; if(!target||!answer||typeof answer!=="object"||Array.isArray(answer))return acknowledge({ok:false,error:"Call recovery answer is not authorized."});
+      try { const auth=await callState.authorizeDirectCall({userId,targetId:target,serverId,socketId:socket.id}); if(!auth.ok)return acknowledge({ok:false,error:"Call recovery answer is not authorized."}); emitToUser(target,"call:recovery-answer",{senderId:userId,answer}); return acknowledge({ok:true}); } catch { return acknowledge({ok:false,error:"Could not verify the shared direct call."}); }
     });
 
     // Group-call membership and authorization are durable PostgreSQL state.
@@ -294,7 +241,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
+        if (await callState.hasActiveCall({ userId })) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
         const result = await callState.startGroupCall({
           groupId, userId, username: socket.data.username, serverId, socketId: socket.id
         });
@@ -322,7 +269,7 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        if (activeCalls.has(userId)) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
+        if (await callState.hasActiveCall({ userId })) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
         const result = await callState.joinGroupCall({
           groupId, userId, username: socket.data.username, serverId, socketId: socket.id
         });
@@ -466,8 +413,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
         });
       }
       socket.data.typingGroups.clear();
-      const callPeer = activeCalls.get(userId);
-      if (callPeer) endCall(userId, callPeer, true);
       for (const groupId of Array.from(groupCallMembership)) {
         try {
           const result = await callState.leaveSession({ serverId, socketId: socket.id });
