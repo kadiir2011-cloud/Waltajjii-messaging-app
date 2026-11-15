@@ -15,6 +15,22 @@ const { createPostgresRealtimeServer } = require("../src/postgres/postgres-realt
 
 const connectionString = process.env.TEST_DATABASE_URL;
 if (!connectionString) throw new Error("TEST_DATABASE_URL must point only to disposable CI PostgreSQL.");
+if (process.env.ALLOW_DISPOSABLE_POSTGRES_TESTS !== "1") {
+  throw new Error("Set ALLOW_DISPOSABLE_POSTGRES_TESTS=1 only for a disposable PostgreSQL database.");
+}
+let disposableDatabaseName = "";
+try {
+  const parsedDatabaseUrl = new URL(connectionString);
+  if (!["postgres:", "postgresql:"].includes(parsedDatabaseUrl.protocol)) {
+    throw new Error("TEST_DATABASE_URL must use PostgreSQL.");
+  }
+  disposableDatabaseName = decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\\//, ""));
+} catch {
+  throw new Error("TEST_DATABASE_URL is invalid.");
+}
+if (!/(^|[-_])(staging|stage|test|preview)([-_]|$)/i.test(disposableDatabaseName)) {
+  throw new Error("Refusing to run destructive integration migrations without a staging/test/preview database name.");
+}
 const secret = "phase55-disposable-integration-secret-at-least-32-characters";
 const pool = new Pool({ connectionString, max: 5, options: "-c search_path=waltajjii,public" });
 const db = createPostgresAdapter(pool);
