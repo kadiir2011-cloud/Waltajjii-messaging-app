@@ -267,7 +267,6 @@ function attachPostgresRealtime(io, { jwt, jwtSecret, realtimeService, callState
       const groupId = validId(data.groupId);
       if (!groupId) return acknowledge({ ok: false, error: "Invalid group." });
       try {
-        if (await callState.hasActiveCall({ userId })) return acknowledge({ ok: false, error: "End your one-to-one call before joining a group call." });
         const result = await callState.joinGroupCall({
           groupId, userId, username: socket.data.username, serverId, socketId: socket.id
         });
