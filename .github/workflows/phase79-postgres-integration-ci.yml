@@ -46,7 +46,7 @@ jobs:
       - name: Install dependencies including native SQLite test driver
         run: npm ci
       - name: Install realtime integration test client
-        run: npm install --no-save --package-lock=false socket.io-client@4.8.1
+        run: npm install --no-save --package-lock=false socket.io-client@4.8.1 @socket.io/postgres-adapter@0.5.0
       - name: Check JavaScript syntax
         run: |
           find src public test scripts -type f -name '*.js' -print0 | xargs -0 -n1 node --check
