@@ -44,6 +44,14 @@ function createPostgresCallStateService({ db, clock = () => new Date(), leaseMs 
         "UPDATE realtime_call_sessions SET status='ended', ended_at=$2 WHERE id=$1 AND status='active'",
         [callId, at]
       );
+      await tx.execute(
+        "UPDATE realtime_call_participants SET left_at=$2,hand_raised=FALSE WHERE call_id=$1 AND left_at IS NULL",
+        [callId, at]
+      );
+      await tx.execute(
+        "UPDATE realtime_call_device_sessions SET disconnected_at=$2 WHERE call_id=$1 AND disconnected_at IS NULL",
+        [callId, at]
+      );
     }
   }
 
