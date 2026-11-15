@@ -45,6 +45,8 @@ test("validates before constructing a database pool", () => {
 test("builds an un-listened runtime and closes realtime before pool", async () => {
   const order = [];
   let capturedRouterOptions;
+  let capturedRealtimeOptions;
+  const adapterFactory = () => ({ name: "postgres-adapter" });
   let appUses = [];
   const fakeExpress = () => ({
     disable() {}, get() {}, set() {}, use(...args) { appUses.push(args); }
@@ -59,21 +61,27 @@ test("builds an un-listened runtime and closes realtime before pool", async () =
     async end() { order.push("pool"); }
   }
   const runtime = createPostgresStagingRuntime({
-    config: config(), Pool,
+    config: config({ createSocketAdapter: adapterFactory, socketAdapterOptions: { channelPrefix: "test" } }), Pool,
     bcrypt: { hash: async () => "hash", compare: async () => true },
     jwt: { sign: () => "token", verify: () => ({ userId: 1 }) },
     express: fakeExpress,
     createHttpServer: app => ({ app, listen() { throw new Error("must not listen"); } }),
     createApiRouter: options => { capturedRouterOptions = options; return {}; },
-    createRealtimeServer: () => ({
-      io: {}, getOnlineUserIds: () => [],
-      close: async () => { order.push("realtime"); }
-    })
+    createRealtimeServer: (_server, options) => {
+      capturedRealtimeOptions = options;
+      return {
+        io: {}, getOnlineUserIds: () => [],
+        close: async () => { order.push("realtime"); }
+      };
+    }
   });
   assert.equal(runtime.environment, "staging");
   assert.equal(runtime.pool.options.connectionString, config().databaseUrl);
   assert.equal(capturedRouterOptions.services, runtime.services);
   assert.equal(capturedRouterOptions.mediaStorage, runtime.mediaStorage);
+  assert.equal(capturedRealtimeOptions.createSocketAdapter, adapterFactory);
+  assert.equal(capturedRealtimeOptions.adapterPool, runtime.pool);
+  assert.deepEqual(capturedRealtimeOptions.adapterOptions, { channelPrefix: "test" });
   assert.deepEqual(appUses[0], [{ type: "json-parser" }]);
   assert.equal(appUses[1][0], "/api");
   assert.equal(typeof runtime.httpServer.listen, "function");
