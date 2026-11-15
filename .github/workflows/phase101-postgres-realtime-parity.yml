@@ -4,13 +4,17 @@ on:
     paths:
       - "src/postgres/postgres-realtime-socket.js"
       - "src/services/postgres-realtime-service.js"
+      - "src/postgres/postgres-realtime-server.js"
+      - "src/postgres/postgres-staging-runtime.js"
       - "test/phase101-postgres-realtime-parity.test.js"
       - "test/phase100-postgres-sqlite-compatibility-audit.test.js"
       - "PHASE-101-POSTGRES-REALTIME-PARITY.md"
+      - "PHASE-103-SHARED-REALTIME-SCALABILITY.md"
       - ".github/workflows/phase101-postgres-realtime-parity.yml"
   push:
     branches:
       - waltajjii-phase101-postgres-realtime-parity
+      - waltajjii-phase103-shared-realtime-scalability
 permissions:
   contents: read
 jobs:
