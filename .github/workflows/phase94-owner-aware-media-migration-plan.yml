@@ -1,0 +1,30 @@
+name: Phase 94 owner-aware media migration plan
+on:
+  pull_request:
+    paths:
+      - "scripts/phase91-verified-local-backup-snapshot.js"
+      - "scripts/phase93-media-object-reconciliation.js"
+      - "scripts/phase94-owner-aware-media-migration-plan.js"
+      - "test/phase94-owner-aware-media-migration-plan.test.js"
+      - ".github/workflows/phase94-owner-aware-media-migration-plan.yml"
+      - "PHASE-94-OWNER-AWARE-MEDIA-MIGRATION-PLAN.md"
+permissions:
+  contents: read
+jobs:
+  owner-aware-media-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check syntax
+        run: |
+          node --check scripts/phase94-owner-aware-media-migration-plan.js
+          node --check test/phase94-owner-aware-media-migration-plan.test.js
+      - name: Validate owner and purpose mapping
+        run: node --test test/phase94-owner-aware-media-migration-plan.test.js

@@ -1,0 +1,25 @@
+name: Phase 87 account recovery token foundation
+on:
+  pull_request:
+    paths:
+      - "src/security/account-recovery-tokens.js"
+      - "test/phase87-account-recovery-tokens.test.js"
+      - ".github/workflows/phase87-account-recovery-token-foundation.yml"
+      - "PHASE-87-ACCOUNT-RECOVERY-TOKEN-FOUNDATION.md"
+permissions:
+  contents: read
+jobs:
+  account-recovery-token-foundation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check syntax
+        run: |
+          node --check src/security/account-recovery-tokens.js
+          node --check test/phase87-account-recovery-tokens.test.js
+      - name: Run account recovery token tests
+        run: node --test test/phase87-account-recovery-tokens.test.js

@@ -1,0 +1,28 @@
+name: Phase 104 PostgreSQL shared call-state foundation
+on:
+  pull_request:
+    paths:
+      - "src/services/postgres-call-state-service.js"
+      - "src/postgres/postgres-runtime-services.js"
+      - "src/postgres/postgres-staging-runtime.js"
+      - "migrations/postgres/006_realtime_call_state.sql"
+      - "test/phase104-postgres-call-state.test.js"
+      - "PHASE-104-POSTGRES-SHARED-CALL-STATE.md"
+      - ".github/workflows/phase104-postgres-call-state.yml"
+  push:
+    branches:
+      - waltajjii-phase104-postgres-shared-call-state
+permissions:
+  contents: read
+jobs:
+  call-state:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --check src/services/postgres-call-state-service.js
+      - run: node --test test/phase104-postgres-call-state.test.js test/phase101-postgres-realtime-parity.test.js test/phase99-postgres-staging-bootstrap.test.js

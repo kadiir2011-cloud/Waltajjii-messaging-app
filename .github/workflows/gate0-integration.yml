@@ -1,0 +1,27 @@
+name: Gate 0 integration frontend checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "public/app.js"
+      - "public/index.html"
+      - "test/gate0-low-bandwidth.test.js"
+      - ".github/workflows/gate0-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  low-bandwidth-and-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check frontend JavaScript syntax
+        run: node --check public/app.js
+      - name: Verify Low-Bandwidth Mode contract
+        run: node test/gate0-low-bandwidth.test.js

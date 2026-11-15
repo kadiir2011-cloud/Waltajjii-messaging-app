@@ -83,6 +83,9 @@ async function storeFile(file, maxBytes, typeMap) {
 }
 
 async function sendStoredFile(filename, res, options = {}) {
+  // Uploaded media and profile pictures are private account data; never cache them publicly.
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   if (storageService.configured) {
     try {
       const buffer = await storageService.downloadObject(filename);
@@ -142,7 +145,8 @@ router.get("/:filename", authenticate, async (req, res) => {
   }
   const message = db.prepare(`
     SELECT id, body, media_type AS mediaType FROM messages
-    WHERE media_path = ? AND (sender_id = ? OR receiver_id = ?)
+    WHERE media_path = ? AND deleted_at IS NULL
+      AND (sender_id = ? OR receiver_id = ?)
     LIMIT 1
   `).get(filename, req.auth.userId, req.auth.userId);
   const groupMessage = db.prepare(`

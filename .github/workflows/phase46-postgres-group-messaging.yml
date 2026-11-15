@@ -1,0 +1,40 @@
+name: Phase 46 PostgreSQL group messaging integration
+on:
+  pull_request:
+    paths:
+      - "src/services/postgres-groups-service.js"
+      - "src/routes/postgres-groups.js"
+      - "src/db/postgres-adapter.js"
+      - "migrations/postgres/001_initial_schema.sql"
+      - "test/phase46-postgres-group-messaging-integration.test.js"
+      - ".github/workflows/phase46-postgres-group-messaging.yml"
+permissions:
+  contents: read
+jobs:
+  postgres-group-messaging:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase46_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase46_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase46_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Test PostgreSQL group messaging HTTP flow
+        run: node --test test/phase46-postgres-group-messaging-integration.test.js

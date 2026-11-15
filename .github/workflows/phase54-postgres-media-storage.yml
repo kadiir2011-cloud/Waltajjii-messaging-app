@@ -1,0 +1,39 @@
+name: Phase 54 PostgreSQL media storage integration
+on:
+  pull_request:
+    paths:
+      - "src/services/postgres-media-storage-service.js"
+      - "migrations/postgres/003_media_objects.sql"
+      - "test/phase54-postgres-media-storage.test.js"
+      - ".github/workflows/phase54-postgres-media-storage.yml"
+      - "src/db/postgres-adapter.js"
+permissions:
+  contents: read
+jobs:
+  media-storage:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: waltajjii_phase54_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waltajjii_phase54_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/waltajjii_phase54_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Test isolated PostgreSQL media storage service
+        run: node --test test/phase54-postgres-media-storage.test.js

@@ -1,0 +1,22 @@
+name: Phase 97 PostgreSQL runtime migration map
+on:
+  pull_request:
+    paths:
+      - "PHASE-97-POSTGRES-RUNTIME-MIGRATION-MAP.md"
+      - "test/phase97-postgres-runtime-migration-map.test.js"
+      - ".github/workflows/phase97-postgres-runtime-migration-map.yml"
+  push:
+    branches:
+      - waltajjii-phase97-postgres-runtime-migration-map
+permissions:
+  contents: read
+jobs:
+  phase97-runtime-inventory:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify runtime boundaries and migration inventory
+        run: node --test test/phase97-postgres-runtime-migration-map.test.js test/phase96-staging-integration-safety.test.js
