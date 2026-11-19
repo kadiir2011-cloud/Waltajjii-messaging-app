@@ -3734,7 +3734,7 @@ document.getElementById("social-notifications-tab").addEventListener("click", lo
     toggle.textContent = isOpen ? "✕ Close menu" : "☰ Menu";
   });
 
-  sidebar.querySelectorAll('a[href^="#"]').forEach(link => {
+  document.querySelectorAll('.wt-sidebar a[href^="#"], .wt-home-action[href^="#"], .wt-dashboard-hero-actions a[href^="#"]').forEach(link => {
     link.addEventListener("click", event => {
       event.preventDefault();
       showTarget(link);

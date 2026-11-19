@@ -1,0 +1,24 @@
+name: Phase 107 dashboard redesign
+on:
+  pull_request:
+    paths:
+      - "public/index.html"
+      - "public/app.js"
+      - "test/phase107-dashboard-redesign.test.js"
+      - ".github/workflows/phase107-dashboard.yml"
+      - "PHASE-107-NEXT-GENERATION-DASHBOARD.md"
+permissions:
+  contents: read
+jobs:
+  dashboard-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check browser JavaScript syntax
+        run: node --check public/app.js
+      - name: Run Phase 107 dashboard regression tests
+        run: node --test test/phase107-dashboard-redesign.test.js
