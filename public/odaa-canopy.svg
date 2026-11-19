@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" fill="none">
+  <defs>
+    <linearGradient id="leaf" x1="120" y1="30" x2="510" y2="400" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D7E8C8"/><stop offset=".52" stop-color="#78A77A"/><stop offset="1" stop-color="#2F6951"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="320" y1="250" x2="320" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C18A5A"/><stop offset="1" stop-color="#80533C"/>
+    </linearGradient>
+  </defs>
+  <g opacity=".96">
+    <path d="M319 482c-10-66-12-130-4-197 4-34 2-72-8-112l31-5c13 47 16 91 10 133-8 58-2 117 11 181h-40Z" fill="url(#wood)"/>
+    <path d="M323 285c-50-46-99-73-156-93l13-24c65 15 115 43 154 83 33-57 80-97 148-123l12 25c-57 29-98 70-130 124l-41 8Z" fill="url(#wood)"/>
+    <path d="M320 197c-6-44-25-78-57-105l18-19c36 27 59 61 69 104 26-42 63-70 111-85l9 26c-49 20-81 52-103 97l-47-18Z" fill="url(#wood)"/>
+    <path d="M91 179c8-46 42-78 89-86 8-47 49-77 98-70 31-35 88-31 113 4 51-12 100 20 103 68 52 17 77 62 59 107 28 37 12 86-29 103-13 48-60 67-103 46-36 36-89 31-118-4-47 21-98-1-107-48-50-10-77-56-55-99-32-6-53-28-50-51Z" fill="url(#leaf)"/>
+    <path d="M129 164c26-30 55-43 88-42m-8 103c31-26 65-37 102-32m15-94c-11 28-14 56-8 84m71-53c-21 26-33 53-36 84m96-35c-30 8-55 24-74 49m-237 26c37-5 70 3 99 25m109 28c20-26 47-42 82-48" stroke="#F8F4E8" stroke-opacity=".5" stroke-width="5" stroke-linecap="round"/>
+    <path d="M244 472c-45 15-85 20-121 13m195-9c39 12 75 13 110 2" stroke="#C18A5A" stroke-width="9" stroke-linecap="round"/>
+  </g>
+</svg>
