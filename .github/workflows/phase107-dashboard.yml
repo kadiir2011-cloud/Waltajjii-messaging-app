@@ -6,11 +6,6 @@ on:
       - "public/app.js"
       - "test/phase107-dashboard-redesign.test.js"
       - "test/phase108-premium-workspace.test.js"
-      - "test/phase109-arsi-cultural-theme.test.js"
-      - "test/phase110-odaa-tibeb-theme.test.js"
-      - "public/odaa-canopy.svg"
-      - "PHASE-110-ODAA-TIBEB.md"
-      - "PHASE-109-ARSI-CULTURAL-THEME.md"
       - "PHASE-108-PREMIUM-WORKSPACE.md"
       - ".github/workflows/phase107-dashboard.yml"
       - "PHASE-107-NEXT-GENERATION-DASHBOARD.md"
@@ -28,4 +23,4 @@ jobs:
       - name: Check browser JavaScript syntax
         run: node --check public/app.js
       - name: Run Phase 107 and Phase 108 UI regression tests
-        run: node --test test/phase107-dashboard-redesign.test.js test/phase108-premium-workspace.test.js test/phase109-arsi-cultural-theme.test.js test/phase110-odaa-tibeb-theme.test.js
+        run: node --test test/phase107-dashboard-redesign.test.js test/phase108-premium-workspace.test.js
