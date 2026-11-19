@@ -5,6 +5,8 @@ on:
       - "public/index.html"
       - "public/app.js"
       - "test/phase107-dashboard-redesign.test.js"
+      - "test/phase108-premium-workspace.test.js"
+      - "PHASE-108-PREMIUM-WORKSPACE.md"
       - ".github/workflows/phase107-dashboard.yml"
       - "PHASE-107-NEXT-GENERATION-DASHBOARD.md"
 permissions:
@@ -20,5 +22,5 @@ jobs:
           node-version: 22
       - name: Check browser JavaScript syntax
         run: node --check public/app.js
-      - name: Run Phase 107 dashboard regression tests
-        run: node --test test/phase107-dashboard-redesign.test.js
+      - name: Run Phase 107 and Phase 108 UI regression tests
+        run: node --test test/phase107-dashboard-redesign.test.js test/phase108-premium-workspace.test.js
