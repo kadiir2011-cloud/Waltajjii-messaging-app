@@ -58,7 +58,7 @@ function emitAck(socket, event, payload) {
 
 test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, receipts, direct recovery and group calls", async () => {
   const root = path.join(__dirname, "..");
-  for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql", "004_media_storage_cleanup.sql", "005_socketio_cluster_adapter.sql", "006_realtime_call_state.sql", "007_realtime_call_hand_raise.sql"]) {
+  for (const migration of ["001_initial_schema.sql", "002_channel_message_interactions.sql", "003_media_objects.sql", "004_media_storage_cleanup.sql", "005_socketio_cluster_adapter.sql", "006_realtime_call_state.sql", "007_realtime_call_hand_raise.sql", "008_realtime_direct_call_state.sql"]) {
     await pool.query(fs.readFileSync(path.join(root, "migrations/postgres", migration), "utf8"));
   }
 
@@ -171,6 +171,7 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const bobSocket = await connectClient(url, tokenFor(bob));
   const outsiderSocket = await connectClient(url, tokenFor(outsider));
   const remoteOutsiderSocket = await connectClient(secondUrl, tokenFor(outsider));
+  const bobRemoteSocket = await connectClient(secondUrl, tokenFor(bob));
   assert.ok(realtimeState.getOnlineUserIds().includes(String(alice.id)));
   assert.ok(realtimeState.getOnlineUserIds().includes(String(bob.id)));
 
@@ -208,28 +209,28 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   const persisted = await db.one("SELECT delivered_at FROM messages WHERE id=$1", [String(message.id)]);
   assert.ok(persisted.delivered_at);
 
-  const incomingCall = waitFor(bobSocket, "call:incoming");
+  const incomingCall = waitFor(bobRemoteSocket, "call:incoming");
   const offerAck = await emitAck(aliceSocket, "call:offer", { targetUserId: String(bob.id),
     offer: { type: "offer", sdp: "phase55-test-offer" } });
   assert.equal(offerAck.ok, true);
   const [offerPayload] = await incomingCall;
   assert.equal(offerPayload.callerId, String(alice.id));
   const acceptedCall = waitFor(aliceSocket, "call:accepted");
-  const answerAck = await emitAck(bobSocket, "call:answer", { targetUserId: String(alice.id),
+  const answerAck = await emitAck(bobRemoteSocket, "call:answer", { targetUserId: String(alice.id),
     answer: { type: "answer", sdp: "phase55-test-answer" } });
   assert.equal(answerAck.ok, true);
   const [answerPayload] = await acceptedCall;
   assert.equal(answerPayload.recipientId, String(bob.id));
 
   // Phase 102: exercise direct-call recovery over real authenticated sockets.
-  const recoveryRequested = waitFor(bobSocket, "call:recovery-requested");
+  const recoveryRequested = waitFor(bobRemoteSocket, "call:recovery-requested");
   assert.deepEqual(await emitAck(aliceSocket, "call:recovery-request", {
     targetUserId: String(bob.id)
   }), { ok: true });
   const [recoveryRequestPayload] = await recoveryRequested;
   assert.equal(recoveryRequestPayload.senderId, String(alice.id));
 
-  const recoveryOfferEvent = waitFor(bobSocket, "call:recovery-offer");
+  const recoveryOfferEvent = waitFor(bobRemoteSocket, "call:recovery-offer");
   assert.deepEqual(await emitAck(aliceSocket, "call:recovery-offer", {
     targetUserId: String(bob.id),
     offer: { type: "offer", sdp: "phase102-recovery-offer" }
@@ -239,7 +240,7 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.equal(recoveryOfferPayload.offer.sdp, "phase102-recovery-offer");
 
   const recoveryAnswerEvent = waitFor(aliceSocket, "call:recovery-answer");
-  assert.deepEqual(await emitAck(bobSocket, "call:recovery-answer", {
+  assert.deepEqual(await emitAck(bobRemoteSocket, "call:recovery-answer", {
     targetUserId: String(alice.id),
     answer: { type: "answer", sdp: "phase102-recovery-answer" }
   }), { ok: true });
@@ -264,7 +265,6 @@ test("Phases 55 and 102: real PostgreSQL Socket.IO clients exercise presence, re
   assert.equal(availablePayload.groupId, String(group.id));
   assert.equal(availablePayload.hostId, String(alice.id));
 
-  const bobRemoteSocket = await connectClient(secondUrl, tokenFor(bob));
   const participantJoined = waitFor(aliceSocket, "group-call:participant-joined");
   const joinedAck = await emitAck(bobRemoteSocket, "group-call:join", {
     groupId: String(group.id)

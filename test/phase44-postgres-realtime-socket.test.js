@@ -25,6 +25,7 @@ function makeHarness(serviceOverrides = {}) {
     },
     ...serviceOverrides
   };
+  const directCalls = new Map();
   const callState = {
     async startGroupCall() { return { ok: false }; },
     async joinGroupCall() { return { ok: false }; },
@@ -33,7 +34,18 @@ function makeHarness(serviceOverrides = {}) {
     async getGroupCallStatus() { return { ok: true, active: false, participantCount: 0, participants: [] }; },
     async endGroupCall() { return { ok: false }; },
     async setHandRaised() { return { ok: false }; },
-    async moderateGroupCall() { return { ok: false }; }
+    async moderateGroupCall() { return { ok: false }; },
+    async hasActiveCall() { return false; },
+    async startDirectCall() { return { ok: false }; },
+    async acceptDirectCall() { return { ok: false }; },
+    async authorizeDirectCall() { return { ok: false }; },
+    async getDirectCallStatus() { return { ok: false }; },
+    async hasActiveCall({userId}) { return directCalls.has(String(userId)); },
+    async startDirectCall({callerId,targetId}) { if(directCalls.has(String(callerId))||directCalls.has(String(targetId)))return {ok:false}; directCalls.set(String(callerId),String(targetId));directCalls.set(String(targetId),String(callerId));return {ok:true,callId:"1"}; },
+    async acceptDirectCall({userId,otherUserId}) { return directCalls.get(String(userId))===String(otherUserId)?{ok:true}:{ok:false}; },
+    async authorizeDirectCall({userId,targetId}) { return directCalls.get(String(userId))===String(targetId)?{ok:true}:{ok:false}; },
+    async getDirectCallStatus() { return {ok:false,active:false}; },
+    async endDirectCall({userId,targetId}) { if(directCalls.get(String(userId))!==String(targetId))return {ok:false};directCalls.delete(String(userId));directCalls.delete(String(targetId));return {ok:true}; }
   };
   const realtime = attachPostgresRealtime(io, { jwt, jwtSecret: secret, realtimeService: service, callState });
   function makeSocket(userId, username) {
@@ -146,9 +158,10 @@ test("call signaling only forwards within an authorized paired call", async () =
   assert.ok(h.emitted.some(item => item.room === "user:8" && item.event === "call:incoming"));
   await recipient.events["call:answer"]({ targetUserId: "7", answer: { type: "answer" } }, value => { ack = value; });
   assert.deepEqual(ack, { ok: true });
-  recipient.events["call:ice-candidate"]({ targetUserId: "7", candidate: { candidate: "x" } });
+  await recipient.events["call:ice-candidate"]({ targetUserId: "7", candidate: { candidate: "x" } });
   assert.ok(h.emitted.some(item => item.room === "user:7" && item.event === "call:ice-candidate"));
-  recipient.events["call:end"]({ targetUserId: "7" });
+  await recipient.events["call:end"]({ targetUserId: "7" });
+  await new Promise(resolve => setImmediate(resolve));
   assert.ok(h.emitted.some(item => item.room === "user:7" && item.event === "call:ended"));
 });
 
@@ -170,12 +183,12 @@ test("live captions are relayed only to the active call peer, with server identi
     await h.handlers.connection(socket);
   }
   let ack;
-  caller.events["call:caption"]({ targetUserId: "8", text: "before call" }, value => { ack = value; });
+  await caller.events["call:caption"]({ targetUserId: "8", text: "before call" }, value => { ack = value; });
   assert.deepEqual(ack, { ok: false, error: "Live captions are not authorized for this call." });
 
-  caller.events["call:offer"]({ targetUserId: "8", offer: { type: "offer" } }, value => { ack = value; });
+  await caller.events["call:offer"]({ targetUserId: "8", offer: { type: "offer" } }, value => { ack = value; });
   assert.deepEqual(ack, { ok: true });
-  caller.events["call:caption"]({ targetUserId: "8", text: "  Hello there.  ", senderUsername: "spoofed" }, value => { ack = value; });
+  await caller.events["call:caption"]({ targetUserId: "8", text: "  Hello there.  ", senderUsername: "spoofed" }, value => { ack = value; });
   assert.deepEqual(ack, { ok: true });
   const caption = h.emitted.find(item => item.room === "user:8" && item.event === "call:caption");
   assert.equal(caption.payload.senderId, "7");
@@ -184,9 +197,9 @@ test("live captions are relayed only to the active call peer, with server identi
   assert.equal(typeof caption.payload.sentAt, "number");
   assert.equal(h.emitted.some(item => item.room === "user:7" && item.event === "call:caption"), false);
 
-  caller.events["call:caption"]({ targetUserId: "8", text: "x".repeat(501) }, value => { ack = value; });
+  await caller.events["call:caption"]({ targetUserId: "8", text: "x".repeat(501) }, value => { ack = value; });
   assert.deepEqual(ack, { ok: false, error: "Caption must contain between 1 and 500 characters." });
-  for (let i = 1; i < 20; i++) caller.events["call:caption"]({ targetUserId: "8", text: "caption " + i }, () => {});
-  caller.events["call:caption"]({ targetUserId: "8", text: "too many" }, value => { ack = value; });
+  for (let i = 1; i < 20; i++) await caller.events["call:caption"]({ targetUserId: "8", text: "caption " + i }, () => {});
+  await caller.events["call:caption"]({ targetUserId: "8", text: "too many" }, value => { ack = value; });
   assert.deepEqual(ack, { ok: false, error: "Live caption rate limit reached. Please slow down." });
 });

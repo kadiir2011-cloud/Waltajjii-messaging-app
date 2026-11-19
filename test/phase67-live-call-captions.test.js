@@ -49,7 +49,7 @@ test("translation is a manual action and is not broadcast to the other caller", 
 
 test("server relays captions only inside an active authenticated call and applies limits", () => {
   assert.match(socket, /socket\.on\("call:caption"/);
-  assert.match(socket, /activeCalls\.get\(userId\) !== target/);
+  assert.match(socket, /callState\.authorizeDirectCall/);
   assert.match(socket, /caption\.length > 500/);
   assert.match(socket, /count >= 20/);
   assert.match(socket, /senderUsername: socket\.data\.username/);

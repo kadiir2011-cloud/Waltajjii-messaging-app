@@ -13,6 +13,7 @@ const postgresSocket = read("src/postgres/postgres-realtime-socket.js");
 
 function createMockCallState({ isMember = async () => true, getRole = async () => "member" } = {}) {
   const calls = new Map();
+  const directCalls = new Map();
   let nextId = 1;
   function active(groupId) {
     const call = calls.get(String(groupId));
@@ -80,7 +81,13 @@ function createMockCallState({ isMember = async () => true, getRole = async () =
       if(action==="remove"){if(c.hostId===String(targetUserId))return {ok:false,error:"The call host cannot be removed."};c.participants.delete(String(targetUserId));}
       if(action==="lower-hand")p.handRaised=false;
       return {ok:true,action,targetUserId:String(targetUserId),targetUsername:p.username,hostId:c.hostId};
-    }
+    },
+    async hasActiveCall({userId}) { return directCalls.has(String(userId)) || [...calls.values()].some(c=>c.status==="active"&&c.participants.has(String(userId))); },
+    async startDirectCall({callerId,targetId}) { if(directCalls.has(String(callerId))||directCalls.has(String(targetId)))return {ok:false};directCalls.set(String(callerId),String(targetId));directCalls.set(String(targetId),String(callerId));return {ok:true,callId:"direct-1"}; },
+    async acceptDirectCall({userId,otherUserId}) { return directCalls.get(String(userId))===String(otherUserId)?{ok:true}:{ok:false}; },
+    async authorizeDirectCall({userId,targetId}) { return directCalls.get(String(userId))===String(targetId)?{ok:true}:{ok:false}; },
+    async getDirectCallStatus() { return {ok:true,active:false}; },
+    async endDirectCall({userId,targetId}) { if(directCalls.get(String(userId))!==String(targetId))return {ok:false};directCalls.delete(String(userId));directCalls.delete(String(targetId));return {ok:true}; }
   };
 }
 
@@ -118,7 +125,7 @@ test("moderation requires host or current group admin and validates action", () 
 test("group-call start and join verify current membership and enforce participant limit", () => {
   assert.match(postgresSocket, /callState\.startGroupCall/);
   assert.match(postgresSocket, /callState\.joinGroupCall/);
-  assert.match(postgresSocket, /activeCalls\.has\(userId\)/);
+  assert.match(read("src/services/postgres-call-state-service.js"), /SELECT call_id FROM realtime_call_participants/);
 });
 
 test("group-call disconnect cleanup and host termination release call state", () => {
