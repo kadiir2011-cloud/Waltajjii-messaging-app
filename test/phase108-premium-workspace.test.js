@@ -21,7 +21,7 @@ test("Phase 108 premium styling covers the in-app messaging workspace and compos
   assert.match(html, /Phase 108: premium in-app workspace/);
   for (const selector of [
     "#wt-communication-section", "#call-panel", "#messages",
-    "#message-form", "#wt-language-bridge", ".social-tabs",
+    "#message-form", ".wt-language-bridge", ".social-tabs",
     ".group-message-form", ".personalization-panel", "#profile-panel"
   ]) assert.ok(html.includes(selector), "Missing style selector: " + selector);
 });
