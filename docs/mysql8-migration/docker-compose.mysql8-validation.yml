@@ -1,0 +1,25 @@
+services:
+  mysql8:
+    image: mysql:8.0.36
+    container_name: waltajjii-mysql8-validation
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set by Test-Waltajjii-MySQL8.ps1}
+      MYSQL_DATABASE: waltajjii_migration_test
+      MYSQL_USER: waltajjii_test_app
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?Set by Test-Waltajjii-MySQL8.ps1}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - waltajjii_mysql8_validation_data:/var/lib/mysql
+      - ./mysql8-schema-draft.sql:/docker-entrypoint-initdb.d/001-waltajjii-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\$\$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  waltajjii_mysql8_validation_data:
