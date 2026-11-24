@@ -19,8 +19,11 @@ if (-not $docker) { throw "Docker CLI not found. Install/start Docker Desktop, t
 docker info *> $null
 if ($LASTEXITCODE -ne 0) { throw "Docker Desktop is not running or the Docker engine is unavailable." }
 
-$existing = docker container inspect $ContainerName 2>$null
-if ($LASTEXITCODE -eq 0) {
+# Use a list/filter query: "inspect" writes an error when the container is absent,
+# and PowerShell 7 can promote native stderr to a terminating error under Stop.
+$existing = docker container ls -aq --filter "name=^/$ContainerName$"
+if ($LASTEXITCODE -ne 0) { throw "Could not check whether the validation container already exists." }
+if ($existing) {
   throw "Container '$ContainerName' already exists. Inspect it first; this runner will not replace or delete it."
 }
 
@@ -61,7 +64,7 @@ try {
   Write-Host ""
   Write-Host "PASS: MySQL 8.0.36 started; all 29 tables exist; smoke tests completed." -ForegroundColor Green
   Write-Host "The disposable database remains available at 127.0.0.1:3307 for inspection."
-  Write-Host "The randomly generated credentials exist only in this PowerShell process."
+  Write-Host "Credentials were randomly generated for this disposable container and were not printed or written to the repository."
   Write-Host "No live app, Render service, Supabase project, or production database was changed."
 }
 finally {
