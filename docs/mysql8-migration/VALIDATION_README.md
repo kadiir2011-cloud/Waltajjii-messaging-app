@@ -20,10 +20,9 @@ The script generates throwaway random credentials in memory, starts a container 
 ## Inspect
 ```powershell
 docker logs waltajjii-mysql8-validation
-docker exec -it waltajjii-mysql8-validation mysql -uroot -p -D waltajjii_migration_test
 ```
 
-The generated root password is intentionally not printed or saved. If you need an interactive session, rerun the script with a planned credential-handling workflow or inspect using the validation runner. Do not reuse any local validation credential in production.
+The generated credentials are intentionally not printed or saved by the runner. Use the runner output and Docker logs for this first validation. Do not reuse any local validation credential in production.
 
 ## Cleanup (destructive to this disposable test database only)
 After reviewing results and exiting the MySQL client:
