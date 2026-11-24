@@ -72,7 +72,7 @@ CREATE TABLE messages (
   CONSTRAINT fk_messages_deleted_by FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE groups (
+CREATE TABLE `groups` (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(80) NOT NULL,
   created_by BIGINT UNSIGNED NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE group_members (
   PRIMARY KEY (group_id, user_id),
   KEY idx_group_members_user (user_id, group_id),
   CONSTRAINT chk_group_members_role CHECK (role IN ('admin','member')),
-  CONSTRAINT fk_group_members_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_members_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_members_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -123,7 +123,7 @@ CREATE TABLE group_messages (
   KEY idx_group_messages_pinned_by (pinned_by),
   CONSTRAINT chk_group_messages_body CHECK (CHAR_LENGTH(body) BETWEEN 1 AND 2000),
   CONSTRAINT chk_group_messages_announcement CHECK (is_announcement IN (0,1)),
-  CONSTRAINT fk_group_messages_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_messages_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_messages_sender FOREIGN KEY (sender_id) REFERENCES users(id),
   CONSTRAINT fk_group_messages_reply FOREIGN KEY (reply_to_message_id) REFERENCES group_messages(id) ON DELETE SET NULL,
   CONSTRAINT fk_group_messages_pinned_by FOREIGN KEY (pinned_by) REFERENCES users(id) ON DELETE SET NULL
@@ -322,7 +322,7 @@ CREATE TABLE group_invitations (
   KEY idx_group_invitations_group (group_id, created_at),
   CONSTRAINT chk_group_invitations_use_limit CHECK (use_limit IS NULL OR use_limit BETWEEN 1 AND 1000),
   CONSTRAINT chk_group_invitations_use_count CHECK (use_count >= 0),
-  CONSTRAINT fk_group_invitations_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_invitations_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_invitations_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -355,7 +355,7 @@ CREATE TABLE group_join_requests (
   KEY idx_group_join_requests_invitation (invitation_id),
   KEY idx_group_join_requests_reviewer (reviewed_by),
   CONSTRAINT chk_group_join_requests_status CHECK (status IN ('pending','approved','rejected','cancelled')),
-  CONSTRAINT fk_group_join_requests_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_join_requests_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_join_requests_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_join_requests_invitation FOREIGN KEY (invitation_id) REFERENCES group_invitations(id) ON DELETE SET NULL,
   CONSTRAINT fk_group_join_requests_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
@@ -373,7 +373,7 @@ CREATE TABLE group_activity (
   KEY idx_group_activity_group (group_id, id),
   KEY idx_group_activity_actor (actor_id),
   KEY idx_group_activity_subject (subject_user_id),
-  CONSTRAINT fk_group_activity_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_activity_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_activity_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_group_activity_subject FOREIGN KEY (subject_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -394,7 +394,7 @@ CREATE TABLE group_polls (
   CONSTRAINT chk_group_polls_question CHECK (CHAR_LENGTH(question) BETWEEN 1 AND 300),
   CONSTRAINT chk_group_polls_multiple_choice CHECK (multiple_choice IN (0,1)),
   CONSTRAINT chk_group_polls_status CHECK (status IN ('open','closed')),
-  CONSTRAINT fk_group_polls_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_polls_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_polls_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_polls_closed_by FOREIGN KEY (closed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -444,7 +444,7 @@ CREATE TABLE group_events (
   CONSTRAINT chk_group_events_location CHECK (CHAR_LENGTH(location) <= 200),
   CONSTRAINT chk_group_events_reminder CHECK (reminder_minutes IN (0,5,10,15,30,60,1440)),
   CONSTRAINT chk_group_events_status CHECK (status IN ('scheduled','cancelled')),
-  CONSTRAINT fk_group_events_group FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_group_events_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_events_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_group_events_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
