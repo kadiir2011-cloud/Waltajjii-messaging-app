@@ -25,7 +25,7 @@ BEGIN
   INSERT INTO users (username, password_hash) VALUES ('__waltajjii_schema_test_user_2__', 'test-only-hash');
   SET v_user2 = LAST_INSERT_ID();
 
-  INSERT INTO groups (name, created_by) VALUES ('Schema test group', v_user1);
+  INSERT INTO `groups` (name, created_by) VALUES ('Schema test group', v_user1);
   SET v_group = LAST_INSERT_ID();
 
   INSERT INTO group_join_requests (group_id, user_id, status)
