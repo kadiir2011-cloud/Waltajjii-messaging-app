@@ -15,7 +15,7 @@ services:
       - waltajjii_mysql8_validation_data:/var/lib/mysql
       - ./mysql8-schema-draft.sql:/docker-entrypoint-initdb.d/001-waltajjii-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\$\$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", 'mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD --silent']
       interval: 5s
       timeout: 5s
       retries: 30
