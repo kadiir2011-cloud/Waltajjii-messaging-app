@@ -6,6 +6,7 @@ SELECT COUNT(*) AS application_table_count
 FROM information_schema.tables
 WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE';
 
+DROP PROCEDURE IF EXISTS waltajjii_run_schema_smoke_tests;
 DELIMITER //
 CREATE PROCEDURE waltajjii_run_schema_smoke_tests()
 BEGIN
