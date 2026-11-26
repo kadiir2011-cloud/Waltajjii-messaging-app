@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "preflight:sqlite": "node scripts/phase57-sqlite-migration-preflight.js",
-    "rehearse:postgres": "node scripts/phase58-postgres-migration-rehearsal.js"
+    "rehearse:postgres": "node scripts/phase58-postgres-migration-rehearsal.js",
+    "test:mysql8:adapter": "node --test test/mysql8-adapter.test.js"
   },
   "engines": {
     "node": "22.x"
@@ -26,7 +27,8 @@
     "multer": "^2.5.0",
     "pg": "8.16.3",
     "qrcode": "^1.5.4",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "mysql2": "^3.15.3"
   },
   "allowScripts": {
     "better-sqlite3@11.10.0": true
