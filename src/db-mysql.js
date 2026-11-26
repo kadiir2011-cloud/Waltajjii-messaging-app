@@ -8,14 +8,14 @@ function requiredConfig(env) {
   const required = ["MYSQL_HOST", "MYSQL_DATABASE", "MYSQL_USER", "MYSQL_PASSWORD"];
   const missing = required.filter((key) => !env[key] || !String(env[key]).trim());
   if (missing.length) {
-    const error = new Error(`MySQL configuration is incomplete: ${missing.join(", ")}`);
+    const error = new Error("MySQL configuration is incomplete: " + missing.join(", "));
     error.code = "MYSQL_CONFIGURATION_MISSING";
     throw error;
   }
 
   const port = Number(env.MYSQL_PORT || 3306);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("MYSQL_PORT must be an integer between 1 and 65535.");
+    throw new Error("MYSQL_PORT must be a valid TCP port.");
   }
 
   const connectionLimit = Number(env.MYSQL_POOL_SIZE || 5);
@@ -28,6 +28,17 @@ function requiredConfig(env) {
   }
 
   return { port, connectionLimit };
+}
+
+function normalizeInsertId(value) {
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) return value;
+  throw new TypeError("MySQL insertId is not a valid non-negative integer.");
+}
+
+function isDuplicateEntry(error) {
+  return Boolean(error && error.code === "ER_DUP_ENTRY" && error.errno === 1062);
 }
 
 function createMySqlAdapter({ mysql, env = process.env }) {
@@ -59,9 +70,8 @@ function createMySqlAdapter({ mysql, env = process.env }) {
       : {})
   });
 
-  // A pooled connection is initialized exactly once before any application SQL
-  // is run on it. This is stronger than relying on the driver's timezone option,
-  // which controls JS conversion but does not set the server session timezone.
+  // timezone:"Z" controls driver conversion only. Set the server session timezone
+  // on every physical pooled connection before application statements use it.
   const utcInitialized = new WeakSet();
 
   async function acquireConnection() {
@@ -78,25 +88,38 @@ function createMySqlAdapter({ mysql, env = process.env }) {
     }
   }
 
-  async function runOnConnection(method, sql, values = []) {
+  async function queryOn(connection, sql, values = []) {
+    const [rows] = await connection.execute(sql, values);
+    return rows;
+  }
+
+  async function executeOn(connection, sql, values = []) {
+    const [result] = await connection.execute(sql, values);
+    return result;
+  }
+
+  async function query(sql, values = []) {
     const connection = await acquireConnection();
     try {
-      return await connection[method](sql, values);
+      return await queryOn(connection, sql, values);
     } finally {
       connection.release();
     }
   }
 
-  async function query(sql, values = []) {
-    return runOnConnection("query", sql, values);
-  }
-
   async function execute(sql, values = []) {
-    return runOnConnection("execute", sql, values);
+    const connection = await acquireConnection();
+    try {
+      return await executeOn(connection, sql, values);
+    } finally {
+      connection.release();
+    }
   }
 
   async function ping() {
-    const [rows] = await query("SELECT 1 AS ok, VERSION() AS serverVersion");
+    const rows = await query(
+      "SELECT 1 AS ok, VERSION() AS serverVersion, @@session.time_zone AS sessionTimeZone"
+    );
     return rows[0];
   }
 
@@ -106,11 +129,15 @@ function createMySqlAdapter({ mysql, env = process.env }) {
     }
 
     const connection = await acquireConnection();
+    const tx = {
+      query: (sql, values = []) => queryOn(connection, sql, values),
+      execute: (sql, values = []) => executeOn(connection, sql, values)
+    };
     let transactionStarted = false;
     try {
       await connection.beginTransaction();
       transactionStarted = true;
-      const result = await work(connection);
+      const result = await work(tx);
       await connection.commit();
       transactionStarted = false;
       return result;
@@ -132,11 +159,7 @@ function createMySqlAdapter({ mysql, env = process.env }) {
     await pool.end();
   }
 
-  return { query, execute, ping, withTransaction, close };
+  return { query, execute, ping, withTransaction, close, normalizeInsertId, isDuplicateEntry };
 }
 
-// The factory is deliberately dependency-injected: unit tests can exercise
-// the adapter contract without credentials, a MySQL server, or mysql2 installed.
-// The migration-only bootstrap should call this with require("mysql2/promise")
-// and its isolated MYSQL_* environment variables.
-module.exports = { createMySqlAdapter };
+module.exports = { createMySqlAdapter, normalizeInsertId, isDuplicateEntry };
