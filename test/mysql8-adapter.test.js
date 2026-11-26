@@ -23,7 +23,7 @@ function fakeMysql() {
     },
     async execute(sql, values) {
       calls.push(["execute", sql, values]);
-      if (/^SELECT\\s/i.test(sql)) {
+      if (/^SELECT\s/i.test(sql)) {
         return [[{ ok: 1, serverVersion: "8.0.36", sessionTimeZone: "+00:00" }], []];
       }
       return [{ affectedRows: 1, insertId: "9007199254740993" }, []];
