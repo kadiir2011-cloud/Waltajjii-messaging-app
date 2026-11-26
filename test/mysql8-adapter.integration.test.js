@@ -20,7 +20,7 @@ test("real MySQL 8.0.36 adapter smoke test (local isolated database only)", {
   try {
     const health = await db.ping();
     assert.equal(Number(health.ok), 1);
-    assert.match(String(health.serverVersion), /^8\\.0\\.36(?:[-+ ].*)?$/);
+    assert.match(String(health.serverVersion), /^8\.0\.36(?:[-+ ].*)?$/);
     assert.equal(health.sessionTimeZone, "+00:00");
 
     await db.execute("CREATE TABLE " + q +
