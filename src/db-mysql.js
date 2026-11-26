@@ -135,11 +135,8 @@ function createMySqlAdapter({ mysql, env = process.env }) {
   return { query, execute, ping, withTransaction, close };
 }
 
-// Runtime singleton. Tests use createMySqlAdapter with a fake pool and do not
-// require a running MySQL server or the mysql2 package to be installed.
-const adapter = createMySqlAdapter({
-  mysql: require("mysql2/promise"),
-  env: process.env
-});
-
-module.exports = { ...adapter, createMySqlAdapter };
+// The factory is deliberately dependency-injected: unit tests can exercise
+// the adapter contract without credentials, a MySQL server, or mysql2 installed.
+// The migration-only bootstrap should call this with require("mysql2/promise")
+// and its isolated MYSQL_* environment variables.
+module.exports = { createMySqlAdapter };
