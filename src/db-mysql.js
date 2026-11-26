@@ -119,7 +119,7 @@ function createMySqlAdapter({ mysql, env = process.env }) {
         try {
           await connection.rollback();
         } catch (rollbackError) {
-          error.rollbackError = rollbackError;
+          if (error && typeof error === "object") error.rollbackError = rollbackError;
         }
       }
       throw error;
@@ -132,7 +132,7 @@ function createMySqlAdapter({ mysql, env = process.env }) {
     await pool.end();
   }
 
-  return { pool, query, execute, ping, withTransaction, close };
+  return { query, execute, ping, withTransaction, close };
 }
 
 // Runtime singleton. Tests use createMySqlAdapter with a fake pool and do not
