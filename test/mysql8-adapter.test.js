@@ -16,9 +16,7 @@ const validEnv = {
 function fakeMysql() {
   const calls = [];
   const connections = [];
-  const pool = {
-    async getConnection() {
-      const connection = {
+  const connection = {
         async query(sql, values) {
           calls.push(["query", sql, values]);
           return [[{ ok: 1, serverVersion: "8.0.36" }], []];
@@ -31,8 +29,10 @@ function fakeMysql() {
         async commit() { calls.push(["commit"]); },
         async rollback() { calls.push(["rollback"]); },
         release() { calls.push(["release"]); }
-      };
-      connections.push(connection);
+  };
+  const pool = {
+    async getConnection() {
+      if (!connections.length) connections.push(connection);
       return connection;
     },
     async end() { calls.push(["end"]); }
@@ -84,8 +84,8 @@ test("sets UTC once per pooled connection before application SQL", async () => {
   const statements = fake.calls.filter((entry) => entry[0] === "query" || entry[0] === "execute");
   assert.equal(statements[0][1], "SET time_zone = '+00:00'");
   assert.equal(statements[1][1], "SELECT ?");
-  assert.equal(statements[2][1], "SET time_zone = '+00:00'");
-  assert.equal(statements[3][1], "UPDATE sample SET value = ?");
+  assert.equal(statements[2][1], "UPDATE sample SET value = ?");
+  assert.equal(fake.calls.filter((entry) => entry[0] === "query" && entry[1] === "SET time_zone = '+00:00'").length, 1);
   assert.equal(fake.calls.filter((entry) => entry[0] === "release").length, 2);
 });
 
